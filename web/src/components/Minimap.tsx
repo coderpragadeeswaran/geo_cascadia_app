@@ -12,6 +12,7 @@ const PAD = 10
 export function Minimap() {
   const area = useUi((s) => s.area)
   const cam = useUi((s) => s.camera)
+  const sv = useUi((s) => s.svCam)
   const { data: areas } = useAreas()
   const { data: geo } = useAreaGeo(area)
   const map = useMap('main')
@@ -50,7 +51,8 @@ export function Minimap() {
     const [bx, by] = proj.to(e, s)
     return { x: Math.min(ax, bx), y: Math.min(ay, by), w: Math.abs(bx - ax), h: Math.abs(by - ay) }
   })() : null
-  const me = cam ? proj.to(cam.lng, cam.lat) : null
+  const me = cam && !sv ? proj.to(cam.lng, cam.lat) : null
+  const eye = sv ? proj.to(sv.lng, sv.lat) : null
 
   return (
     <div className="glass pointer-events-auto relative overflow-hidden p-0" style={{ width: W, height: H }}>
@@ -68,6 +70,12 @@ export function Minimap() {
           {view && view.w < W * 3 && (
             <rect x={view.x} y={view.y} width={Math.max(view.w, 4)} height={Math.max(view.h, 4)} fill="rgb(255 255 255 / 0.07)"
               stroke="var(--fg)" strokeOpacity=".75" strokeWidth="1.2" rx="2" />
+          )}
+          {eye && (
+            <g transform={`translate(${eye[0]},${eye[1]}) rotate(${sv?.heading ?? 0})`} aria-label="Street View camera">
+              <path d="M0 0 L-9 -16 A18 18 0 0 1 9 -16 Z" fill="var(--accent)" fillOpacity=".35" />
+              <circle r="4.5" fill="#f5c542" stroke="#000" strokeWidth="1.2" />
+            </g>
           )}
           {me && (
             <g transform={`translate(${me[0]},${me[1]}) rotate(${cam?.heading ?? 0})`}>

@@ -153,7 +153,7 @@ class JsonStore:
 class DbStore:
     source = "db"
 
-    def __init__(self, pool, version_check_s=5.0):
+    def __init__(self, pool, version_check_s=20.0):   # writes in this process invalidate at once; external reloads show within 20 s
         self.pool, self.version_check_s = pool, version_check_s
         self._cache, self._lock = {}, threading.Lock()   # slug -> (version, checked_at, bundle)
 

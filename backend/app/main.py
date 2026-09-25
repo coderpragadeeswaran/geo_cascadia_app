@@ -56,8 +56,9 @@ class ModelCard:
 
 class QueryIn(BaseModel):
     area: str = Field(examples=["ward29"])
-    text: str = Field(min_length=2, max_length=300,
-                      examples=["Show commercial buildings with more than two visible floors that do not have a matching property record"])
+    text: Optional[str] = Field(None, min_length=2, max_length=300,
+                                examples=["Show commercial buildings with more than two visible floors that do not have a matching property record"])
+    filters: Optional[dict] = Field(None, description="edited filter chips (parsed_filters shape) instead of text")
 
 
 def create_app(settings: Optional[Settings] = None) -> FastAPI:
@@ -180,6 +181,12 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
                                                                    review_status), page, page_size))
         return {"offline": off, **res}
 
+    @app.get("/areas/{slug}/unmapped", tags=["assets"])
+    def unmapped(slug: str, D: Data = Depends(get_data)):
+        """Businesses read on frontage with no building outline (approximate positions), full records."""
+        res, off = D.read(lambda s: need(s, slug)["unmapped_businesses"])
+        return {"offline": off, "total": len(res), "rows": res}
+
     @app.get("/assets/{area}/{id}", tags=["assets"])
     def asset(area: str, id: str, D: Data = Depends(get_data)):
         def fn(s):
@@ -195,8 +202,15 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     # ------------------------------------------------------------ query
     @app.post("/query", tags=["query"])
     def query(body: QueryIn, D: Data = Depends(get_data)):
-        """Plain-English query via pipeline `workspace.QueryEngine` (inputs rebuilt from the export records)."""
-        res, off = D.read(lambda s: views.run_query(need(s, body.area), body.text))
+        """Plain-English query via pipeline `workspace.QueryEngine` (inputs rebuilt from the export records).
+        `filters` (edited chips) are turned into canonical text that QueryEngine parses back to the same filters."""
+        if bool(body.text) == bool(body.filters):
+            raise HTTPException(422, "give either text or filters")
+        try:
+            res, off = D.read(lambda s: views.run_filters(need(s, body.area), body.filters) if body.filters
+                              else views.run_query(need(s, body.area), body.text))
+        except views.FilterError as e:
+            raise HTTPException(422, str(e)) from None
         return {"offline": off, "area": body.area, **res}
 
     from .jobs import router as jobs_router

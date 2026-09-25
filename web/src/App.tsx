@@ -1,16 +1,23 @@
 import { APIProvider } from '@vis.gl/react-google-maps'
 import { motion } from 'framer-motion'
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { API_URL } from '@/api/client'
 import { useConfig } from '@/api/queries'
-import { AreaSummary, HoverCard, SelectionCard } from '@/components/Inspect'
+import { AnalysePanel } from '@/components/AnalysePanel'
+import { CommandPalette } from '@/components/CommandPalette'
+import { CoverageNotice, HoverCard } from '@/components/Inspect'
+import { KpiRibbon } from '@/components/KpiRibbon'
 import { Legend } from '@/components/Legend'
+import { QueryCard } from '@/components/QueryCard'
+import { RightPanel } from '@/components/RightPanel'
 import { MapControls } from '@/components/MapControls'
 import { Minimap } from '@/components/Minimap'
 import { TopBar } from '@/components/TopBar'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { MapView } from '@/map/MapView'
+import { MapView, PANEL_W } from '@/map/MapView'
 import { useUi } from '@/store/ui'
+
+const ReviewPage = lazy(() => import('@/components/ReviewPage').then((m) => ({ default: m.ReviewPage })))
 
 /** Maps JS channel. 'quarterly' (stable): deck.gl 9.4 interleaved rendering draws nothing on weekly 3.66 (checked 2026-09-25). */
 const MAPS_VERSION = 'quarterly'
@@ -41,21 +48,70 @@ export default function App() {
       <TooltipProvider>
         <main className="relative h-full w-full overflow-hidden">
           <MapView mapId={cfg.data.map_id} />
-          <TopBar />
-          <AreaSummary />
-          <SelectionCard />
-          <Legend />
-          <div className="pointer-events-none absolute bottom-9 right-3 z-10 flex flex-col items-end gap-2">
-            <MapControls />
-            <Minimap />
-          </div>
-          <HoverCard />
-          <Footer />
+          <Explore />
+          <PageSwitch />
+          <CommandPalette />
           <PerfMeter />
         </main>
       </TooltipProvider>
     </APIProvider>
   )
+}
+
+/** Explore page chrome: everything floats over the one map. The Street View dive hides the map chrome. */
+function Explore() {
+  const dive = useUi((s) => s.dive)
+  const panelOpen = useUi((s) => s.panelOpen)
+  const page = useUi((s) => s.page)
+  const select = useUi((s) => s.select)
+  const setDive = useUi((s) => s.setDive)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || useUi.getState().paletteOpen || useUi.getState().analyse) return
+      if (useUi.getState().dive) setDive(null)
+      else select(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [select, setDive])
+  if (page !== 'explore') return null
+  const right = panelOpen ? PANEL_W + 4 : 12
+  return (
+    <>
+      <TopBar />
+      {!dive && (
+        <>
+          <div className="pointer-events-none absolute left-3 top-[64px] z-10" style={{ right }}><KpiRibbon /></div>
+          <div className="pointer-events-none absolute left-3 top-[122px] z-10 flex max-h-[calc(100%-122px-300px)] w-[300px] flex-col gap-2 overflow-y-auto">
+            <QueryCard />
+            <CoverageNotice />
+          </div>
+          <Legend />
+        </>
+      )}
+      {dive && (
+        <div className="pointer-events-none absolute left-3 top-[68px] z-20 flex items-center gap-2">
+          <button onClick={() => setDive(null)} className="glass pointer-events-auto flex h-10 cursor-pointer items-center gap-2 px-3.5 text-[13px] font-semibold hover:bg-hover">
+            ← Back to map
+          </button>
+          <span className="glass px-2.5 py-1.5 text-[11.5px] text-muted">Live Street View · drag to look around · Esc to return</span>
+        </div>
+      )}
+      <RightPanel />
+      <div className="pointer-events-none absolute bottom-9 z-10 flex flex-col items-end gap-2" style={{ right }}>
+        <MapControls />
+        <Minimap />
+      </div>
+      <HoverCard />
+      <AnalysePanel />
+      <Footer />
+    </>
+  )
+}
+
+function PageSwitch() {
+  const page = useUi((s) => s.page)
+  return page === 'review' ? <Suspense fallback={null}><ReviewPage /></Suspense> : null
 }
 
 function Splash({ children }: { children?: React.ReactNode }) {

@@ -159,3 +159,37 @@ The owner does not have the original full-run logs. `stage_seconds`, `total_minu
 ### Pipeline follow-up (not app work)
 `match.py` gap length uses a straight-line fit; on curved streets it understates length and can mis-order cameras
 (`gap60-006`). Fix in the pipeline later. The app shows the recorded values and flags the difference (D13).
+
+## 2026-09-25 — P4 (Explore page)
+
+### D14. Explore page notes
+- **One global store** (`web/src/store/ui.ts`): `filter` (subject, street, match, use, name quality, Google, asset type,
+  triangulated, review), `kpi`, `query`. KPI ribbon, map emphasis (everything else dimmed; result dots at area level),
+  Findings table and Charts all read it. KPIs, charts and table are computed client-side from the full records with the
+  same formulas as `workspace.build_dashboard` (D2); with no filter the ribbon equals the API dashboard (checked).
+  Picking a record type in the table (buildings/assets/unmapped) is not a filter and does not dim the map.
+- **Editable query chips** still run through the pipeline's QueryEngine: `POST /query {area, filters}` composes canonical
+  English (`views.compose_query`), re-parses it with QueryEngine and refuses (422) anything that does not read back to
+  exactly the same filters. pytest round-trips every street of every area.
+- **why_empty** is rendered as an explained funnel (query card + Findings panel), never an empty table.
+- **Gaps (D13 in the UI):** Streetlights tab and query 2 show the recorded length (sorted by it) and "≈ X m along the road"
+  only for gaps drawn along the road; `check` gaps show the check note instead of an along-road length.
+- **Evidence:** the drawer shows a live Street View Static image (browser key, never stored) of the exact stored view with
+  the box drawn in 640×640 space. Assets have no stored box → the aimed view with a crosshair, labelled as such.
+  Google place names are fetched live by `place_id` (§9.6), not taken from the stored copy. Route badges quote only
+  `model_card.json` (per-building `validated` strings are not shown: they say n=33, model_card n=36).
+- **Street View dive** uses the map's own `StreetViewPanorama` (one map instance, D3) with a 250 ms veil cross-fade;
+  the minimap draws the panorama camera. Esc / "Back to map" reverses it.
+- **Analyse a street:** Street View coverage is shown as the snapping guide (hovering arbitrary streets would need road
+  geometry the browser does not have). `POST /jobs/preview` now returns an **estimate** scaled by length from the Ward 29
+  run (planned views per metre; GPU minutes and $/image from model_card; VLM calls not included). New
+  `POST /jobs/{id}/cancel` (→ failed "cancelled by user", never claimed again); `/worker/result` rejects non-running jobs.
+- **Review page (lean):** list + evidence + A/R/E/J/K; "Send N to Review" opens it filtered to those items (test 3).
+  P5 turns it into the full split view.
+- **Places search** lives in the Ctrl+K palette (Places API New, session tokens, "powered by Google").
+- Light-theme status colours use darker steps (#0d9488 / #d97706 / #e11d48) — validated with the dataviz palette check
+  (CVD separation and ≥ 3:1 contrast on white); the dark theme keeps the brighter ones (contrast passes on the dark surface).
+- Recharts and the Review page are lazy-loaded. Production heap after GC: 22.3 MB (area) · 28.7 MB (street) · 46.9 MB
+  after two theme toggles (D3 ≤ 60 MB).
+- DbStore version check relaxed from 5 s to 20 s (writes in this process invalidate immediately; a CLI reload shows
+  within 20 s) — cuts pooler round-trips, e.g. `/jobs/preview` from ~3.3 s.

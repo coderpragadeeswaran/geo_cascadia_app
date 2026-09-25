@@ -53,6 +53,10 @@
   --shadow: 0 10px 40px -14px rgb(15 23 42 / 0.28), 0 2px 8px -2px rgb(15 23 42 / 0.12);
   --accent: #2f7cf0;
   --accent-soft: rgb(47 124 240 / 0.12);
+  /* darker status steps on light surfaces (validated: CVD + contrast >= 3:1 on white; dataviz check) */
+  --matched: #0d9488;
+  --discrepancy: #d97706;
+  --no-record: #e11d48;
   color-scheme: light;
 }
 

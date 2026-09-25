@@ -1,10 +1,6 @@
-/** Hover card (follows the cursor) and the selection card. The full Street View evidence dive is P4. */
-import { AnimatePresence, motion } from 'framer-motion'
-import { X } from 'lucide-react'
-import { useEffect } from 'react'
+/** Hover card (follows the cursor), status chips, low-coverage notice. Selection opens the evidence drawer. */
 import { useAreas } from '@/api/queries'
 import type { AnyProps, BuildingProps } from '@/api/types'
-import { Button } from '@/components/ui/button'
 import { useUi } from '@/store/ui'
 import { cn, fmt, fmt1 } from '@/lib/utils'
 
@@ -124,60 +120,14 @@ export function HoverCard() {
   )
 }
 
-export function SelectionCard() {
-  const sel = useUi((s) => s.selected)
-  const select = useUi((s) => s.select)
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') select(null) }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [select])
-  return (
-    <AnimatePresence>
-      {sel && sel.kind !== 'area' && (
-        <motion.aside key={'id' in sel ? sel.id : 'x'} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 24 }}
-          transition={{ type: 'spring', stiffness: 380, damping: 34 }}
-          className="glass glass-strong pointer-events-auto absolute right-3 top-[68px] z-20 w-[300px] px-4 pb-3.5 pt-3" aria-label="Selected object">
-          <Button size="icon-sm" className="absolute right-2 top-2" onClick={() => select(null)} aria-label="Close (Esc)"><X /></Button>
-          <div className="pr-6"><Body p={sel} /></div>
-          <p className="mt-2 border-t border-glass-border pt-2 text-[11px] text-faint">Street View evidence opens here in the next phase.</p>
-        </motion.aside>
-      )}
-    </AnimatePresence>
-  )
-}
-
-/** Compact summary for the open area: counts computed from records, unclassified shown explicitly (D9). */
-export function AreaSummary() {
+/** Low-coverage notice for the open area (Trichy / Tiruppur); Ward 29 has full coverage, so none. */
+export function CoverageNotice() {
   const area = useUi((s) => s.area)
   const band = useUi((s) => s.band)
   const { data: areas } = useAreas()
   const a = areas?.find((x) => x.slug === area)
-  if (!a || band === 'city') return null
-  const m = a.match_status
-  const total = a.counts.buildings || 1
-  const seg = [['matched', 'bg-matched'], ['discrepancy', 'bg-discrepancy'], ['no_record', 'bg-no-record']] as const
-  return (
-    <motion.section initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
-      className="glass pointer-events-auto absolute left-3 top-[68px] z-10 w-[236px] px-3.5 py-3" aria-label="Area summary">
-      <div className="eyebrow">Buildings · register match</div>
-      <div className="tnum mt-1 text-[22px] font-semibold leading-none">{fmt.format(a.counts.buildings)}</div>
-      <div className="mt-2.5 flex h-1.5 overflow-hidden rounded-full bg-hover">
-        {seg.map(([k, c]) => <div key={k} className={c} style={{ width: `${((m[k] ?? 0) / total) * 100}%` }} />)}
-      </div>
-      <div className="tnum mt-2 grid grid-cols-3 gap-1 text-[11px]">
-        <span><b className="font-semibold text-matched">{m.matched ?? 0}</b> <span className="text-muted">matched</span></span>
-        <span><b className="font-semibold text-discrepancy">{m.discrepancy ?? 0}</b> <span className="text-muted">discrep.</span></span>
-        <span><b className="font-semibold text-no-record">{m.no_record ?? 0}</b> <span className="text-muted">no record</span></span>
-      </div>
-      <div className="tnum mt-2.5 space-y-0.5 border-t border-glass-border pt-2 text-[11.5px]">
-        <KV k="Use: not classified" v={<span className="text-unclassified">{fmt.format(a.counts.use_not_classified)}</span>} />
-        <KV k="Assets triangulated" v={`${a.counts.assets_triangulated} / ${a.counts.assets}`} />
-      </div>
-      {a.coverage.level === 'partial' && <CoverageBanner c={a.coverage} />}
-      <div className="mt-2 text-[10.5px] text-faint">Synthetic register (demo)</div>
-    </motion.section>
-  )
+  if (!a || band === 'city' || a.coverage.level !== 'partial') return null
+  return <div className="glass pointer-events-auto px-3 py-2.5"><CoverageBanner c={a.coverage} /></div>
 }
 
 /** Low map coverage: explains why few buildings were analysed (numbers from data: view counts from the run's coverage
@@ -186,7 +136,7 @@ function CoverageBanner({ c }: { c: import('@/api/types').AreaCard['coverage'] }
   const pct = c.share_views_no_mapped_building != null ? Math.round(c.share_views_no_mapped_building * 100) : null
   const strong = (c.share_views_no_mapped_building ?? 0) >= 0.5
   return (
-    <div role="note" className="mt-2.5 rounded-lg border border-[rgb(245_165_36/0.35)] bg-[rgb(245_165_36/0.1)] px-2.5 py-2 text-[11px] leading-snug">
+    <div role="note" className="rounded-lg border border-[rgb(245_165_36/0.35)] bg-[rgb(245_165_36/0.1)] px-2.5 py-2 text-[11px] leading-snug">
       <div className="mb-0.5 font-semibold text-discrepancy">{strong ? 'Low map coverage' : 'Partial map coverage'}</div>
       <p className="text-fg/85">
         {pct != null && <><b className="tnum">{pct}%</b> of camera views (<span className="tnum">{c.views_facing_no_mapped_building} of {c.views_planned}</span>) face

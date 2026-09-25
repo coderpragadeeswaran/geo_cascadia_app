@@ -13,6 +13,7 @@ import type { LineString, MultiLineString, MultiPolygon, Point, Polygon } from '
 import type {
   AnyProps, AreaCard, AreaFeature, AssetProps, Band, BuildingProps, GapProps, Job, MissingProps, StreetProps, UnmappedProps,
 } from '@/api/types'
+import type { Focus } from '@/lib/derive'
 import type { LayerKey } from '@/store/ui'
 import { C, DENSITY_RANGE, healthColor, matchColor, registerColor, withAlpha } from './colors'
 import { HATCH_MAPPING, ICONS, hatchAtlas } from './icons'
@@ -99,6 +100,10 @@ export interface LayerCtx {
   pulse: number
   selectedId: string | null
   light: boolean
+  /** filter / query emphasis: everything outside these ids is dimmed (one global store, CLAUDE.md §9.4) */
+  focus: Focus
+  /** analyse mode: the street polygon returned by /jobs/preview */
+  analysePoly: Position[][] | null
 }
 
 const pick = { pickable: true, autoHighlight: true, highlightColor: [255, 255, 255, 70] as [number, number, number, number] }
@@ -110,7 +115,12 @@ function outerRings(poly: Polygon | MultiPolygon): Position[][] {
 }
 
 export function buildLayers(ctx: LayerCtx): Layer[] {
-  const { band, flat, layers: on, split, light } = ctx
+  const { band, flat, layers: on, split, light, focus: F } = ctx
+  const fk = F.key
+  const dimB = (id: string) => !!F.buildings && !F.buildings.has(id)
+  const dimA = (id: string) => !!F.assets && !F.assets.has(id)
+  const dimG = (id: string) => !!F.gaps && !F.gaps.has(id)
+  const dimU = (id: string) => !!F.unmapped && !F.unmapped.has(id)
   const L: Layer[] = []
   const near = band === 'street' || band === 'object'
 
@@ -180,9 +190,13 @@ export function buildLayers(ctx: LayerCtx): Layer[] {
     L.push(
       new PathLayer({ id: 'street-casing', visible: v, data: split.streets, getPath: (d) => d.path, widthUnits: 'pixels',
         getWidth: near ? 5 : 9, getColor: [0, 0, 0, near ? 60 : 110], capRounded: true, jointRounded: true, updateTriggers: { getWidth: near } }),
+      // selected street(s): bright casing under the health line
+      new PathLayer({ id: 'street-selected', visible: !city && !!F.streets, data: F.streets ? split.streets.filter((d) => F.streets!.has(d.p.name)) : [],
+        getPath: (d) => d.path, widthUnits: 'pixels', getWidth: near ? 9 : 13, getColor: [255, 255, 255, 215], capRounded: true,
+        jointRounded: true, updateTriggers: { getWidth: near } }),
       new PathLayer({ id: 'street-health', visible: v, data: split.streets, getPath: (d) => d.path, widthUnits: 'pixels',
-        getWidth: near ? 2.5 : 5, getColor: (d) => healthColor(d.p.issues_per_km, near ? 150 : 240),
-        capRounded: true, jointRounded: true, ...pick, updateTriggers: { getWidth: near, getColor: near } }),
+        getWidth: near ? 2.5 : 5, getColor: (d) => healthColor(d.p.issues_per_km, F.streets && !F.streets.has(d.p.name) ? 70 : near ? 150 : 240),
+        capRounded: true, jointRounded: true, ...pick, updateTriggers: { getWidth: near, getColor: [near, fk] } }),
     )
   }
   {
@@ -191,14 +205,15 @@ export function buildLayers(ctx: LayerCtx): Layer[] {
     const check = split.gaps.filter((d) => d.p.display_mode === 'check')
     L.push(
       new PathLayer({ id: 'gap-glow', visible: v, data: sure, getPath: (d) => d.path, widthUnits: 'pixels', getWidth: near ? 10 : 14,
-        getColor: withAlpha(C.noRecord, 55), capRounded: true, jointRounded: true, updateTriggers: { getWidth: near } }),
+        getColor: (d) => withAlpha(C.noRecord, dimG(d.p.id) ? 12 : 55), capRounded: true, jointRounded: true,
+        updateTriggers: { getWidth: near, getColor: fk } }),
       new PathLayer({ id: 'gap-dash', visible: v, data: sure, getPath: (d) => d.path, widthUnits: 'pixels', getWidth: near ? 3 : 4,
-        getColor: [255, 96, 104, 255], getDashArray: [2.2, 1.6], dashJustified: true, extensions: [dash], capRounded: true,
-        jointRounded: true, ...pick, updateTriggers: { getWidth: near } }),
+        getColor: (d) => [255, 96, 104, dimG(d.p.id) ? 60 : 255], getDashArray: [2.2, 1.6], dashJustified: true, extensions: [dash], capRounded: true,
+        jointRounded: true, ...pick, updateTriggers: { getWidth: near, getColor: fk } }),
       // "check": drawn as recorded; lit camera stops lie on the road between its ends (bent street, D13)
       new PathLayer({ id: 'gap-check', visible: v, data: check, getPath: (d) => d.path, widthUnits: 'pixels', getWidth: near ? 2.5 : 3,
-        getColor: [245, 165, 36, 235], getDashArray: [0.8, 1.8], dashJustified: true, extensions: [dash], capRounded: true,
-        ...pick, updateTriggers: { getWidth: near } }),
+        getColor: (d) => [245, 165, 36, dimG(d.p.id) ? 60 : 235], getDashArray: [0.8, 1.8], dashJustified: true, extensions: [dash], capRounded: true,
+        ...pick, updateTriggers: { getWidth: near, getColor: fk } }),
     )
   }
   // ---------------------------------------------------------------- street / object level
@@ -207,19 +222,21 @@ export function buildLayers(ctx: LayerCtx): Layer[] {
     // no floor count → flat footprint, hatched, coloured by match status (D9: never a guessed height)
     L.push(
       new PolygonLayer({ id: 'bld-unclassified-base', visible: v, data: split.unclassified, getPolygon: (d) => d.polygon,
-        getFillColor: (d) => withAlpha(matchColor(d.p.match_status), 38), stroked: true, lineWidthUnits: 'pixels',
-        getLineWidth: 1.2, getLineColor: (d) => withAlpha(matchColor(d.p.match_status), 200), ...pick }),
+        getFillColor: (d) => withAlpha(matchColor(d.p.match_status), dimB(d.p.id) ? 8 : 38), stroked: true, lineWidthUnits: 'pixels',
+        getLineWidth: 1.2, getLineColor: (d) => withAlpha(matchColor(d.p.match_status), dimB(d.p.id) ? 45 : 200), ...pick,
+        updateTriggers: { getFillColor: fk, getLineColor: fk } }),
       new PolygonLayer<BuildingD>({ id: 'bld-unclassified-hatch', visible: v, data: split.unclassified, getPolygon: (d) => d.polygon, stroked: false,
-        getFillColor: (d) => withAlpha(matchColor(d.p.match_status), 150), extensions: [hatch], pickable: false,
+        getFillColor: (d) => withAlpha(matchColor(d.p.match_status), dimB(d.p.id) ? 30 : 150), extensions: [hatch], pickable: false,
+        updateTriggers: { getFillColor: fk },
         // FillStyleExtension props (not in PolygonLayer's own prop types)
         ...({ fillPatternAtlas: hatchAtlas(), fillPatternMapping: HATCH_MAPPING, getFillPattern: () => 'hatch',
               getFillPatternScale: 0.45, fillPatternMask: true } as object) }),
       new PolygonLayer({ id: 'bld-extruded', visible: v, data: split.extruded, getPolygon: (d) => d.polygon,
         extruded: !flat, wireframe: false, getElevation: (d) => (d.p.floors ?? 0) * FLOOR_HEIGHT_M,
-        getFillColor: (d) => withAlpha(matchColor(d.p.match_status), d.p.floors_status === 'low_confidence' ? 130 : flat ? 150 : 225),
+        getFillColor: (d) => withAlpha(matchColor(d.p.match_status), dimB(d.p.id) ? 38 : d.p.floors_status === 'low_confidence' ? 130 : flat ? 150 : 225),
         stroked: flat, lineWidthUnits: 'pixels', getLineWidth: 1.2, getLineColor: (d) => withAlpha(matchColor(d.p.match_status), 230),
         material: { ambient: 0.42, diffuse: 0.62, shininess: 24, specularColor: [60, 64, 70] }, ...pick,
-        updateTriggers: { getFillColor: flat } }),
+        updateTriggers: { getFillColor: [flat, fk] } }),
     )
     {
       const rv = [...split.extruded, ...split.unclassified].filter((d) => d.p.review_status === 'pending')
@@ -233,20 +250,23 @@ export function buildLayers(ctx: LayerCtx): Layer[] {
     {
       L.push(
         new ScatterplotLayer({ id: 'asset-unc-fill', visible: v && on.uncertainty, data: split.assets, getPosition: (d) => d.position, radiusUnits: 'meters',
-          getRadius: (d) => d.p.uncertainty_m ?? 3.5, getFillColor: (d) => withAlpha(registerColor(d.p.register_status), 26) }),
+          getRadius: (d) => d.p.uncertainty_m ?? 3.5, getFillColor: (d) => withAlpha(registerColor(d.p.register_status), dimA(d.p.id) ? 0 : 26),
+          updateTriggers: { getFillColor: fk } }),
         new PathLayer<AssetD>({ id: 'asset-unc-ring', visible: v && on.uncertainty, data: split.assets, getPath: (d) => d.ring, widthUnits: 'pixels', getWidth: 1.4,
-          getColor: (d) => withAlpha(registerColor(d.p.register_status), 210), extensions: [dash],
+          getColor: (d) => withAlpha(registerColor(d.p.register_status), dimA(d.p.id) ? 35 : 210), extensions: [dash],
+          updateTriggers: { getColor: fk },
           // PathStyleExtension: dashed ring = approximate (single camera), solid = triangulated
           ...({ getDashArray: (d: AssetD) => (d.p.approximate ? [3, 2.5] : [0, 0]), dashJustified: true } as object) }),
       )
     }
     L.push(
       new ScatterplotLayer({ id: 'asset-disc', visible: v, data: split.assets, getPosition: (d) => d.position, radiusUnits: 'pixels',
-        getRadius: big ? 11 : 7.5, getFillColor: [11, 15, 22, 235], stroked: true, lineWidthUnits: 'pixels', getLineWidth: big ? 2 : 1.6,
-        getLineColor: (d) => registerColor(d.p.register_status), ...pick, updateTriggers: { getRadius: big, getLineWidth: big } }),
+        getRadius: big ? 11 : 7.5, getFillColor: (d) => [11, 15, 22, dimA(d.p.id) ? 110 : 235], stroked: true, lineWidthUnits: 'pixels',
+        getLineWidth: big ? 2 : 1.6, getLineColor: (d) => withAlpha(registerColor(d.p.register_status), dimA(d.p.id) ? 60 : 255), ...pick,
+        updateTriggers: { getRadius: big, getLineWidth: big, getFillColor: fk, getLineColor: fk } }),
       new IconLayer<AssetD>({ id: 'asset-glyph', visible: v, data: split.assets, getPosition: (d) => d.position,
-        getIcon: (d) => ICONS[d.p.kind], getSize: big ? 16 : 11, sizeUnits: 'pixels', getColor: [255, 255, 255, 245], pickable: false,
-        updateTriggers: { getSize: big } }),
+        getIcon: (d) => ICONS[d.p.kind], getSize: big ? 16 : 11, sizeUnits: 'pixels', getColor: (d) => [255, 255, 255, dimA(d.p.id) ? 70 : 245],
+        pickable: false, updateTriggers: { getSize: big, getColor: fk } }),
     )
     {
       L.push(new ScatterplotLayer<AssetD>({ id: 'asset-review', visible: v && on.review, data: split.assets.filter((d) => d.p.review_status === 'pending'),
@@ -260,7 +280,23 @@ export function buildLayers(ctx: LayerCtx): Layer[] {
   }
   {
     L.push(new IconLayer({ id: 'unmapped', visible: on.unmapped && near, data: split.unmapped, getPosition: (d) => d.position, getIcon: () => ICONS.pin,
-      getSize: 28, getColor: C.unmapped, ...pick }))
+      getSize: 28, getColor: (d) => withAlpha(C.unmapped, dimU(d.p.id) ? 60 : 255), ...pick, updateTriggers: { getColor: fk } }))
+  }
+
+  // filter / query results as bright dots at area level (buildings are only drawn from street level down)
+  {
+    const pts: Position[] = [
+      ...(F.buildings ? [...split.extruded, ...split.unclassified].filter((d) => F.buildings!.has(d.p.id)).map((d) => [d.p.lon, d.p.lat] as Position) : []),
+      ...(F.assets ? split.assets.filter((d) => F.assets!.has(d.p.id)).map((d) => d.position) : []),
+      ...(F.unmapped ? split.unmapped.filter((d) => F.unmapped!.has(d.p.id)).map((d) => d.position) : []),
+    ]
+    L.push(new ScatterplotLayer<Position>({ id: 'focus-dots', visible: band === 'area' && !!fk, data: pts, getPosition: (d) => d,
+      radiusUnits: 'pixels', getRadius: 4.5, getFillColor: [255, 255, 255, 240], stroked: true, lineWidthUnits: 'pixels',
+      getLineWidth: 2, getLineColor: C.accent }))
+  }
+  if (ctx.analysePoly) {
+    L.push(new PolygonLayer({ id: 'analyse-preview', data: [{ polygon: ctx.analysePoly }], getPolygon: (d) => d.polygon,
+      getFillColor: withAlpha(C.accent, 50), stroked: true, lineWidthUnits: 'pixels', getLineWidth: 2, getLineColor: C.accent }))
   }
 
   // selection ring / outline

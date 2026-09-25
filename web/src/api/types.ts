@@ -62,3 +62,47 @@ export interface Job {
   id: string; kind: string; status: string; stage: string | null; done: number | null; total: number | null
   street: string | null; area_slug: string | null; input: { click?: { lat: number; lon: number }; polygon?: Polygon }
 }
+
+// ------------------------------------------------------------------ P4 responses
+export type { Asset, Building, UnmappedBusiness } from '@/types/export'
+
+export interface QueryFilters {
+  intent: 'buildings' | 'streetlight_gaps' | 'assets' | 'review'
+  street?: string; use?: 'commercial' | 'residential'; floors_op?: '>' | '>=' | '<' | '=='; floors_n?: number
+  match_status?: 'no_record' | 'discrepancy'; discrepancy?: string; ref_flag?: string; group_by?: 'street'
+  interval_m?: number; asset_type?: 'pole' | 'streetlight'; reason_has?: string
+}
+export interface GapRow {
+  kind: 'streetlight_gap'; id: string; street: string; length_m: number; interval_m: number; start: [number, number]
+  end: [number, number]; poles_inside: number; gap_type: string; display_mode: 'along_road' | 'check' | 'straight'
+  along_road_m: number | null; length_differs: boolean; lit_cameras_inside: number | null
+  longest_dark_along_road_m: number | null; note: string | null
+}
+export interface ReviewItem {
+  id: number | null; item_type: 'building' | 'asset'; ref_id: string; building_id: string | null; asset_cls: string | null
+  street: string | null; lat: number; lon: number; priority: number | null; reasons: string[]; discrepancies: string[]
+  status: 'pending' | 'approved' | 'rejected' | 'appealed'; reviewer: string | null; note: string | null
+  appeal_photo_path: string | null; updated_at: string | null
+}
+export type ReviewRow = ReviewItem & { area: string; object: Record<string, string | number | null> }
+export interface QueryResponse {
+  area: string; text: string; parsed_filters: QueryFilters; intent: QueryFilters['intent']
+  rows: (Record<string, unknown> & { kind: string; id: string | number | null })[] | null
+  groups: { key: string; count: number }[] | null; total: number; why_empty: { step: string; count: number }[]
+}
+export interface AreaDetail extends AreaCard {
+  meta: { area: string; run?: Record<string, unknown> }
+  dashboard: {
+    kpi: Record<string, number>
+    charts: { by_street: Record<string, { buildings: number; no_record: number; discrepancy: number; streetlights: number; poles: number; gap_m_60: number }> } & Record<string, unknown>
+  }
+  consistency: { field: string; stored: unknown; computed: unknown; source: string; note: string }[]
+  cost: { model_card: Record<string, unknown> | null; run_stats: Record<string, unknown>; run_stats_representative: false; run_stats_badge: string }
+  streets: { name: string; osm_name: string | null; length_m: number | null }[]
+}
+export interface JobPreview {
+  street: string; length_m: number; osm_ways: number; way_ids: number[]; polygon: Polygon; already_analysed_in: string[]
+  estimate: null | { street_view_images: number; street_view_usd: number | null; gpu_minutes: number | null
+    cpu_minutes_full_ocr: number | null; cpu_minutes_fast_ocr: string | null; basis: string; is_estimate: true }
+}
+export interface JobFull extends Job { message: string | null; created_at: string | null; started_at: string | null; finished_at: string | null }

@@ -265,7 +265,8 @@ def run_query(bundle, text):
         out["groups"] = [{"key": k, "count": v} for k, v in res.items()]
         out["total"] = sum(res.values())
     else:
-        out["rows"] = [_query_row(it, r) for r in res]
+        disp = bundle.get("gap_display") or {}
+        out["rows"] = [_query_row(it, r, disp) for r in res]
         out["total"] = len(res)
     if funnel:
         out["why_empty"] = [{"step": s, "count": n} for s, n in funnel]
@@ -274,7 +275,7 @@ def run_query(bundle, text):
     return out
 
 
-def _query_row(intent, r):
+def _query_row(intent, r, disp=None):
     if intent == "buildings":
         return {"kind": "building", "id": r["building_id"], **{k: r.get(k) for k in (
             "street", "lat", "lon", "obs_use", "use_route", "obs_floors", "floors_status", "match_status", "discrepancies",
@@ -283,8 +284,13 @@ def _query_row(intent, r):
         return {"kind": r["type"], "id": r["id"], **{k: r.get(k) for k in (
             "street", "lat", "lon", "confidence", "method", "uncertainty_m")}, "register_status": (r.get("register") or {}).get("status")}
     if intent == "streetlight_gaps":
+        d = (disp or {}).get(r.get("id")) or {}
         return {"kind": "streetlight_gap", **{k: r.get(k) for k in (
-            "id", "street", "length_m", "interval_m", "start", "end", "poles_inside", "gap_type")}}
+            "id", "street", "length_m", "interval_m", "start", "end", "poles_inside", "gap_type")},
+                # D13: recorded length stays the value; along-road length + check flag shown beside it
+                "display_mode": d.get("mode", "straight"), "along_road_m": d.get("along_road_m"),
+                "length_differs": bool(d.get("length_differs")), "lit_cameras_inside": d.get("lit_cameras_inside"),
+                "longest_dark_along_road_m": d.get("longest_dark_along_road_m"), "note": d.get("note")}
     return {"kind": "review_item", **r}       # review
 
 
@@ -307,3 +313,90 @@ def _other_funnel(bundle, qe, f):
             steps.append((f"reason: {f['reason_has']}", sum((not st or x.get("street") == st)
                                                             and any(f["reason_has"] in r for r in x["reasons"]) for x in qe.Q)))
     return [{"step": s, "count": n} for s, n in steps]
+
+
+# ---------------------------------------------------------------- editable filter chips → QueryEngine
+FILTER_KEYS = ("intent", "street", "use", "floors_op", "floors_n", "match_status", "discrepancy", "ref_flag", "group_by",
+               "interval_m", "asset_type", "reason_has")
+OP_WORDS = {">": "more than", ">=": "at least", "<": "less than", "==": "exactly"}
+
+
+class FilterError(ValueError):
+    pass
+
+
+def normalize_filters(f):
+    out = {k: f[k] for k in FILTER_KEYS if f.get(k) not in (None, "", False)}
+    out.setdefault("intent", "buildings")
+    if "floors_n" in out:
+        out["floors_n"] = int(out["floors_n"])
+    if "interval_m" in out:
+        out["interval_m"] = int(out["interval_m"])
+    return out
+
+
+def compose_query(f):
+    """Canonical English for a filter set, phrased so QueryEngine.parse() reads back exactly these filters.
+    Chip edits therefore still run through the pipeline's QueryEngine (CLAUDE.md §7), never a second query engine."""
+    f = normalize_filters(f)
+    it, parts = f["intent"], []
+    if it == "streetlight_gaps":
+        parts.append(f"streets where no streetlight is detected within {f.get('interval_m', 60)} m")
+    elif it == "assets":
+        parts.append("show streetlights" if f.get("asset_type") == "streetlight" else "show poles")
+    elif it == "review":
+        parts.append("review items" + (" with low-confidence floor count" if f.get("reason_has") else ""))
+    else:
+        w = ["show"] + ([f["use"]] if f.get("use") in ("commercial", "residential") else []) + ["buildings"]
+        if f.get("floors_op"):
+            if f["floors_op"] not in OP_WORDS or "floors_n" not in f:
+                raise FilterError("floors filter needs an operator (>, >=, <, ==) and a number")
+            w.append(f"with {OP_WORDS[f['floors_op']]} {f['floors_n']} visible floors")
+        if f.get("match_status") == "no_record":
+            w.append("that do not have a matching property record")
+        elif f.get("match_status") == "discrepancy":
+            w.append("flagged with a discrepancy")
+        if f.get("discrepancy"):
+            w.append("with " + str(f["discrepancy"]).replace("_", " "))
+        if f.get("ref_flag"):
+            w.append("whose sign is not in google")
+        parts.append(" ".join(w))
+    if f.get("street"):
+        parts.append(f"on {f['street']}")
+    if it == "buildings" and f.get("group_by") == "street":
+        parts.append("by street")
+    return " ".join(parts)
+
+
+def run_filters(bundle, filters):
+    want = normalize_filters(filters)
+    if want["intent"] != "buildings":
+        want.pop("group_by", None)
+    text = compose_query(want)
+    got = {k: v for k, v in engine(bundle).parse(text).items() if k != "why_empty"}
+    if got != want:
+        raise FilterError(f"these filters can't be expressed for QueryEngine (read back as {got})")
+    return run_query(bundle, text)
+
+
+# ---------------------------------------------------------------- analyse-a-street estimate
+def job_estimate(length_m, ref_bundle, model_card):
+    """Scale a new street by length from the Ward 29 run: planned views per metre (run coverage stats) and GPU minutes /
+    prices from model_card (D1). Returns None when the reference run or model card is missing."""
+    ct = (model_card or {}).get("cost_time") or {}
+    if not ref_bundle or not ct or not length_m:
+        return None
+    ref_len = sum(s.get("length_m") or 0 for s in ref_bundle["streets"])
+    views = (((ref_bundle["meta"].get("run") or {}).get("coverage") or {}).get("views_planned"))
+    if not ref_len or not views:
+        return None
+    images = round(length_m * views / ref_len)
+    price = ct.get("street_view_price_usd_per_image")
+    gpu = ct.get("ward29_full_run_gpu_minutes")
+    cpu = (ct.get("cpu_fallback_per_street_min") or {})
+    return {"street_view_images": images, "street_view_usd": round(images * price, 2) if price else None,
+            "gpu_minutes": round(gpu * length_m / ref_len, 1) if gpu else None,
+            "cpu_minutes_full_ocr": cpu.get("full_ocr"), "cpu_minutes_fast_ocr": cpu.get("fast_ocr_estimate"),
+            "basis": (f"scaled by length from the Ward 29 run: {views} planned views over {round(ref_len)} m of streets; "
+                      f"GPU {gpu} min for Ward 29 and ${price}/image from model_card. VLM calls not included."),
+            "is_estimate": True}

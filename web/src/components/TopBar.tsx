@@ -1,16 +1,17 @@
 import { motion } from 'framer-motion'
-import { Box, Check, ChevronDown, CloudOff, Moon, Square, Sun } from 'lucide-react'
+import { Box, Check, ChevronDown, CloudOff, Crosshair, Inbox, Moon, Search, Square, Sun } from 'lucide-react'
 import { useMap } from '@vis.gl/react-google-maps'
 import { useActiveJobs, useAreas } from '@/api/queries'
 import type { Band } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tip } from '@/components/ui/tooltip'
-import { bboxCenter, flyTo } from '@/map/camera'
+import { goToBand } from '@/map/bands'
 import { flyToArea } from '@/map/MapView'
 import { useUi } from '@/store/ui'
 import { cn, fmt } from '@/lib/utils'
 import { LayerPanel } from './LayerPanel'
+import { QueryBar } from './QueryCard'
 
 const BANDS: { key: Band; label: string }[] = [
   { key: 'city', label: 'City' }, { key: 'area', label: 'Area' }, { key: 'street', label: 'Street' }, { key: 'object', label: 'Object' },
@@ -18,13 +19,17 @@ const BANDS: { key: Band; label: string }[] = [
 
 export function TopBar() {
   return (
-    <header className="pointer-events-none absolute inset-x-3 top-3 z-20 flex items-start justify-between gap-3">
-      <div className="pointer-events-auto flex items-center gap-2">
+    <header className="pointer-events-none absolute inset-x-3 top-3 z-30 flex items-start gap-2">
+      <div className="pointer-events-auto flex shrink-0 items-center gap-2">
         <Brand />
         <AreaSwitcher />
       </div>
+      <div className="pointer-events-auto flex min-w-[220px] flex-1"><QueryBar /></div>
       <BandIndicator />
-      <div className="pointer-events-auto glass flex h-11 items-center gap-0.5 px-1.5">
+      <div className="pointer-events-auto glass flex h-11 shrink-0 items-center gap-0.5 px-1.5">
+        <AnalyseButton />
+        <Tip label="Search places & commands (Ctrl K)"><Button size="icon" onClick={() => useUi.getState().setPaletteOpen(true)} aria-label="Search places and commands"><Search /></Button></Tip>
+        <Tip label="Review queue"><Button size="icon" onClick={() => useUi.getState().setPage('review')} aria-label="Open Review"><Inbox /></Button></Tip>
         <OfflineBadge />
         <JobsIndicator />
         <span className="mx-1 h-5 w-px bg-[var(--glass-border)]" />
@@ -38,7 +43,7 @@ export function TopBar() {
 
 function Brand() {
   return (
-    <div className="glass flex h-11 items-center gap-2.5 pl-3 pr-4">
+    <div className="glass flex h-11 items-center gap-2 pl-2.5 pr-3" title="GEO-CASCADIA · street-level asset & property intelligence">
       <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden>
         <defs>
           <linearGradient id="gc-g" x1="0" y1="0" x2="1" y2="1">
@@ -49,10 +54,11 @@ function Brand() {
         <path d="M16 2 29 9.5v13L16 30 3 22.5v-13z" fill="none" stroke="url(#gc-g)" strokeWidth="2.4" />
         <path d="M16 9.5 23 13.5v8L16 25.5l-7-4v-8z" fill="url(#gc-g)" opacity=".9" />
       </svg>
-      <div className="leading-none">
+      <div className="hidden leading-none min-[1500px]:block">
         <div className="text-[13px] font-semibold tracking-[0.14em]">GEO-CASCADIA</div>
         <div className="mt-1 text-[10.5px] text-muted">Street-level asset &amp; property intelligence</div>
       </div>
+      <div className="text-[12.5px] font-semibold tracking-[0.12em] min-[1500px]:hidden">GEO·C</div>
     </div>
   )
 }
@@ -68,13 +74,13 @@ function AreaSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="glass flex h-11 min-w-0 max-w-[340px] cursor-pointer items-center gap-3 px-3.5 text-left transition-colors hover:bg-hover" aria-label="Switch area">
+        <button className="glass flex h-11 min-w-0 max-w-[250px] cursor-pointer items-center gap-3 px-3 text-left transition-colors hover:bg-hover" aria-label="Switch area">
           <div className="min-w-0">
             <div className="eyebrow leading-none">Area</div>
             <div className="mt-1 truncate text-[13px] font-medium leading-none">{cur ? short(cur.name) : 'Loading…'}</div>
           </div>
           {cur && (
-            <div className="tnum hidden shrink-0 items-center gap-2 text-[11.5px] text-muted xl:flex">
+            <div className="tnum hidden shrink-0 items-center gap-2 text-[11.5px] text-muted min-[1600px]:flex">
               <span>{fmt.format(cur.counts.buildings)} bldg</span>
               <span className="text-faint">·</span>
               <span>{fmt.format(cur.counts.assets)} assets</span>
@@ -115,21 +121,7 @@ function BandIndicator() {
   const zoom = useUi((s) => s.camera?.zoom)
   const map = useMap('main')
   const { data: areas } = useAreas()
-  const go = (target: Band) => {
-    const ui = useUi.getState()
-    const a = areas?.find((x) => x.slug === ui.area)
-    if (!map || !a) return
-    const c = map.getCenter()?.toJSON() ?? bboxCenter(a.bbox)
-    const [x0, y0, x1, y1] = a.bbox
-    const inArea = c.lng >= x0 && c.lng <= x1 && c.lat >= y0 && c.lat <= y1
-    const tilt = ui.flat ? 0 : 45
-    const sel = ui.selected && 'lat' in ui.selected && typeof ui.selected.lat === 'number'
-      ? { lat: ui.selected.lat, lng: (ui.selected as { lon: number }).lon } : null
-    if (target === 'area') return flyToArea(map, a.bbox, ui.flat)
-    if (target === 'city') return flyTo(map, { center: bboxCenter(a.bbox), zoom: 11.8, tilt: 0, heading: 0 }, { instant: ui.flat })
-    const center = target === 'object' && sel ? sel : inArea ? c : bboxCenter(a.bbox)
-    return flyTo(map, { center, zoom: target === 'street' ? 17.6 : 19.2, tilt }, { instant: ui.flat })
-  }
+  const go = (target: Band) => { if (map) goToBand(map, target, areas) }
   return (
     <nav className="glass pointer-events-auto hidden h-9 items-center gap-0.5 self-center px-1 md:flex" aria-label="Zoom level">
       {BANDS.map((b) => (
@@ -141,7 +133,7 @@ function BandIndicator() {
           <span className={cn('relative', band === b.key ? 'text-accent' : 'text-muted group-hover:text-fg')}>{b.label}</span>
         </button>
       ))}
-      <span className="tnum w-12 pr-2 text-right text-[11px] text-faint" aria-live="polite">z{zoom != null ? zoom.toFixed(1) : '–'}</span>
+      <span className="tnum hidden w-12 pr-2 text-right text-[11px] text-faint min-[1500px]:inline" aria-live="polite">z{zoom != null ? zoom.toFixed(1) : '–'}</span>
     </nav>
   )
 }
@@ -169,7 +161,7 @@ function JobsIndicator() {
           {n > 0 && <span className="absolute inline-flex size-full animate-ping rounded-full bg-accent opacity-60" />}
           <span className={cn('relative inline-flex size-2 rounded-full', online ? 'bg-matched' : 'bg-faint')} />
         </span>
-        <span className="tnum">{n > 0 ? `${n} running` : 'Jobs'}</span>
+        <span className="tnum hidden min-[1500px]:inline">{n > 0 ? `${n} running` : 'Jobs'}</span>
       </div>
     </Tip>
   )
@@ -208,3 +200,15 @@ function ThemeToggle() {
   )
 }
 
+
+function AnalyseButton() {
+  const on = useUi((s) => s.analyse)
+  const offline = useUi((s) => s.offline)
+  return (
+    <Tip label={offline ? 'Offline data mode: new analyses need the database' : 'Analyse a new street: click it on the map'}>
+      <Button size="sm" variant={on ? 'subtle' : 'accent'} className="mr-1 h-8" onClick={() => useUi.getState().setAnalyse(!on)} aria-pressed={on}>
+        <Crosshair /> {on ? 'Picking…' : 'Analyse'}
+      </Button>
+    </Tip>
+  )
+}

@@ -23,7 +23,7 @@ from shapely.geometry import Point, mapping, shape
 from shapely.ops import transform
 from shapely.validation import explain_validity
 
-from . import loader
+from . import loader, views
 from .store import Data, OfflineError
 
 router = APIRouter()
@@ -33,7 +33,8 @@ FAIL_CODES = {"NO_STREET_VIEW": "no_street_view", "NO_STREETS": "no_street_view"
               "AWS_TOKEN_EXPIRED": "expired_token", "EXPIRED_TOKEN": "expired_token"}
 FILE_OK = re.compile(r"^[A-Za-z0-9_.-]{1,80}\.(json|geojson|csv)$")
 MAX_FILE = 40 * 1024 * 1024
-STALE_RUNNING = "10 minutes"   # a running job with no heartbeat for this long can be claimed again (worker died)
+STALE_RUNNING = "10 minutes"
+CANCELLED = "cancelled by user"   # a running job with no heartbeat for this long can be claimed again (worker died)
 
 
 def get_data(request: Request) -> Data:
@@ -113,7 +114,12 @@ class JobIn(BaseModel):
 def job_preview(body: ClickIn, request: Request, D: Data = Depends(get_data)):
     """Resolve a map click to the street it lands on (no job created) — for the confirm sheet."""
     res = pick_street(request.app.state.settings, body.lat, body.lon)
-    return {"offline": not D.db_online, **res, "already_analysed_in": _existing_areas(D, body.lat, body.lon)}
+    try:
+        ref, _ = D.read(lambda s: s.bundle("ward29"))
+    except Exception:
+        ref = None
+    est = views.job_estimate(res.get("length_m"), ref, request.app.state.model_card.get())
+    return {"offline": not D.db_online, **res, "estimate": est, "already_analysed_in": _existing_areas(D, body.lat, body.lon)}
 
 
 @router.post("/jobs", tags=["jobs"], status_code=201)
@@ -174,6 +180,20 @@ def job_get(job_id: str, request: Request, D: Data = Depends(get_data)):
             return _get_job(c, job_id)
     job = D.write(fn)
     return {"offline": False, "job": job, "worker_online": worker_online(request.app)}
+
+
+@router.post("/jobs/{job_id}/cancel", tags=["jobs"])
+def job_cancel(job_id: str, request: Request, D: Data = Depends(get_data)):
+    """Cancel a job that has not finished (status → failed, message "cancelled by user"); workers never claim it again."""
+    def fn(s):
+        with s.pool.connection() as c:
+            j = _get_job(c, job_id)
+            if j["status"] not in ("queued", "running", "expired_token"):
+                raise HTTPException(409, f"job is already {j['status']}")
+            c.execute("update jobs set status = 'failed', message = %s, finished_at = now() where id = %s",
+                      (CANCELLED, job_id))
+            return _get_job(c, job_id)
+    return {"offline": False, "job": D.write(fn), "worker_online": worker_online(request.app)}
 
 
 # ------------------------------------------------------------------------------------------------ worker
@@ -300,6 +320,8 @@ def worker_result(request: Request, job: str = Form(...), files: List[UploadFile
     def fn(s):
         with s.pool.connection() as c:
             j = _get_job(c, job)
+        if j["status"] != "running":
+            raise HTTPException(409, f"job is {j['status']}" + (f" ({j['message']})" if j.get("message") else ""))
         slug = j["input"].get("slug") or _slugify(j["street"], j["id"])
         folder = os.path.join(settings.areas_dir, slug)
         tmp = folder + f".upload-{uuid.uuid4().hex[:6]}"
