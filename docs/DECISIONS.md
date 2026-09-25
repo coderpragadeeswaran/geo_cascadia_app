@@ -56,3 +56,22 @@ The owner does not have the original full-run logs. `stage_seconds`, `total_minu
 - Vite **8** + `@vitejs/plugin-react` 6, React **18.3**, TypeScript **5.9**, zod **4**, Node 24, Python 3.12.
 - The zod schemas in `web/src/types/*` are the single source for TS types: `strict` for `npm run check:data`, `loose` in the app.
 - `tools/p0_setup.py` rebuilds every `run_report.json` and prints the inventory plus the D2 mismatch list.
+
+## 2026-09-25 — P1 (database)
+
+### D9. Unclassified building use is shown, never hidden
+- Ward 29: only 221 of 381 buildings have a use value/route; **160 have none** (Trichy 25 of 66). Every place that
+  shows building use (KPIs, charts, filters, tables, Under the Hood) shows the gap explicitly,
+  e.g. **"use: not classified — 160"**. It is never dropped from a denominator or a chart.
+- In the DB, `buildings.use is null` means not classified.
+
+### D10. Schema additions to CLAUDE.md §6 (P1)
+- Every object table has `record jsonb` = the full export record, so the API returns the same shape as offline mode (D4).
+- Extra tables: `streets` (from `streets.json`: geometry, length, coverage, for street-health colouring) and
+  `missing_asset_records` (D7). Extra columns: `areas.polygon_source/computed/consistency/updated_at`,
+  `jobs.heartbeat_at`, `review_items.street/geom/discrepancies`, `buildings.google_flags`, `assets.method/street`.
+- Area polygon: `data/study_area/Study_area.geojson` when it contains ≥95% of the area's objects (Ward 29);
+  otherwise the analysed streets buffered by 40 m (Trichy, Tiruppur). Stored in `areas.polygon_source`.
+- Reloads are idempotent and **keep human review decisions**; only pending items that vanished from the export are deleted.
+- RLS is enabled on every table with no policies: the backend (table owner) bypasses it, and the public anon key is blocked.
+- `Study_area.geojson` had one stray character (`,S[`) that made it invalid JSON; it was removed. No coordinates changed.
