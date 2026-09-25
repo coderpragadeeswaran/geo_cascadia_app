@@ -1,0 +1,58 @@
+/* NIGHT SURVEY — scoped to .ns (design preview only; the real pages are untouched until approved).
+   Fonts are self-hosted from node_modules (@fontsource-variable): no Google Fonts requests. */
+@import "@fontsource-variable/anek-tamil/standard.css";     /* Latin + Tamil, weight 100–800, width 75–125 % */
+@import "@fontsource-variable/martian-mono/standard.css";   /* weight 100–800, width 75–112.5 % */
+
+.ns {
+  font-family: var(--ns-sans);
+  background: var(--ns-bg0);
+  color: var(--ns-ink);
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 420;
+  -webkit-font-smoothing: antialiased;
+}
+.ns ::selection { background: var(--ns-sodium-soft); }
+
+/* type scale (see tokens.ts) */
+.ns .t-display { font-size: 30px; line-height: 1; font-weight: 640; font-stretch: 78%; letter-spacing: -0.01em; }
+.ns .t-title   { font-size: 18px; line-height: 1.15; font-weight: 600; font-stretch: 85%; }
+.ns .t-body    { font-size: 14px; line-height: 1.4; }
+.ns .t-small   { font-size: 12.5px; line-height: 1.35; }
+.ns .t-micro   { font-size: 10.5px; line-height: 1.2; font-weight: 600; font-stretch: 110%; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ns-ink3); }
+.ns .t-figure  { font-family: var(--ns-mono); font-size: 24px; line-height: 1; font-weight: 300; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.ns .t-data    { font-family: var(--ns-mono); font-size: 11.5px; line-height: 1.3; font-weight: 400; font-stretch: 90%; font-variant-numeric: tabular-nums; }
+.ns .ink2 { color: var(--ns-ink2); }
+.ns .ink3 { color: var(--ns-ink3); }
+.ns .sodium { color: var(--ns-sodium); }
+
+/* structure: thin rules instead of cards */
+.ns .rule-t { border-top: 1px solid var(--ns-line); }
+.ns .rule-b { border-bottom: 1px solid var(--ns-line); }
+.ns .rule-l { border-left: 1px solid var(--ns-line); }
+.ns .surface { background: var(--ns-bg1); }
+.ns .sheet { background: var(--ns-bg2); border: 1px solid var(--ns-line); border-radius: var(--ns-r-sheet); box-shadow: 0 24px 60px -24px rgb(0 0 0 / 0.55); }
+
+/* controls */
+.ns .btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: var(--ns-r-control);
+  font-size: 13px; font-weight: 520; color: var(--ns-ink2); cursor: pointer; transition: color 120ms var(--ns-ease), background 120ms var(--ns-ease); }
+.ns .btn:hover { color: var(--ns-ink); background: var(--ns-line); }
+.ns .btn-sodium { color: var(--ns-sodium); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ns-sodium) 55%, transparent); }
+.ns .btn-sodium:hover { background: var(--ns-sodium-soft); color: var(--ns-sodium); }
+.ns .btn-solid { background: var(--ns-sodium); color: var(--ns-bg0); }
+.ns .btn-solid:hover { background: var(--ns-sodium-glow); color: var(--ns-bg0); }
+.ns :focus-visible { outline: 2px solid var(--ns-sodium); outline-offset: 2px; }
+.ns .tag { font-family: var(--ns-mono); font-size: 10px; font-stretch: 90%; padding: 1px 5px; border-radius: var(--ns-r-hair);
+  border: 1px solid var(--ns-line-strong); color: var(--ns-ink2); letter-spacing: 0.02em; white-space: nowrap; }
+.ns .dot { display: inline-block; width: 8px; height: 8px; border-radius: 999px; flex: none; }
+
+/* top-of-map scrim: text sits on a gradient, not on a card */
+.ns .scrim-top { background: linear-gradient(to bottom, var(--ns-scrim) 0%, var(--ns-scrim) 58%, color-mix(in srgb, var(--ns-bg0) 45%, transparent) 82%, transparent 100%); }
+
+/* analyse mode "flashlight": everything outside a circle around the cursor is dimmed (coverage lines only near it) */
+.ns .flashlight { pointer-events: none; position: absolute; inset: 0;
+  background: radial-gradient(circle 150px at var(--fx, -999px) var(--fy, -999px), transparent 0 55%, rgb(2 4 10 / 0.9) 100%); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ns *, .ns *::before, .ns *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}

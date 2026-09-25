@@ -99,6 +99,8 @@ export interface AreaDetail extends AreaCard {
   consistency: { field: string; stored: unknown; computed: unknown; source: string; note: string }[]
   cost: { model_card: Record<string, unknown> | null; run_stats: Record<string, unknown>; run_stats_representative: false; run_stats_badge: string }
   streets: { name: string; osm_name: string | null; length_m: number | null }[]
+  /** run_report.json as built by tools/build_run_report.py (pipeline-internal counts; timings are from resumed runs, D1) */
+  run_report: Record<string, unknown> | null
 }
 export interface JobPreview {
   street: string; length_m: number; osm_ways: number; way_ids: number[]; polygon: Polygon; already_analysed_in: string[]

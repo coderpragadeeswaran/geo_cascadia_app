@@ -1,0 +1,207 @@
+# Night Survey — design system (proposal)
+
+Status: **preview only** at `http://localhost:5173/design-preview`. The real pages are unchanged until approved.
+Single source of tokens: [`web/src/design/tokens.ts`](../web/src/design/tokens.ts) (CSS variables are generated from it;
+deck.gl reads the same values).
+
+## Concept
+The city at night, lit by its own streetlights. The base is deep night indigo, never neutral grey. The one accent is
+**sodium-lamp orange**, the colour of Indian streetlights. On the map, analysed roads glow where they are lit, and every
+**streetlight gap is drawn as a dark stretch of road** on top of that glow. The core finding ("where is it dark?")
+reads without a legend. Findings (no record, discrepancy) are the only coloured points at area level; matched buildings
+recede.
+
+Structure comes from **space, thin rules and type**, not from cards: no glass, no blur, no pill clusters. Panels appear
+only when there is a question or a selection.
+
+## Colour
+
+| token | night | daylight | role |
+|---|---|---|---|
+| `bg0` | `#070a14` | `#f4f0e6` | page / map surround |
+| `bg1` | `#0b1020` | `#fbf8f1` | panels (flat) |
+| `bg2` | `#121936` | `#ffffff` | sheets, popovers |
+| `ink` / `ink2` / `ink3` | `#ebe6da` / `#a9b0c7` / `#6b7391` | `#1b1f2a` / `#4c5366` / `#858a99` | text hierarchy |
+| `line` / `lineStrong` | 13 % / 28 % of `#a0afdc` | 12 % / 30 % of ink | rules |
+| `sodium` | `#ffa23a` | `#b65c09` | the only accent: lights, selection, primary action |
+| `sodiumGlow` | `#ffc27a` | `#e08a2a` | lamp halos, lit roads |
+| `matched` | `#6a7fb0` dusk slate | `#8e9dc4` | nothing wrong, recedes |
+| `discrepancy` | `#7dcad6` glacier | `#00849f` | soft cool / deep teal |
+| `noRecord` | `#e7819f` peony | `#cc1f63` | soft rose / deep rose |
+| `review` | `#ebe6da` | `#1b1f2a` | chalk: dashed outline, never a fill |
+| `unclassified` | `#4a5270` | `#b9b2a2` | floors / use not classified (hatched, D9) |
+| `dark` / `darkEdge` | `#02040a` / `#34407a` | `#1b1f2a` | unlit stretch of road |
+
+**Status colours are computed, not eyeballed.** I ran the dataviz palette validator (`validate_palette.js`, OKLab ΔE),
+with the sodium accent included because it shares the map with the statuses, checking all pairs.
+
+- **v2 night (current, "soft")** on `#0a0e1c`: dusk slate `#6a7fb0` · glacier `#7dcad6` · peony `#e7819f`.
+  - Colour-blind separation PASS (worst ΔE 8.2, protan: peony ↔ slate).
+  - Normal-vision floor PASS (16.4).
+  - Contrast ≥ 3:1 PASS.
+  - Chroma is 0.078–0.079, just under the validator's "vivid" floor of 0.10. That softening is the point of v2; every
+    status also has a text label, so colour is never the only cue.
+- **v1 night** (first preview, rejected as too neon): `#7c93c9` · `#3fd4e0` · `#ff4f9a`. Kept in `statusV1Night` only
+  for the old-vs-new comparison in the preview.
+- **Daylight** on `#f4f0e6` (unchanged):
+  - Colour-blind separation PASS (worst ΔE 8.6, deutan: sodium ↔ rose).
+  - Normal-vision floor PASS (15.3).
+  - The pale matched is 2.4:1 against paper by design, so it always has an ink outline and every value is also in the
+    table (the validator's "relief" rule).
+- The categorical lightness band is not applied: the validator scopes it to categorical series, and these are statuses.
+- Hue logic: warm (sodium) is "the lit city", and cool or muted colours are findings. Red-green pairs failed the
+  validator (green ↔ rose ΔE 3–5 deutan), so the palette avoids them.
+
+## Type
+- **Anek Tamil** (Ek Type, OFL): one variable family for **Latin and Tamil** (weight 100–800, width 75–125 %). Sign
+  text in the data is Tamil; Inter has no Tamil glyphs. Condensed widths set titles; normal width sets reading text.
+- **Martian Mono** (OFL, weight 100–800, width 75–112.5 %): every measurement, count, coordinate and ID. Tabular by
+  nature, with an instrument feel.
+- **Self-hosted** from `@fontsource-variable/*` (bundled by Vite). No Google Fonts requests. The preview also stops the
+  Maps JS API from injecting its Roboto stylesheet; our fonts cover the attribution text.
+
+| style | family | size / line | weight | width |
+|---|---|---|---|---|
+| display | Anek Tamil | 30 / 1.0 | 640 | 78 % |
+| title | Anek Tamil | 18 / 1.15 | 600 | 85 % |
+| body | Anek Tamil | 14 / 1.4 | 420 | 100 % |
+| small | Anek Tamil | 12.5 / 1.35 | 430 | 100 % |
+| micro (caps, +0.12em) | Anek Tamil | 10.5 / 1.2 | 600 | 110 % |
+| figure (KPIs) | Martian Mono | 24 / 1.0 | 300 | 100 % |
+| data (IDs, metres) | Martian Mono | 11.5 / 1.3 | 400 | 90 % |
+
+## Space, radii, motion
+- **Space:** 4-pt steps `2 4 8 12 16 24 32 48`.
+- **Radii:** hairline 2, controls 6, sheets 10. Sharper than the glass UI (14).
+- **Motion:** quick 120 ms, base 200, slow 320; ease `cubic-bezier(0.2,0.7,0.2,1)`.
+  - Opening: a 2.6 s flight in over the dark city, then the streetlights fade on over 1.8 s, staggered per lamp.
+  - `prefers-reduced-motion` (and the 3D-off switch) skip both and show the final state.
+
+## Map language
+| element | night | daylight |
+|---|---|---|
+| analysed road | sodium line + soft additive glow | sodium line |
+| **streetlight gap (60 m)** | **dark band** (`dark`) with a cold edge | heavy ink band |
+| gap to check (D13) | dark band + dotted chalk edge | same |
+| streetlight | glowing orb (additive halo), fades on | sodium dot |
+| pole without lamp | street level: small unlit dot · area level: barely visible | street level only (hidden at area level) |
+| building, area level | findings only (peony / glacier points); matched faint | findings only; matched hidden |
+| unmapped business, area level | hollow ring | hidden (shown from street level) |
+| building, street level | extruded by floors, status colour; no floors → flat + hatched | same |
+| unmapped business | hollow ring (approximate) | same |
+| selection | sodium outline | sodium outline |
+
+## Declutter rules (applied in the preview)
+1. The map is the hero. The right panel appears only for a question (query result) or a selection (evidence drawer).
+2. **KPIs:** five numbers (buildings, no record, discrepancy, dark stretches, use not classified) plus "More". They sit
+   on a scrim, with no cards and no horizontal scroll.
+3. **Findings table fits its panel.** Columns drop by priority using container queries:
+   - 380 px: id · name/street · register;
+   - 460 px: adds use and floors;
+   - 600 px: adds review.
+   Location and model routes move to the row tooltip and the drawer.
+4. **One chart per question.** The query chart replaces the regular chart of the same thing.
+5. **Findings-density hexbins are off by default.** The key (legend) is collapsed and only lists what is on screen.
+   The minimap is optional (off by default).
+6. **Street View coverage lines only in Analyse mode**, and only near the cursor. The map dims like a flashlight
+   outside a 150 px circle around the pointer (`.flashlight`).
+7. Status colour only where there is a status. Everything else is ink.
+8. **Area level: lit vs dark roads are the dominant read.** Poles are nearly invisible at night and hidden in daylight,
+   and matched buildings and unmapped rings are hidden in daylight. All of them return at street level.
+
+## App structure
+- **The map is home.** Explore and Analyse are modes of the map, never separate pages. At most **one panel** is open:
+  a question's result, a selection's evidence, or a KPI's findings list.
+- **A 64 px left rail** (icon + label) reaches **Review · Under the Hood · Trust · Jobs**. The active item is marked
+  with a sodium bar, and the rail holds no other chrome.
+- **Review:** queue (priority first) | the evidence view with its box | the decision column (A / R / E, J / K).
+- **Trust:** "what we measured" (detector per class with n, use, floors n=36, names routed vs all-VLM) and "tried and
+  dropped", every number from `model_card.json`.
+- **Jobs:** pre-computed runs, plus analyses started from the app, with an honest empty state and worker status.
+
+## Drive the street
+Select a street; a scrubber moves the camera **through the pipeline's real camera stops**.
+- **Road strip:** the whole street at once. The road is sodium where lit and a dark band on each gap, with lamp ticks,
+  buildings above (left side) and below (right side), and camera-stop ticks.
+- **Controls:** drag, click, ←/→ to step, or ▶ Drive to play one stop every 1.3 s (1.6 s with reduced motion).
+- **Map:** follows the camera, with a 90° view wedge; findings within 20 m grow and get an outline.
+- **Street View frame:** the forward view (the street's bearing) at the current stop. It is debounced by 350 ms, so it
+  bills **one image per stop you settle on**, not one per pixel of scrubbing.
+- **Right column:**
+  - the status: "Dark stretch · no lamp within 60 m" with the gap id and recorded / on-road length, or "Lit · nearest
+    lamp X m";
+  - "Passing now": buildings, lamps and unmapped businesses within 20 m, animating in and out;
+  - counts so far.
+- **Data:** `tools/export_drive_street.py` writes `web/src/design/data/ward29-sathy-drive.json` (Sathy Main Road main
+  line, 803 m, 39 stops, 2 gaps, 13 lamps, 43 buildings: all real). The real feature would read the camera stops
+  from an API endpoint instead of a bundled file.
+
+## Under the Hood as a scroll story
+Seven chapters, each a big counted-up figure, one sentence and a kept-vs-dropped bar (kept = sodium, dropped =
+hatched):
+1. 733 panoramas (2 user photospheres excluded)
+2. 203 camera stops (13 dropped: inside a footprint)
+3. 1,154 views (111 face no building outline)
+4. 5,554 detections (4,617 usable; 937 excluded)
+5. 381 buildings (221 use classified, 160 not)
+6. 268 poles & streetlights (20 triangulated, 248 approximate; 11 dark stretches)
+7. 260 items for a person
+
+Pipeline-internal counts come from `run_report.json`. Countable facts are computed from the records (D2): the story
+shows **20** triangulated and explains the report's 29. There are no timings (D1). Reduced motion shows final
+values without animation.
+
+## Base map: Google Cloud settings for your Map ID
+With a Map ID, the map's own look (land, roads, labels, POIs, Google's buildings) is controlled **only in Google
+Cloud**. The JS `styles` option is ignored on vector maps. Both files are in Google's **new cloud-based maps styling
+JSON** format (`{"variant": …, "styles": [{"id": …, "geometry": …, "label": …}]}`), generated from `tokens.ts` by
+`npm run map-styles`. They use only feature IDs and stylers listed in Google's JSON reference, and a local check
+confirms every ID, styler and colour against that list.
+
+| file | variant | becomes | holds |
+|---|---|---|---|
+| `docs/map-styles/night.json` | `dark` | the Map ID's **dark-mode** style | night palette |
+| `docs/map-styles/daylight.json` | `light` | the Map ID's **light-mode** style | paper palette |
+
+Both files hide POI pins and labels, transit stations, 2D and 3D Google buildings (commercial included), business
+corridors, road shields and signs, parking aisles and land parcels.
+
+A style's mode comes from `variant` and cannot be changed after creation. A Map ID takes exactly one light-mode and
+one dark-mode style, and the app picks one with `colorScheme` (DARK = night, LIGHT = daylight).
+
+**Steps (twice: night.json first, then daylight.json)**
+1. Google Cloud Console → **Google Maps Platform → Map Styles → Create style → JSON** tab →
+   **Upload JSON File**. Choose `docs/map-styles/night.json`. If the importer reports "Your JSON contains N errors",
+   stop and send me the message.
+2. Click **Customize**. Open **Map Settings** (the gear in the Map features panel) and set:
+   - **Building style: Footprints.** 3D vs footprints is a Map Settings toggle, not part of the JSON. The JSON already
+     hides building geometry; this makes sure nothing is extruded if Google changes defaults.
+   - **POI density:** the lowest option, and **Landmarks:** off, if your editor shows them.
+3. **Save** it as "GEO Night Survey". It publishes automatically on first save; later edits need **Publish**.
+4. Repeat with `daylight.json` → "GEO Night Survey daylight".
+5. **Map Management → your Map ID → Map styles:** set **Dark mode → GEO Night Survey** and **Light mode → GEO Night
+   Survey daylight**, then **Save**. Google notes that style changes can take **a few hours** to reach apps.
+
+**Limits to know**
+- **Dark-mode styles apply only to roadmap, navigation and terrain**, not hybrid (satellite). So the night map stays
+  on roadmap; satellite is a daylight-only option.
+- The code cannot hide POIs or Google's buildings on a Map ID map; only these styles can.
+
+**What the code handles:**
+- `colorScheme` per mode;
+- `mapTypeId: roadmap` by default;
+- default UI off and POI clicks off;
+- every data layer;
+- blocking the Roboto webfont.
+
+The preview's "Intended style (JSON preview)" shows the same palette on a raster map. It uses the legacy array form
+of the same colours, because the JS `styles` option only accepts that format.
+
+## Files
+- `web/src/design/tokens.ts`: all tokens and **one** base-map palette (`mapBase`). It feeds `mapStyleJson`
+  (legacy array, preview raster map only) and `cloudMapStyle()` (new Cloud JSON). `npm run map-styles` writes
+  `docs/map-styles/{night,daylight}.json`.
+- `web/src/design/night-survey.css`: scoped `.ns` base styles and the font imports.
+- `web/src/design/nsLayers.ts`: the map layers above.
+- `web/src/design/NsParts.tsx`, `NsShell.tsx`, `NsDrive.tsx`, `NsStory.tsx`, `DesignPreview.tsx`: the preview.
+- `tools/export_drive_street.py`: builds the drive data from `plan.json`, `streets.json` and `export.json`.

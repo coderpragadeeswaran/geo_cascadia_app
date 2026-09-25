@@ -1,0 +1,155 @@
+{
+  "variant": "light",
+  "backgroundColor": "#f4f0e6",
+  "metadata": {
+    "name": "GEO Night Survey daylight (light mode)",
+    "source": "web/src/design/tokens.ts"
+  },
+  "styles": [
+    {
+      "id": "pointOfInterest",
+      "label": {
+        "visible": false
+      }
+    },
+    {
+      "id": "infrastructure.transitStation",
+      "label": {
+        "visible": false
+      }
+    },
+    {
+      "id": "infrastructure.building",
+      "geometry": {
+        "visible": false
+      }
+    },
+    {
+      "id": "infrastructure.building.commercial",
+      "geometry": {
+        "visible": false
+      }
+    },
+    {
+      "id": "infrastructure.businessCorridor",
+      "geometry": {
+        "visible": false
+      }
+    },
+    {
+      "id": "natural.land",
+      "geometry": {
+        "fillColor": "#efe9dc"
+      }
+    },
+    {
+      "id": "natural.land.landCover",
+      "geometry": {
+        "fillColor": "#efe9dc"
+      }
+    },
+    {
+      "id": "infrastructure.urbanArea",
+      "geometry": {
+        "fillColor": "#e8e1d2"
+      }
+    },
+    {
+      "id": "natural.water",
+      "geometry": {
+        "fillColor": "#d3dbe3"
+      },
+      "label": {
+        "textFillColor": "#6b7a8a",
+        "textStrokeColor": "#f4f0e6"
+      }
+    },
+    {
+      "id": "infrastructure.roadNetwork.road",
+      "geometry": {
+        "fillColor": "#fbf8f1",
+        "strokeColor": "#d6cdb9"
+      },
+      "label": {
+        "textFillColor": "#6b6457",
+        "textStrokeColor": "#f4f0e6"
+      }
+    },
+    {
+      "id": "infrastructure.roadNetwork.road.local",
+      "geometry": {
+        "fillColor": "#fbf8f1"
+      },
+      "label": {
+        "textFillColor": "#857d6e",
+        "textStrokeColor": "#f4f0e6"
+      }
+    },
+    {
+      "id": "infrastructure.roadNetwork.road.noOutlet",
+      "geometry": {
+        "fillColor": "#fbf8f1"
+      },
+      "label": {
+        "textFillColor": "#857d6e",
+        "textStrokeColor": "#f4f0e6"
+      }
+    },
+    {
+      "id": "infrastructure.roadNetwork.road.arterial",
+      "geometry": {
+        "fillColor": "#fbf8f1"
+      }
+    },
+    {
+      "id": "infrastructure.roadNetwork.road.highway",
+      "geometry": {
+        "fillColor": "#ffffff"
+      }
+    },
+    {
+      "id": "infrastructure.roadNetwork.ramp",
+      "geometry": {
+        "fillColor": "#ffffff",
+        "strokeColor": "#d6cdb9"
+      }
+    },
+    {
+      "id": "infrastructure.roadNetwork.noTraffic",
+      "geometry": {
+        "fillColor": "#f1ebdf"
+      }
+    },
+    {
+      "id": "infrastructure.roadNetwork.parkingAisle",
+      "geometry": {
+        "visible": false
+      }
+    },
+    {
+      "id": "infrastructure.roadNetwork.roadShield",
+      "label": {
+        "visible": false
+      }
+    },
+    {
+      "id": "infrastructure.roadNetwork.roadSign",
+      "label": {
+        "visible": false
+      }
+    },
+    {
+      "id": "political",
+      "label": {
+        "textFillColor": "#6b6457",
+        "textStrokeColor": "#f4f0e6"
+      }
+    },
+    {
+      "id": "political.landParcel",
+      "label": {
+        "visible": false
+      }
+    }
+  ]
+}
