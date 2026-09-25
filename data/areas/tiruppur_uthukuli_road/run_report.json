@@ -1,0 +1,235 @@
+{
+ "run_dir": "tiruppur_uthukuli_road",
+ "area": "Unseen street: Uthukuli Road, Tiruppur",
+ "generated": "2026-09-24T05:19:21.887418+00:00",
+ "pipeline": {
+  "detector": "YOLOv8s v8s_640_s2",
+  "ocr": "PaddleOCR en+ta (full)",
+  "vlm": "apac.amazon.nova-lite-v1:0",
+  "name_gate": 0.7,
+  "footprints": "OSM",
+  "reference": "Google Places (New)"
+ },
+ "imagery": {
+  "panoramas_found": 75,
+  "google_car": 74,
+  "user_photospheres": 1,
+  "cameras_planned": 36,
+  "cameras_dropped": {},
+  "views_planned": 77,
+  "views_by_type": {
+   "unmapped": 69,
+   "perpendicular": 3,
+   "oblique": 4,
+   "tilt": 1
+  },
+  "views_facing_mapped_building": 8,
+  "views_facing_no_mapped_building": 69,
+  "views_fetched_ok": 77,
+  "street_view_requests": 0,
+  "street_view_cost_usd_notional": 0.0,
+  "by_street": {
+   "Uthukuli Road": {
+    "cameras": 36,
+    "views": 77
+   }
+  }
+ },
+ "maps": {
+  "footprints": {
+   "osm": 1,
+   "microsoft": 0
+  },
+  "osm_built_fraction": 0.02,
+  "buildings_registered": 1,
+  "buildings_by_source": {
+   "osm": 1
+  },
+  "verdict": "partial: 90% of views face no mapped building (assets and signs still analysed)"
+ },
+ "detection": {
+  "boxes_total": 333,
+  "by_class": {
+   "signboard": 132,
+   "building": 111,
+   "pole": 70,
+   "lamp_head": 20
+  },
+  "used_for_geometry": 326,
+  "excluded_from_geometry": {
+   "tilted view": 7
+  },
+  "mean_conf_by_class": {
+   "building": 0.646,
+   "lamp_head": 0.421,
+   "pole": 0.525,
+   "signboard": 0.606
+  }
+ },
+ "assets": {
+  "located": 20,
+  "by_type": {
+   "pole": 15,
+   "streetlight": 5
+  },
+  "by_confidence": {
+   "low": 13,
+   "medium": 7
+  },
+  "triangulated_2plus_cameras": 0,
+  "single_camera_approximate": 20,
+  "register_status": {
+   "unconfirmed_detection": 13,
+   "discrepancy": 3,
+   "matched": 2,
+   "unrecorded_asset": 2
+  },
+  "streetlight_gaps_60m": 3,
+  "missing_asset_records": 1
+ },
+ "buildings": {
+  "registered": 1,
+  "with_a_building_box": 1,
+  "no_building_box_detected": 0,
+  "box_rejected_by_quality_gate": {},
+  "usable_view": 1,
+  "vlm_said_wrong_target": 0,
+  "use_route": {
+   "tier3_vlm": 1
+  },
+  "use_values": {
+   "commercial": 1
+  },
+  "floors_status": {
+   "measured": 1
+  },
+  "floor_values": {
+   "3": 1
+  }
+ },
+ "signs": {
+  "crops": 132,
+  "tiers": {
+   "no readable text": 55,
+   "read by OCR (Tier 2)": 65,
+   "escalated to VLM (Tier 3)": 12
+  },
+  "ocr_seconds_per_crop": 0.01,
+  "ocr_mode": "full",
+  "vlm_name_calls": 1,
+  "vlm_name_verdicts": {
+   "advertisement": 1
+  },
+  "buildings_named": 1,
+  "name_route": {
+   "tier2_ocr": 1
+  },
+  "name_quality": {
+   "fragment": 1
+  },
+  "google_confirmed": 0
+ },
+ "unmapped_businesses": {
+  "sign_candidates_checked_by_vlm": 47,
+  "kept": 14,
+  "vlm_said_not_business": 22,
+  "examples": [
+   "true value solutions",
+   "V.R.CLOTHING",
+   "mkm motors",
+   "adventist nursery school",
+   "nathika associates",
+   "idm60 saloon",
+   "Edelweiss Mutual Fund",
+   "century door",
+   "MARUTI SUZUKI SERVICE",
+   "coimbatore association",
+   "kc ortho hospital",
+   "granda furniture"
+  ]
+ },
+ "matching": {
+  "match_status": {
+   "matched": 1
+  },
+  "discrepancy_types": {},
+  "planted_error_scores": {
+   "location_shift": {
+    "planted": 0,
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+   },
+   "area_understated": {
+    "planted": 0,
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+   },
+   "missing_record": {
+    "planted": 0,
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+   }
+  },
+  "asset_register_scores": {
+   "location_shift": {
+    "planted": 1,
+    "tp": 1,
+    "fp": 0
+   },
+   "type_mismatch": {
+    "planted": 2,
+    "tp": 2,
+    "fp": 0
+   },
+   "missing_asset": {
+    "planted": 1,
+    "tp": 1,
+    "fp": 0
+   }
+  },
+  "register_note": "SYNTHETIC property + asset registers with planted errors (no open municipal data)"
+ },
+ "review": {
+  "items": 13,
+  "by_priority": {
+   "6": 13
+  },
+  "by_reason": {
+   "single-detection asset": 13
+  }
+ },
+ "cost_time": {
+  "stage_seconds": {
+   "panoramas": 0.0,
+   "area": 0.0,
+   "plan": 0.0,
+   "detect": 0.1,
+   "geometry": 0.0,
+   "ocr": 3.0,
+   "vlm": 0.1,
+   "reference": 0.0,
+   "match": 0.0
+  },
+  "total_minutes": 0.1,
+  "vlm_calls": 0,
+  "vlm_cost_usd": 0.0,
+  "places_calls": 0,
+  "device": "gpu",
+  "buildings_use_local": null,
+  "buildings_use_vlm": null
+ },
+ "story": [
+  "Found 75 Street View panoramas (1 user photospheres, excluded from geometry).",
+  "Planned 36 camera stops and 77 views instead of a full 12-heading sweep.",
+  "69 views face frontage with no building outline in OSM \u2014 map coverage verdict: partial: 90% of views face no mapped building (assets and signs still analysed).",
+  "The detector drew 333 boxes; 326 were usable for positioning.",
+  "Located 20 poles/streetlights; 0 triangulated from 2+ cameras, 20 approximate (single camera).",
+  "1 buildings registered; 1 had a usable view for use/floors, 0 had no building box at all.",
+  "132 sign crops: 65 read locally, 12 escalated; 1 buildings named, 0 confirmed by Google.",
+  "14 businesses found on unmapped frontage (approximate points).",
+  "13 items sent to human review."
+ ]
+}

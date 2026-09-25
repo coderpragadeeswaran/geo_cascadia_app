@@ -1,0 +1,278 @@
+{
+ "run_dir": "trichy_bharathidasan_salai",
+ "area": "Unseen street: Bharathidasan Salai, Tiruchirappalli",
+ "generated": "2026-09-24T05:19:27.343302+00:00",
+ "pipeline": {
+  "detector": "YOLOv8s v8s_640_s2",
+  "ocr": "PaddleOCR en+ta (full)",
+  "vlm": "apac.amazon.nova-lite-v1:0",
+  "name_gate": 0.7,
+  "footprints": "OSM",
+  "reference": "Google Places (New)"
+ },
+ "imagery": {
+  "panoramas_found": 177,
+  "google_car": 165,
+  "user_photospheres": 12,
+  "cameras_planned": 102,
+  "cameras_dropped": {},
+  "views_planned": 338,
+  "views_by_type": {
+   "unmapped": 113,
+   "perpendicular": 91,
+   "oblique": 113,
+   "tilt": 21
+  },
+  "views_facing_mapped_building": 225,
+  "views_facing_no_mapped_building": 113,
+  "views_fetched_ok": 338,
+  "street_view_requests": 0,
+  "street_view_cost_usd_notional": 0.0,
+  "by_street": {
+   "Bharathidasan Salai": {
+    "cameras": 102,
+    "views": 338
+   }
+  }
+ },
+ "maps": {
+  "footprints": {
+   "osm": 105,
+   "microsoft": 0
+  },
+  "osm_built_fraction": 0.176,
+  "buildings_registered": 66,
+  "buildings_by_source": {
+   "osm": 66
+  },
+  "verdict": "partial: 33% of views face no mapped building (assets and signs still analysed)"
+ },
+ "detection": {
+  "boxes_total": 2403,
+  "by_class": {
+   "signboard": 1267,
+   "building": 613,
+   "pole": 455,
+   "lamp_head": 68
+  },
+  "used_for_geometry": 2226,
+  "excluded_from_geometry": {
+   "tilted view": 169,
+   "user photosphere": 8
+  },
+  "mean_conf_by_class": {
+   "building": 0.644,
+   "lamp_head": 0.487,
+   "pole": 0.487,
+   "signboard": 0.583
+  }
+ },
+ "assets": {
+  "located": 87,
+  "by_type": {
+   "pole": 78,
+   "streetlight": 9
+  },
+  "by_confidence": {
+   "low": 48,
+   "medium": 37,
+   "high": 2
+  },
+  "triangulated_2plus_cameras": 2,
+  "single_camera_approximate": 85,
+  "register_status": {
+   "unconfirmed_detection": 48,
+   "discrepancy": 11,
+   "matched": 20,
+   "unrecorded_asset": 8
+  },
+  "streetlight_gaps_60m": 8,
+  "missing_asset_records": 4
+ },
+ "buildings": {
+  "registered": 66,
+  "with_a_building_box": 59,
+  "no_building_box_detected": 7,
+  "box_rejected_by_quality_gate": {
+   "implausibly tall box": 7,
+   "thin sliver at image edge": 6,
+   "roof cut off at top": 2
+  },
+  "usable_view": 44,
+  "vlm_said_wrong_target": 0,
+  "use_route": {
+   "tier3_vlm": 44
+  },
+  "use_values": {
+   "not observed": 25,
+   "institutional": 1,
+   "commercial": 23,
+   "residential": 11,
+   "under_construction": 3,
+   "mixed": 3
+  },
+  "floors_status": {
+   "not_measured": 25,
+   "measured": 28,
+   "low_confidence": 13
+  },
+  "floor_values": {
+   "4": 3,
+   "1": 10,
+   "2": 20,
+   "3": 7,
+   "5": 1
+  }
+ },
+ "signs": {
+  "crops": 1267,
+  "tiers": {
+   "escalated to VLM (Tier 3)": 95,
+   "no readable text": 631,
+   "read by OCR (Tier 2)": 537,
+   "Google watermark": 4
+  },
+  "ocr_seconds_per_crop": 0.07,
+  "ocr_mode": "full",
+  "vlm_name_calls": 55,
+  "vlm_name_verdicts": {
+   "advertisement": 14,
+   "business": 37,
+   "none": 2,
+   "notice": 2
+  },
+  "buildings_named": 54,
+  "name_route": {
+   "tier2_ocr": 27,
+   "tier3_vlm+ocr_gate": 26,
+   "tier3_vlm_unverified": 1
+  },
+  "name_quality": {
+   "fragment": 14,
+   "good": 38,
+   "tamil_unverified": 2
+  },
+  "google_confirmed": 13
+ },
+ "unmapped_businesses": {
+  "sign_candidates_checked_by_vlm": 90,
+  "kept": 36,
+  "vlm_said_not_business": 23,
+  "examples": [
+   "maa kauvery",
+   "maa kauvery",
+   "ashley land",
+   "sims",
+   "prasar bharati",
+   "Indian Oil",
+   "M.L AUTOMOBILE",
+   "sri om silks",
+   "kannan",
+   "cycle world",
+   "bsnl",
+   "sri sri sri"
+  ]
+ },
+ "matching": {
+  "match_status": {
+   "matched": 45,
+   "discrepancy": 19,
+   "no_record": 2
+  },
+  "discrepancy_types": {
+   "extra_floor": 9,
+   "area_understated": 2,
+   "use_change": 10,
+   "location_shift": 4,
+   "missing_record": 2
+  },
+  "planted_error_scores": {
+   "location_shift": {
+    "planted": 4,
+    "tp": 4,
+    "fp": 0,
+    "fn": 0
+   },
+   "area_understated": {
+    "planted": 2,
+    "tp": 2,
+    "fp": 0,
+    "fn": 0
+   },
+   "missing_record": {
+    "planted": 2,
+    "tp": 2,
+    "fp": 0,
+    "fn": 0
+   }
+  },
+  "asset_register_scores": {
+   "location_shift": {
+    "planted": 6,
+    "tp": 5,
+    "fp": 0
+   },
+   "type_mismatch": {
+    "planted": 6,
+    "tp": 6,
+    "fp": 2
+   },
+   "missing_asset": {
+    "planted": 3,
+    "tp": 3,
+    "fp": 1
+   }
+  },
+  "register_note": "SYNTHETIC property + asset registers with planted errors (no open municipal data)"
+ },
+ "review": {
+  "items": 77,
+  "by_priority": {
+   "1": 6,
+   "2": 13,
+   "3": 1,
+   "4": 8,
+   "5": 1,
+   "6": 48
+  },
+  "by_reason": {
+   "high-severity discrepancy": 6,
+   "attribute discrepancy \u2014 verify on imagery": 17,
+   "building seen from one view only": 6,
+   "floor count low confidence (roofline not visible)": 13,
+   "name read by VLM only (not supported by OCR)": 1,
+   "single-detection asset": 48
+  }
+ },
+ "cost_time": {
+  "stage_seconds": {
+   "panoramas": 0.0,
+   "area": 0.2,
+   "plan": 0.0,
+   "detect": 0.2,
+   "geometry": 0.3,
+   "ocr": 4.3,
+   "vlm": 0.1,
+   "reference": 0.2,
+   "match": 0.0
+  },
+  "total_minutes": 0.1,
+  "vlm_calls": 0,
+  "vlm_cost_usd": 0.0,
+  "places_calls": 0,
+  "device": "gpu",
+  "buildings_use_local": null,
+  "buildings_use_vlm": null
+ },
+ "story": [
+  "Found 177 Street View panoramas (12 user photospheres, excluded from geometry).",
+  "Planned 102 camera stops and 338 views instead of a full 12-heading sweep.",
+  "113 views face frontage with no building outline in OSM \u2014 map coverage verdict: partial: 33% of views face no mapped building (assets and signs still analysed).",
+  "The detector drew 2403 boxes; 2226 were usable for positioning.",
+  "Located 87 poles/streetlights; 2 triangulated from 2+ cameras, 85 approximate (single camera).",
+  "66 buildings registered; 44 had a usable view for use/floors, 7 had no building box at all.",
+  "1267 sign crops: 537 read locally, 95 escalated; 54 buildings named, 13 confirmed by Google.",
+  "36 businesses found on unmapped frontage (approximate points).",
+  "77 items sent to human review."
+ ]
+}
