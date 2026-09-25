@@ -1,0 +1,142 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@fontsource-variable/inter";
+@import "@fontsource/noto-sans-tamil/400.css";
+@import "@fontsource/noto-sans-tamil/600.css";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ------------------------------------------------------------------ design tokens
+   One accent (azure). Status colours are fixed across map, legend and tables (CLAUDE.md §9.1):
+   matched = teal · discrepancy = amber · no record = red · review = violet · approximate = hollow/dashed.
+   map/colors.ts mirrors these values for deck.gl. */
+:root {
+  --font-sans: "Inter Variable", "Noto Sans Tamil", ui-sans-serif, system-ui, sans-serif;
+
+  --accent: #4f9dff;
+  --accent-soft: rgb(79 157 255 / 0.16);
+  --matched: #2dd4bf;
+  --discrepancy: #f5a524;
+  --no-record: #f4525b;
+  --review: #a78bfa;
+  --unclassified: #94a3b8;
+  --unmapped: #7dd3fc;
+
+  --radius: 14px;
+}
+
+:root,
+[data-theme="dark"] {
+  --bg: #07090d;
+  --fg: #e8edf5;
+  --muted: #8b95a7;
+  --faint: #5b6577;
+  --glass: rgb(14 18 26 / 0.72);
+  --glass-strong: rgb(12 16 23 / 0.88);
+  --glass-border: rgb(255 255 255 / 0.08);
+  --glass-highlight: rgb(255 255 255 / 0.06);
+  --hover: rgb(255 255 255 / 0.06);
+  --shadow: 0 10px 40px -12px rgb(0 0 0 / 0.65), 0 2px 8px -2px rgb(0 0 0 / 0.4);
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --bg: #eef1f6;
+  --fg: #0f172a;
+  --muted: #5b6577;
+  --faint: #8b95a7;
+  --glass: rgb(255 255 255 / 0.74);
+  --glass-strong: rgb(255 255 255 / 0.9);
+  --glass-border: rgb(15 23 42 / 0.09);
+  --glass-highlight: rgb(255 255 255 / 0.7);
+  --hover: rgb(15 23 42 / 0.05);
+  --shadow: 0 10px 40px -14px rgb(15 23 42 / 0.28), 0 2px 8px -2px rgb(15 23 42 / 0.12);
+  --accent: #2f7cf0;
+  --accent-soft: rgb(47 124 240 / 0.12);
+  color-scheme: light;
+}
+
+@theme inline {
+  --font-sans: var(--font-sans);
+  --color-bg: var(--bg);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-matched: var(--matched);
+  --color-discrepancy: var(--discrepancy);
+  --color-no-record: var(--no-record);
+  --color-review: var(--review);
+  --color-unclassified: var(--unclassified);
+  --color-unmapped: var(--unmapped);
+  --color-glass: var(--glass);
+  --color-glass-border: var(--glass-border);
+  --color-hover: var(--hover);
+  --radius-panel: var(--radius);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* numbers line up in every panel */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "cv11" 1;
+}
+
+/* the glass panel: everything floats over the map */
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow), inset 0 1px 0 var(--glass-highlight);
+  border-radius: var(--radius);
+}
+
+.glass-strong {
+  background: var(--glass-strong);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.eyebrow {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  font-weight: 600;
+}
+
+/* hatched swatch = floors not classified (matches the deck.gl fill pattern) */
+.hatch {
+  background-image: repeating-linear-gradient(135deg, currentColor 0 1.5px, transparent 1.5px 5px);
+}
+
+/* Google attribution must stay visible: keep our bottom UI above it, never over it */
+.gm-style-cc,
+.gm-style a[href*="maps.google"] {
+  opacity: 0.9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -16,6 +16,7 @@ from shapely.ops import unary_union
 
 from . import loader
 from .db import DbUnavailable, Pool
+from .streetgeo import gap_display, named_streets
 
 LAYER_TABLES = {  # layer -> (table, key column, geometry expression)
     "buildings": ("buildings", "id", "coalesce(footprint, geom)"),
@@ -49,7 +50,7 @@ def review_item(**kw):
 
 
 def assemble(slug, name, polygon_source, polygon, bbox, meta, dashboard, run_report, streets, buildings, assets, gaps,
-             unmapped, missing, queue, source):
+             unmapped, missing, queue, gap_disp, source):
     """Common bundle. Applies live review state from `queue` onto the building/asset records."""
     by_ref = {(q["item_type"], q["ref_id"]): q for q in queue}
     for kind, recs in (("building", buildings), ("asset", assets)):
@@ -64,7 +65,7 @@ def assemble(slug, name, polygon_source, polygon, bbox, meta, dashboard, run_rep
     return {"slug": slug, "name": name, "polygon_source": polygon_source, "polygon": polygon, "bbox": bbox,
             "meta": meta, "dashboard_stored": dashboard, "run_report": run_report, "streets": streets,
             "buildings": buildings, "assets": assets, "streetlight_gaps": gaps, "unmapped_businesses": unmapped,
-            "missing_asset_records": missing, "review_queue": queue, "source": source}
+            "missing_asset_records": missing, "review_queue": queue, "gap_display": gap_disp or {}, "source": source}
 
 
 def _feature_geom(layer, rec):
@@ -109,15 +110,15 @@ class JsonStore:
         exp = loader._read(path)
         rr_path = os.path.join(folder, "run_report.json")
         rr = loader._read(rr_path) if os.path.exists(rr_path) else None
-        st_path = os.path.join(folder, "streets.json")
-        raw_streets = loader._read(st_path) if os.path.exists(st_path) else []
+        raw_streets, names, plan = loader.read_street_inputs(folder)
+        named = named_streets(raw_streets, names)          # display name + osm_name, same as the loader (D13)
         poly, poly_src = loader.area_polygon(exp, raw_streets)
         B, A, U = exp.get("buildings", []), exp.get("assets", []), exp.get("unmapped_businesses") or []
         bb = unary_union([poly] + [Point(o["lon"], o["lat"]) for o in B + A + U]).bounds  # same rule as the loader
         streets = []
-        for s in raw_streets:
+        for s in named:
             g = loader._street_lines(s)
-            streets.append({"name": s["name"], "length_m": s.get("length_m"), "road_type": s.get("type"),
+            streets.append({"name": s["name"], "osm_name": s["osm_name"], "length_m": s.get("length_m"), "road_type": s.get("type"),
                             "kind": s.get("kind"), "panos": s.get("panos"), "coverage": s.get("coverage"),
                             "way_ids": s.get("way_ids") or [], "geometry": _geojson(g) if g else None})
         asset_by_key = {(round(a["lat"], 7), round(a["lon"], 7), a["type"]): a["id"] for a in A}
@@ -133,7 +134,7 @@ class JsonStore:
                                          appeal_photo_path=q.get("appeal_photo_path")))
         b = assemble(slug, exp["meta"].get("area") or slug, poly_src, _geojson(poly), [round(x, 7) for x in bb],
                      exp["meta"], exp.get("dashboard") or {}, rr, streets, B, A, exp.get("streetlight_gaps", []), U,
-                     exp.get("missing_asset_records", []), queue, "json")
+                     exp.get("missing_asset_records", []), queue, gap_display(exp, named, plan, names), "json")
         with self._lock:
             self._cache[slug] = (stamp, b)
         return b
@@ -198,12 +199,14 @@ class DbStore:
         recs = lambda t: [r[0] for r in c.execute(f"select record from {t} where area_id = %s order by ord nulls last, id",
                                                    (area_id,))]
         B, A, G, U = recs("buildings"), recs("assets"), recs("streetlight_gaps"), recs("unmapped_businesses")
+        GD = {r[0]: r[1] for r in c.execute("select id, display from streetlight_gaps where area_id = %s and display is not null",
+                                            (area_id,))}
         M = [{"asset_no": r[0], "lat": r[1], "lon": r[2], "street": r[3], "why": r[4]} for r in c.execute(
             "select asset_no, ST_Y(geom), ST_X(geom), street, why from missing_asset_records where area_id = %s "
             "order by ord nulls last, asset_no", (area_id,))]
-        S = [{"name": r[0], "length_m": r[1], "road_type": r[2], "kind": r[3], "panos": r[4], "coverage": r[5],
+        S = [{"name": r[0], "osm_name": r[8], "length_m": r[1], "road_type": r[2], "kind": r[3], "panos": r[4], "coverage": r[5],
               "way_ids": list(r[6] or []), "geometry": r[7]} for r in c.execute(
-            "select name, length_m, road_type, kind, panos, coverage, way_ids, ST_AsGeoJSON(geom, 7)::json from streets "
+            "select name, length_m, road_type, kind, panos, coverage, way_ids, ST_AsGeoJSON(geom, 7)::json, osm_name from streets "
             "where area_id = %s order by ord nulls last, name", (area_id,))]
         asset_type = {x["id"]: x["type"] for x in A}
         Q = [review_item(id=r[0], item_type=r[1], ref_id=r[2], building_id=r[2] if r[1] == "building" else None,
@@ -214,7 +217,7 @@ class DbStore:
              for r in c.execute("""select id, item_type, ref_id, street, ST_Y(geom), ST_X(geom), priority, reasons, discrepancies,
                                           status, reviewer, note, appeal_photo_url, updated_at
                                    from review_items where area_id = %s order by ord nulls last, id""", (area_id,))]
-        return assemble(slug, a[0], a[1], a[2], [round(x, 7) for x in a[3]], a[4], a[5], a[6], S, B, A, G, U, M, Q, "db")
+        return assemble(slug, a[0], a[1], a[2], [round(x, 7) for x in a[3]], a[4], a[5], a[6], S, B, A, G, U, M, Q, GD, "db")
 
     def ids_in_bbox(self, bundle, layer, bb):
         table, key, geom = LAYER_TABLES[layer]

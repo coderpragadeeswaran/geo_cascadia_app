@@ -10,6 +10,7 @@ from collections import Counter
 from geo_cascadia.workspace import QueryEngine, build_dashboard
 
 from .derived import computed_counts, consistency
+from .streetgeo import gap_consistency
 
 NOT_CLASSIFIED = "not classified"   # D9: unclassified use is shown, never hidden
 MODEL_CARD_AREA = "ward29"          # model_card cost_time figures are Ward 29 figures (D1)
@@ -89,15 +90,31 @@ def area_card(bundle):
     return {"slug": bundle["slug"], "name": bundle["name"], "polygon_source": bundle["polygon_source"],
             "polygon": bundle["polygon"], "bbox": bundle["bbox"],
             "coverage_verdict": ((bundle["meta"].get("run") or {}).get("coverage") or {}).get("verdict"),
+            "coverage": coverage(bundle, s),
             "counts": {k: s[k] for k in ("buildings", "assets", "streets", "streetlight_gaps_60m", "review_items",
                                          "unmapped_businesses", "missing_asset_records", "use_not_classified",
                                          "assets_triangulated")},
             "match_status": s["match_status"]}
 
 
+def coverage(bundle, s=None):
+    """Map-coverage facts for the low-coverage banner. View counts are the pipeline's coverage stats (meta.run.coverage);
+    building / unmapped-business counts are computed from the records (D2)."""
+    cov = (bundle["meta"].get("run") or {}).get("coverage") or {}
+    s = s or summary(bundle)
+    vp, vn = cov.get("views_planned"), cov.get("views_facing_no_mapped_building")
+    share = round(vn / vp, 3) if vp and vn is not None else None
+    verdict = cov.get("verdict") or ""
+    return {"level": "full" if verdict.startswith("full") else "partial" if verdict else None,
+            "verdict": verdict or None, "views_planned": vp, "views_facing_no_mapped_building": vn,
+            "share_views_no_mapped_building": share, "osm_footprints": (cov.get("footprints") or {}).get("osm"),
+            "buildings": s["buildings"], "unmapped_businesses": s["unmapped_businesses"], "assets": s["assets"]}
+
+
 def area_detail(bundle, model_card):
     return {**area_card(bundle), "meta": bundle["meta"], "dashboard": dashboard(bundle), "summary": summary(bundle),
-            "consistency": consistency(export_view(bundle), bundle["run_report"], model_card),
+            "consistency": consistency(export_view(bundle), bundle["run_report"], model_card)
+                           + gap_consistency(bundle["streetlight_gaps"], bundle.get("gap_display") or {}),
             "cost": cost(bundle, model_card), "run_report": bundle["run_report"],
             "streets": [{k: v for k, v in s.items() if k != "geometry"} for s in bundle["streets"]]}
 
@@ -107,10 +124,13 @@ def street_health(bundle):
     by = dashboard(bundle)["charts"]["by_street"]
     out = {}
     for s in bundle["streets"]:
-        st = by.get(s["name"], {})
+        st = by.get(s["name"])
         km = (s.get("length_m") or 0) / 1000
+        if st is None:        # no building stats for this line: "no data" (grey), never a healthy-looking 0 (D13)
+            out[s["name"]] = {"has_stats": False, "issues_per_km": None}
+            continue
         issues = st.get("discrepancy", 0) + st.get("no_record", 0)
-        out[s["name"]] = {**st, "issues_per_km": round(issues / km, 2) if km else None}
+        out[s["name"]] = {**st, "has_stats": True, "issues_per_km": round(issues / km, 2) if km else None}
     return out
 
 
@@ -124,7 +144,8 @@ def features(bundle, layers, keep=None):
         health = street_health(bundle)
         for s in bundle["streets"]:
             if s.get("geometry") and ok("streets", s["name"]):
-                feats.append(F(s["geometry"], {"kind": "street", "id": s["name"], "name": s["name"], "length_m": s["length_m"],
+                feats.append(F(s["geometry"], {"kind": "street", "id": s["name"], "name": s["name"], "osm_name": s.get("osm_name"),
+                                               "length_m": s["length_m"],
                                                "road_type": s["road_type"], "coverage": s["coverage"], **health.get(s["name"], {})}))
     if "buildings" in layers:
         for b in bundle["buildings"]:
@@ -148,11 +169,17 @@ def features(bundle, layers, keep=None):
                     "cameras_used": a.get("cameras_used"), "uncertainty_m": a.get("uncertainty_m"),
                     "register_status": (a.get("register") or {}).get("status"), "review_status": (a.get("review") or {}).get("status")}))
     if "gaps" in layers:
+        disp = bundle.get("gap_display") or {}
         for g in bundle["streetlight_gaps"]:
             if ok("gaps", g["id"]):
-                feats.append(F({"type": "LineString", "coordinates": [g["start"][::-1], g["end"][::-1]]}, {
+                d = disp.get(g["id"]) or {}
+                path = d.get("path") or [g["start"][::-1], g["end"][::-1]]      # D13: along the road, or as recorded
+                feats.append(F({"type": "LineString", "coordinates": path}, {
                     "kind": "streetlight_gap", "id": g["id"], "street": g.get("street"), "length_m": g.get("length_m"),
-                    "interval_m": g.get("interval_m"), "poles_inside": g.get("poles_inside"), "gap_type": g.get("gap_type")}))
+                    "interval_m": g.get("interval_m"), "poles_inside": g.get("poles_inside"), "gap_type": g.get("gap_type"),
+                    "display_mode": d.get("mode", "straight"), "along_road_m": d.get("along_road_m"),
+                    "length_differs": bool(d.get("length_differs")), "lit_cameras_inside": d.get("lit_cameras_inside"),
+                    "longest_dark_along_road_m": d.get("longest_dark_along_road_m"), "note": d.get("note")}))
     if "unmapped" in layers:
         for u in bundle["unmapped_businesses"]:
             if ok("unmapped", u["id"]):

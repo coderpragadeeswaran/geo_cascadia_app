@@ -101,3 +101,61 @@ The owner does not have the original full-run logs. `stage_seconds`, `total_minu
   `GET /review/{id}/photo` (10-minute signed URL).
 - DB connections set `extra_float_digits = 3` so coordinates round-trip exactly (the pooler otherwise returns 15 digits).
 - Dropped `sqlalchemy`/`geoalchemy2` (unused; plain psycopg 3 with a small fail-fast pool).
+
+## 2026-09-25 — P3 (web foundation + map)
+
+### D12. Map rendering notes
+- **deck.gl draws in its own canvas** over the vector map (`GoogleMapsOverlay({ interleaved: false })`); tilt/heading stay
+  synced. Interleaved mode (shared WebGL context) rendered **nothing** with deck.gl 9.4 + Maps JS 3.65/3.66 in testing:
+  deck reads its size from Google's canvas, which is 0×0 when deck attaches, so it draws a 0×0 viewport. `?interleaved=1`
+  re-tests it after library upgrades. Side effect: 3D buildings do not occlude Google's own labels/icons.
+- **Maps JS pinned to the `quarterly` (stable) channel.**
+- **Extrusion height = observed floors × 3.2 m** — a display scale only, stated in the legend. Buildings with no floor
+  count (Ward 29: 160) are **flat + hatched**, never a guessed height (D9). Low-confidence floor counts are drawn faded.
+- **Streetlight gaps** — *corrected, see D13.* The P3 note here said Ward 29 `gap60-001` has endpoints 176 m / 195 m
+  from every street line. **That was wrong:** the check compared each OSM way piece separately; against the merged
+  Sathy Main Road line the ends are 0.5 m / 10.7 m away. Gap display is now computed in the backend (D13).
+- **Zoom bands:** city < 13.5 ≤ area < 16.5 ≤ street < 18.5 ≤ object. Auto base map: dark roadmap at city level,
+  hybrid satellite below; tilt 45° at street level (not in 2D / reduce-motion mode).
+- **Minimap** is an SVG of the area outline + street health + current view (no second Google map, D3).
+- **Theme toggle remounts the map** (Maps `colorScheme` is init-only). Measured on the production build, JS heap after GC:
+  **21.7 MB** idle (area), **24.8 MB** (street), **40.4 MB** after two theme toggles — within the D3 ≤ 60 MB target.
+  Dev-mode numbers are ~3× higher (React dev tooling) and are not the target.
+- Asset icon ring colour = synthetic asset-register status (matched teal / discrepancy amber / not in register red /
+  unconfirmed slate). Google POI icons come from the Map ID's cloud style (JS `styles` do not apply with a Map ID);
+  hide them in Cloud Console → Map Styles if they clutter the demo.
+- Places search box is deferred to P4 (it belongs in the top-bar search with the query bar).
+
+## 2026-09-25 — P3 review fixes
+
+### D13. Street names and streetlight-gap display
+- **Street names.** `streets.json` keeps raw OSM labels for unnamed ways ("(unnamed residential #907980850)"); every
+  building/asset/gap record carries the pipeline's display name from `street_names.json` ("Korathottam Road",
+  `run_area.py` `nm()`). The exact-name join matched only 3 of Ward 29's 10 streets and painted 7 streets "healthy"
+  (0.0 issues/km instead of 17.9–41.1). Now the loader and the JSON store apply `street_names.json` to the street lines:
+  `name` = display name, `osm_name` = raw label (migration 003). All 10/10 join (Trichy 1/1, Tiruppur 1/1); pytest
+  asserts it for all three areas. A street with no joined stats is shown **grey "no data"**, never a healthy 0.
+- **Gap display** (`backend/app/streetgeo.py`, shared by DB and offline mode; stored in `streetlight_gaps.display`):
+  merge the street's OSM pieces (as the pipeline's plan does); if both gap ends lie ≤ 25 m from the merged line **and no
+  lit camera stop** (streetlight within interval/2 = 30 m, the pipeline's rule) lies on the road between them → draw
+  along the road (`along_road`). If lit camera stops lie between the ends → keep the recorded straight segment in an
+  amber dotted **"check"** style with a note (`check`). No line near both ends → recorded straight segment (`straight`).
+  Ward 29: 10 along the road, `gap60-006` = check (4 lit stops; longest unlit stretch along the road ≈ 302 m).
+- **Gap length.** The recorded `length_m` is always shown (and QueryEngine sorts by it). When the along-road length
+  (+ the pipeline's 12 m end padding) differs by > 10 %, the UI adds "≈ X m along the road" and the Trust page's
+  data-consistency list gets a row: Ward 29 `gap60-001` 376 → ≈ 424 m, `gap60-003` 313 → ≈ 349 m, `gap60-005`
+  203 → ≈ 251 m, `gap60-006` (check row); Trichy `gap60-004` 304 → ≈ 402 m.
+- **Low-coverage banner** on the area card when `meta.run.coverage.verdict` is not "full" (Trichy 33 %, Tiruppur 90 % of
+  views face no mapped building). View counts come from the run's coverage stats; building/asset/business counts are
+  computed from the records (D2).
+- **3D switch** is labelled and on by default (storage key `gc.threeD`); OS reduced-motion still starts in 2D (D3).
+  Band pills (City / Area / Street / Object) are buttons that fly the camera to that band.
+- **Street-health ramp** stops widened to 0 / 10 / 20 / 40 issues per km (was 0 / 4 / 10 / 20): with correct joins,
+  Ward 29 streets span 0–41 per km and 8 of 10 would otherwise all be the same saturated red.
+- Band-specific deck.gl layers stay mounted and switch with `visible`. The city badge TextLayer is created only once area
+  data exists (with no text its font atlas was a 1024×0 canvas → "WebGL: texSubImage2D: no canvas" when the API was slow).
+  Production heap after GC re-measured: 22.6 MB (area) · 25.4 MB (street) · 43.4 MB after two theme toggles.
+
+### Pipeline follow-up (not app work)
+`match.py` gap length uses a straight-line fit; on curved streets it understates length and can mis-order cameras
+(`gap60-006`). Fix in the pipeline later. The app shows the recorded values and flags the difference (D13).

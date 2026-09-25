@@ -17,6 +17,7 @@ from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, P
 from shapely.ops import transform, unary_union
 
 from .derived import computed_counts, consistency
+from .streetgeo import gap_display, named_streets
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 STUDY_AREA = os.path.join(ROOT, "data", "study_area", "Study_area.geojson")
@@ -75,6 +76,12 @@ def _street_lines(street):
     return MultiLineString(lines) if lines else None
 
 
+def read_street_inputs(folder):
+    """streets.json, street_names.json (OSM label -> display name) and plan.json (camera stops); each may be absent."""
+    opt = lambda n, d: _read(os.path.join(folder, n)) if os.path.exists(os.path.join(folder, n)) else d
+    return opt("streets.json", []), opt("street_names.json", {}), opt("plan.json", None)
+
+
 def area_polygon(exp, streets):
     pts = [Point(o["lon"], o["lat"]) for o in exp.get("buildings", []) + exp.get("assets", [])]
     if os.path.exists(STUDY_AREA) and pts:
@@ -120,8 +127,8 @@ def load_area(conn, folder, slug=None, source_job_id=None):
     slug = slug or os.path.basename(folder.rstrip("\\/"))
     exp = _read(os.path.join(folder, "export.json"))
     rr = ensure_run_report(folder)
-    streets_path = os.path.join(folder, "streets.json")
-    streets = _read(streets_path) if os.path.exists(streets_path) else []
+    streets, names, plan = read_street_inputs(folder)
+    streets = named_streets(streets, names)          # name = pipeline display name, osm_name = raw OSM label (D13)
     mc = _read(MODEL_CARD) if os.path.exists(MODEL_CARD) else None
     meta, B, A = exp["meta"], exp.get("buildings", []), exp.get("assets", [])
     U, GAPS, M, Q = (exp.get("unmapped_businesses") or [], exp.get("streetlight_gaps", []),
@@ -149,10 +156,10 @@ def load_area(conn, folder, slug=None, source_job_id=None):
         rows = []
         for s in streets:
             g = _street_lines(s)
-            rows.append((area_id, s["name"], g.wkt if g else None, _num(s.get("length_m")), s.get("type"), s.get("kind"),
-                         s.get("panos"), _num(s.get("coverage")), s.get("way_ids") or []))
+            rows.append((area_id, s["name"], s["osm_name"], g.wkt if g else None, _num(s.get("length_m")), s.get("type"),
+                         s.get("kind"), s.get("panos"), _num(s.get("coverage")), s.get("way_ids") or []))
         _replace(cur, "streets", ("area_id", "name"),
-                 ["area_id", "name", "geom", "length_m", "road_type", "kind", "panos", "coverage", "way_ids"],
+                 ["area_id", "name", "osm_name", "geom", "length_m", "road_type", "kind", "panos", "coverage", "way_ids"],
                  rows, area_id, {"geom": G}, key_name="name")
 
         rows = []
@@ -187,10 +194,12 @@ def load_area(conn, folder, slug=None, source_job_id=None):
                  ["area_id", "id", "name", "ocr_text", "street", "geom", "sightings", "evidence", "record"],
                  rows, area_id, {"geom": PT})
 
+        disp = gap_display(exp, streets, plan, names)
         rows = [(area_id, g["id"], g.get("street"), LineString([g["start"][::-1], g["end"][::-1]]).wkt,
-                 _num(g.get("length_m")), g.get("interval_m"), g.get("poles_inside"), g.get("gap_type"), J(g)) for g in GAPS]
+                 _num(g.get("length_m")), g.get("interval_m"), g.get("poles_inside"), g.get("gap_type"), J(g),
+                 J(disp.get(g["id"]))) for g in GAPS]
         _replace(cur, "streetlight_gaps", ("area_id", "id"),
-                 ["area_id", "id", "street", "geom", "length_m", "interval_m", "poles_inside", "gap_type", "record"],
+                 ["area_id", "id", "street", "geom", "length_m", "interval_m", "poles_inside", "gap_type", "record", "display"],
                  rows, area_id, {"geom": G})
 
         rows = [(area_id, m["asset_no"], m.get("street"), (m["lon"], m["lat"]), m.get("why")) for m in M]
