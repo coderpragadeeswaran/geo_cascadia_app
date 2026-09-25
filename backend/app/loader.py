@@ -99,6 +99,7 @@ G = "ST_GeomFromText(%s, 4326)"
 def _replace(cur, table, key_cols, cols, rows, area_id, geom_exprs=None, key_name="id"):
     """Upsert rows (list of tuples in `cols` order, area_id first) and delete this area's rows not in `rows`."""
     geom_exprs = geom_exprs or {}
+    cols, rows = cols + ["ord"], [tuple(r) + (i,) for i, r in enumerate(rows)]  # keep export order
     vals = ", ".join(geom_exprs.get(c, "%s") for c in cols)
     upd = ", ".join(f"{c} = excluded.{c}" for c in cols if c not in key_cols)
     sql = f"insert into {table} ({', '.join(cols)}) values ({vals}) on conflict ({', '.join(key_cols)}) do update set {upd}"
@@ -208,15 +209,16 @@ def load_area(conn, folder, slug=None, source_job_id=None):
                 unjoined += 1
                 continue
             items.append((area_id, q["item_type"], ref, q.get("street"), q["lon"], q["lat"], q.get("priority"),
-                          q.get("reasons") or [], q.get("discrepancies") or [], q.get("status") or "pending"))
+                          q.get("reasons") or [], q.get("discrepancies") or [], q.get("status") or "pending", len(items)))
         if items:
             cur.executemany(
-                f"""insert into review_items (area_id, item_type, ref_id, street, geom, priority, reasons, discrepancies, status)
-                    values (%s, %s, %s, %s, {PT}, %s, %s, %s, %s)
+                f"""insert into review_items (area_id, item_type, ref_id, street, geom, priority, reasons, discrepancies, status, ord)
+                    values (%s, %s, %s, %s, {PT}, %s, %s, %s, %s, %s)
                     on conflict (area_id, item_type, ref_id) do update set street = excluded.street, geom = excluded.geom,
-                      priority = excluded.priority, reasons = excluded.reasons, discrepancies = excluded.discrepancies""",
+                      priority = excluded.priority, reasons = excluded.reasons, discrepancies = excluded.discrepancies,
+                      ord = excluded.ord""",
                 items)
-        keep = [f"{t}:{r}" for _, t, r, *_ in items]
+        keep = [f"{it[1]}:{it[2]}" for it in items]
         cur.execute("delete from review_items where area_id = %s and status = 'pending' "
                     "and not (item_type || ':' || ref_id = any(%s))", (area_id, keep))
 

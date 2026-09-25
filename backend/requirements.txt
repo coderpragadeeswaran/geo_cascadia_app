@@ -1,12 +1,11 @@
 # Laptop backend only. Never add torch / paddle / ultralytics / transformers here (CLAUDE.md §2).
 fastapi>=0.115
 uvicorn[standard]>=0.30
-sqlalchemy>=2.0
 psycopg[binary]>=3.2
-geoalchemy2>=0.15
 shapely>=2.0
 numpy>=1.26          # imported by geo_cascadia.geo / area (picker.click_to_street)
 requests>=2.32       # geo_cascadia.area (Overpass)
 python-dotenv>=1.0
 python-multipart>=0.0.9
 pytest>=8
+httpx>=0.27          # Supabase Storage calls + FastAPI TestClient

@@ -25,6 +25,7 @@ def computed_counts(exp):
         "unmapped_businesses": len(U),
         "streets": len({b["street"] for b in B}),
         "match_status": _count(b.get("match_status") for b in B),
+        "use_not_classified": sum(attr(b, "use").get("value") is None for b in B),  # D9: shown, never hidden
         "use_route": _count(attr(b, "use").get("route") for b in B if attr(b, "use").get("route")),
         "floors_status": _count(attr(b, "floors").get("status") for b in B),
         "name_route": _count(attr(b, "name").get("route") for b in B if attr(b, "name").get("route")),

@@ -75,3 +75,29 @@ The owner does not have the original full-run logs. `stage_seconds`, `total_minu
 - Reloads are idempotent and **keep human review decisions**; only pending items that vanished from the export are deleted.
 - RLS is enabled on every table with no policies: the backend (table owner) bypasses it, and the public anon key is blocked.
 - `Study_area.geojson` had one stray character (`,S[`) that made it invalid JSON; it was removed. No coordinates changed.
+
+## 2026-09-25 — P2 (API)
+
+### D11. API design notes
+- **One code path for online and offline.** `DbStore` (Supabase) and `JsonStore` (`data/areas/*.json`) each build the same
+  per-area bundle (export.json shape + live review state). Every endpoint computes from the bundle, so shapes and values
+  are identical in both modes (pytest compares all three areas). The only differences are DB-only fields:
+  review item `id`/`updated_at`/`reviewer`/`note` (null offline).
+- **Every JSON response has `"offline": true|false`.** After a DB failure the API serves JSON for 30 s, then retries.
+  Writes (review decisions, jobs, worker) return **503 `offline data mode — read only`**.
+- **Dashboard is recomputed** from the records with the pipeline's own `workspace.build_dashboard`; `building_use`
+  reports `"not classified"` (D9) and `kpi.use_not_classified` is added. `cost_panel` is replaced by `cost`
+  (`model_card` block for Ward 29, `run_stats` flagged `run_stats_representative: false` + badge text, D1).
+- **§10 "5 spec queries"** = the four free-text queries (tests 1–4) via `/query` + test 5 (click → evidence) via
+  `/buildings/{area}/{id}` and `/assets/{area}/{id}`. §10 has no fifth free-text query.
+- `why_empty`: QueryEngine's own funnel for building queries; for gaps/assets/review queries the wrapper builds the
+  same style of funnel (the engine only produces one for buildings). QueryEngine only has 60 m gaps (§7 input).
+- `POST /jobs/preview {lat, lon}` (extra endpoint) resolves the click with `click_to_street` without creating a job —
+  for the confirm sheet; it also reports `already_analysed_in` if the point lies inside an existing area.
+- Jobs: `expired_token` jobs and `running` jobs with no heartbeat for 10 min are claimable again (resume after key
+  refresh / worker crash). Drawn polygons are capped at 1.5 km² per job (`Settings.max_polygon_km2`).
+- `PATCH /review/{id}` takes **multipart form** fields (`action`, `note`, `reviewer`, optional `photo`) so one call can
+  carry a photo. Appeals need a note. Photos: jpeg/png/webp ≤ 8 MB, private bucket, read via
+  `GET /review/{id}/photo` (10-minute signed URL).
+- DB connections set `extra_float_digits = 3` so coordinates round-trip exactly (the pooler otherwise returns 15 digits).
+- Dropped `sqlalchemy`/`geoalchemy2` (unused; plain psycopg 3 with a small fail-fast pool).
