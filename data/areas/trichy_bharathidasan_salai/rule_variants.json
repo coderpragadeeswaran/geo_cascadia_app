@@ -1,0 +1,58 @@
+{
+ "slug": "trichy_bharathidasan_salai",
+ "buildings": 66,
+ "A": {
+  "method_counts": {
+   "triangulated": 17,
+   "wall_hit": 32,
+   "footprint_centre": 17,
+   "rejected": 4
+  },
+  "triangulated_vs_osm_wall": {
+   "n": 17,
+   "median_m": 4.75,
+   "p90_m": 8.92,
+   "within_3_5_m_pct": 47.1
+  }
+ },
+ "B": {
+  "method_counts": {
+   "triangulated": 19,
+   "wall_hit": 30,
+   "footprint_centre": 17,
+   "rejected": 4
+  },
+  "triangulated_vs_osm_wall": {
+   "n": 19,
+   "median_m": 4.04,
+   "p90_m": 8.92,
+   "within_3_5_m_pct": 47.4
+  },
+  "two_camera_only_vs_osm_wall": {
+   "n": 2,
+   "median_m": 3.49,
+   "p90_m": 4.04,
+   "within_3_5_m_pct": 50.0
+  }
+ },
+ "A_vs_official_changes": [
+  "w1229049682",
+  "w1229049694",
+  "w1229050448",
+  "w456124855"
+ ],
+ "reasons": {
+  "A": {
+   "w1229049694": "triangulation rejected: implausible (12.3 m from road-facing wall)",
+   "w456124855": "triangulation rejected: implausible (26.3 m from road-facing wall)",
+   "w1229049682": "triangulation rejected: implausible (13.3 m from road-facing wall)",
+   "w1229050448": "triangulation rejected: implausible (11.8 m from road-facing wall)"
+  },
+  "B": {
+   "w1229049694": "triangulation rejected: implausible (12.3 m from road-facing wall)",
+   "w456124855": "triangulation rejected: implausible (26.3 m from road-facing wall)",
+   "w1229049682": "triangulation rejected: implausible (13.3 m from road-facing wall)",
+   "w1229050448": "triangulation rejected: implausible (11.8 m from road-facing wall)"
+  }
+ }
+}

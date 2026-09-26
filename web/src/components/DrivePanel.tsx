@@ -176,7 +176,7 @@ function Passing({ branch, s }: { branch: DriveBranch; s: number }) {
           {p.unmapped.map((u) => (
             <motion.li key={u.id} layout initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }}
               className="flex items-center justify-between gap-3 rule-b pb-1">
-              <span className="min-w-0 truncate">{u.name} <span className="t-small ink3">· business not on the map</span></span>
+              <span className="min-w-0 truncate">{u.name} <span className="t-small ink3">· business with no mapped building</span></span>
               <span className="dot" style={{ boxShadow: 'inset 0 0 0 1.5px var(--ns-ink2)' }} />
             </motion.li>
           ))}

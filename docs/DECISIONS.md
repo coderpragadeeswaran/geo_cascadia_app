@@ -517,3 +517,272 @@ The variation follows how many tiles Google has loaded at object zoom. The tilt 
 - **Dark-stretch card.** "2 of 3 dark stretches on Uthukuli Road (516 m total)". Ranked longest first from the stretches
   the map shows: stored 60 m, or a question's computed interval. Recorded lengths (D13).
 
+### D25. P4.5 part 1: building positions predicted from camera rays (pipeline + numbers, no UI)
+**Why.** FarmwiseAI Gate 1 asks for a predicted building position with error <= 3.5 m. Until now a building's only
+position was its OSM footprint centroid (`plan.py`); rays were only used to assign boxes to footprints.
+
+**Pipeline change** (owner request; existing logic and outputs unchanged):
+- New module `pipeline/geo_cascadia/buildloc.py`:
+  - `building_rays` casts every level (`geom_ok`) building / sign box ray into the footprints with `Area.cast()`.
+  - `locate_buildings` groups the rays by the footprint hit (grouping only) and keeps one ray per camera (the
+    highest confidence).
+    - 2+ cameras >= 30 deg apart: `triangulate_multiview`, uncertainty = largest residual (>= 0.5 m, as for assets),
+      method `triangulated`.
+    - Otherwise: the best ray's hit on the footprint edge, method `single_ray`, approximate, uncertainty =
+      `cfg.single_cam_uncertainty_m` (3.5).
+  - `locate_unmapped_buildings`: rays that hit no footprint are crossed pairwise (in front of both cameras,
+    >= 30 deg, <= 60 m, same class). Crossings within 3 m are linked. A cluster seen from >= 3 cameras is solved
+    and kept if its residual is <= 3 m.
+- Hooks for future runs: `run_area.py` saves `building_positions.json`; `export.py` adds an optional
+  `predicted_position {lat, lon, method, n_cameras, uncertainty_m, approximate}` per building.
+- `lat`/`lon` stay the centroid. The hooks are untested end to end: the laptop has no PIL, and the full run needs Colab.
+- `buildloc` avoids scikit-learn (its own single-link clustering) so it also runs on the laptop.
+
+**Laptop recompute:** `tools/p45_building_positions.py`.
+- **Inputs:** `detections.json`, `buildings.json` and `building_views.json`, read only.
+- **Footprints:** the runs did not keep their footprint set, so OSM footprints were fetched once from Overpass into
+  `data/cache/p45_overpass/` (OSM only, as the runs: coverage.json microsoft = 0). No YOLO / OCR / VLM / Street View.
+- **Sanity:** every registered footprint is in today's OSM with no geometry change > 0.5 m. Re-casting the pipeline's
+  own best view hits the same footprint in 418/418 (Ward 29), 59/59 (Trichy) and 1/1 (Tiruppur).
+- **Output:** new `data/areas/<slug>/building_positions.p45.json`. export.json is not changed until approved.
+
+**Results.** "facade" = the distance to the footprint edge the best camera's ray meets. "footprint" = the distance to
+the polygon, 0 if inside.
+
+| area | registered | triangulated | single_ray | none | no-footprint points |
+|---|---|---|---|---|---|
+| Ward 29 | 381 | 171 | 167 (17 had 2+ cameras, angle too small) | 43 | 9 |
+| Trichy | 66 | 38 | 15 (7) | 13 | 79 |
+| Tiruppur | 1 | 1 | 0 | 0 | 12 |
+
+| area / method | n | to footprint: median / p90 / % <= 3.5 m | to facade: median / p90 / % <= 3.5 m | inside footprint |
+|---|---|---|---|---|
+| Ward 29 triangulated | 171 | 0.0 / 2.0 / 94.7% | 3.9 / 13.9 / 46.8% | 114 |
+| Ward 29 single_ray | 167 | 0 / 0 / 100% (by construction) | 0 / 0 / 100% (by construction) | — |
+| Trichy triangulated | 38 | 0.0 / 3.6 / 89.5% | 6.4 / 15.2 / 28.9% | 28 |
+| Trichy single_ray | 15 | 0 / 0 / 100% (by construction) | 0 / 0 / 100% (by construction) | — |
+| Tiruppur triangulated | 1 | 0 | 30.5 | 1 |
+
+**Findings (not yet accepted as a Gate 1 result):**
+1. **No ground truth.** Neither check measures true error. The only labels (`trichy/spot_labels.csv`) are floors and
+   use, not positions.
+2. **Triangulated points fall inside buildings.** 67% of Ward 29 triangulated points lie inside the footprint, a median
+   4.1 m behind the facade. The rays aim at the box centre, which is a different facade point for each camera on a wide
+   building, so they cross behind the facade. "Within 3.5 m of the footprint" (95%) flatters this.
+3. **Two-camera uncertainty is meaningless.** Two rays always meet exactly, so 85 of 171 Ward 29 triangulations report
+   the 0.5 m floor.
+4. **`single_ray` is on the facade by construction.** Its distance along the ray comes from the footprint, so the check
+   is circular and it is not an independent position.
+5. **43 Ward 29 buildings get nothing.** 40 had one planned view; no level box-centre ray reached them.
+6. **126 unregistered footprints** also got positions; they are not in the export.
+
+Owner decision needed before part 2: accept, change the aiming point, and / or get ground truth.
+
+### D26. P4.5: building position = the front wall (wall-corner rays); Gate 1 evaluation
+**Owner decision.** The target point is on the front wall (facade). No manual labelling.
+
+**Method** (`pipeline/geo_cascadia/buildloc.py` `locate_buildings`, `aim="corners"`, the default):
+- Rays are still grouped by the footprint the box-centre ray hits; the footprint is used for grouping only.
+- The box's **left and right edges** are triangulated separately across cameras. Edges within 3% of the image border
+  count as clipped and are left out. The point is the **midpoint of the two corners**.
+- If a corner is clipped in every view, the part-1 box-centre triangulation is used instead:
+  `triangulated_centre`, `fallback: "corner_clipped_all_views"`, approximate.
+- If both corners are visible but can't be triangulated (< 2 unclipped cameras, or < 30 deg apart): `single_ray`
+  with `fallback: "corner_not_triangulable"`. Strict reading of the decision: the centre method is used only for
+  clipped corners.
+- `single_ray` stays marked `uses_footprint`.
+- **Uncertainty is null ("not estimated") whenever a solution rests on exactly 2 cameras.** Otherwise it is the largest
+  residual (>= 0.5 m).
+- The export hook carries `fallback` and `uses_footprint`.
+- Unit tests: `backend/tests/test_buildloc.py`, on a synthetic street with an exact answer.
+
+**Evaluation** (`tools/eval_gate1.py`; any area folder, no hard-coded ids; the same code will score P6 runs). Results
+go to `data/areas/<slug>/gate1_eval.json` and `model_card.json` `"gate1_position"` (the last key; the rest of the file
+is untouched). References:
+- **"vs OSM facade":** distance to the footprint edge whose midpoint is nearest the building's street line.
+  - Scored for triangulated points only; `single_ray` is listed as "(uses footprint)".
+  - The footprint centroid is scored as a do-nothing baseline.
+- **"vs Google pin":** Places API (New) Text Search on the sign text, biased to 50 m around the building. A match needs
+  to be <= 50 m away and pass `textmatch.same_business`.
+  - Only place_id and distances are stored (`gate1_places.json`).
+  - Needs a server-side key `GOOGLE_PLACES_SERVER_KEY` in `backend/.env`. The Maps browser key is referrer-restricted
+    and is not used from the server. **Not run yet: no such key on the laptop.**
+
+**Results "vs OSM facade"** (median / p90 / % <= 3.5 m):
+
+| area | method | before (box centre) | after (wall corners) |
+|---|---|---|---|
+| Ward 29 | triangulated | n=171: 4.07 / 15.4 / 45.0% | n=47: 5.26 / 12.2 / 38.3% |
+| Ward 29 | triangulated_centre (fallback) | — | n=34: 5.94 / 18.2 / 35.3% |
+| Ward 29 | single_ray (uses footprint) | n=167: 0.0 / 4.9 / 85.0% | n=257: 0.0 / 6.4 / 80.2% |
+| Ward 29 | footprint centroid (baseline) | n=381: 7.02 / 14.2 / 7.3% | same |
+| Trichy | triangulated | n=38: 7.62 / 16.0 / 23.7% | n=23: 5.70 / 12.3 / 39.1% |
+| Trichy | single_ray (uses footprint) | n=15: 0.0 / 5.3 / 80.0% | n=30: 0.0 / 5.3 / 83.3% |
+| Trichy | footprint centroid (baseline) | n=66: 9.31 / 23.1 / 6.1% | same |
+| Tiruppur | triangulated | n=1: 30.5 | n=1: 26.6 |
+
+**Paired comparison** (the same buildings triangulated before and after):
+- Ward 29 (n=47): before 4.07 m / 47% → after 5.26 m / 38%; after is better on 25 of 47.
+- Trichy (n=23): before 8.11 m / 17% → after 5.70 m / 39%; after is better on 20 of 23.
+
+**Coverage after the fix** (Ward 29): 47 triangulated + 34 centre fallback, down from 171 triangulated.
+- 101 buildings have `corner_not_triangulable` and fall to `single_ray`.
+- 62 of the 81 triangulated positions have uncertainty "not estimated" (2 cameras).
+
+**Sanity.** The triangulated corner-to-corner width is a median 0.9x the OSM frontage (Ward 29; 0.73x in Trichy), so
+the corners do find walls.
+
+**Owner decision (26 Sep):** the 101 `corner_not_triangulable` buildings stay `single_ray` (no box-centre fallback).
+
+**"vs Google pin"** (run 26 Sep with `GOOGLE_PLACES_SERVER_KEY`: 158 + 51 + 1 Text Search calls; only place_id and
+distances are stored).
+
+| area | buildings with sign text | place found <= 50 m (= used) |
+|---|---|---|
+| Ward 29 | 158 | 24 (15%) |
+| Trichy | 51 | 15 (29%) |
+| Tiruppur | 1 | 0 |
+
+Median / p90 / % <= 3.5 m vs the pin, after the fix (before in brackets):
+
+| area | method | vs Google pin |
+|---|---|---|
+| Ward 29 | triangulated | n=4: 24.7 / 37.7 / 0% (before n=13: 18.2 / 38.1 / 0%) |
+| Ward 29 | triangulated_centre (fallback) | n=2: 8.1 / 9.0 / 0% |
+| Ward 29 | single_ray (uses footprint) | n=17: 12.0 / 36.0 / 11.8% (before n=10: 10.8 / 13.8 / 10%) |
+| Ward 29 | footprint centroid (baseline) | n=24: 16.7 / 41.6 / 4.2% |
+| Ward 29 | **production rule** (tri >= 3 cameras, else single_ray, else centroid; fixed in advance, not tuned) | n=24 (4 / 19 / 1): 12.0 / 36.0 / 8.3% |
+| Trichy | triangulated | n=4: 16.3 / 31.7 / 0% (before n=9: 26.1 / 40.0 / 11.1%) |
+| Trichy | single_ray (uses footprint) | n=9: 11.3 / 44.0 / 0% |
+| Trichy | footprint centroid (baseline) | n=15: 19.2 / 31.2 / 0% |
+| Trichy | **production rule** | n=15 (4 / 9 / 2): 15.3 / 37.4 / 0% |
+
+**Reference check** (distance between the Google pin and the road-facing OSM wall, same buildings):
+- Ward 29: n=24, median 7.7 m, p90 21.4 m.
+- Trichy: n=15, median 7.1 m, p90 34.1 m.
+
+The two references disagree by more than twice the 3.5 m target.
+
+**Match audit** (sign text vs Google display name; names only):
+- Most matches are the right business.
+- 4 rest on a generic word ("MILK", "COMPLEX", "AUTOMOBILES", "studio").
+- 4 places are matched to two buildings each (UCO Bank, Narmatha Industries, Hindustan Motors, Padmakshi), so at
+  least one building in each pair is wrong.
+- Correct matches still sit a median ~17 m from the footprint centroid. Google business pins are placed by owners or
+  by geocoding, often at the road or entrance, and are not metre-accurate.
+
+**Status.** Gate 1 (<= 3.5 m) is **not met** against either reference. **Neither reference can confirm or refute
+3.5 m:**
+- the OSM wall is circular for single_ray and disagrees with the pins by ~7 m;
+- the pins are ~10-20 m noisy and cover only 24 + 15 buildings.
+
+On the evidence here, the production rule is not better than the footprint centroid against the pin. A 3.5 m claim
+needs a reference that is itself accurate to about 1 m (surveyed points, or hand-marked facade points on imagery). The
+owner ruled out manual labelling, so this is left open for the owner.
+
+### D27. P4.5 closed: building position by a fixed rule, self-consistency, UI
+**No more method tuning or accuracy experiments** (owner). The same code runs for any area and every live P6 street.
+
+**Rule** (`pipeline/geo_cascadia/buildloc.py` `predict_positions`, called by `run_area.py`; `export.py` writes
+`buildings[].predicted_position = {lat, lon, method, n_cameras, uncertainty_m}`; the building's `lat`/`lon` stays the
+footprint centroid). Every registered building gets one of:
+1. **`triangulated`:** the wall corners (left and right box edges, unclipped) triangulate (pairs >= 30 deg apart, in
+   front of the camera, <= 60 m) and >= 3 camera positions take part. The point is the midpoint of the two corners.
+2. **`wall_hit`:** the highest-confidence camera ray whose first hit on this footprint is its **road-facing** wall. The
+   road-facing wall is the edge whose midpoint is nearest the building's street line (`Area.streets` live;
+   `streets.json` on the laptop). Uses the map footprint.
+3. **`footprint_centre`:** the fallback.
+
+**Plausibility check** (added 26 Sep, owner; `buildloc.py` `PLAUSIBLE_MAX_M = 10`):
+- A triangulated point more than 10 m from its own footprint polygon (0 when inside) is rejected. The building falls
+  back to `wall_hit`, then `footprint_centre`.
+- `predicted_position.reason` stores "triangulation rejected: implausible (X m from footprint)"; it is null otherwise.
+  The export now writes six fields: `{lat, lon, method, n_cameras, uncertainty_m, reason}`.
+- The reason appears in the method badge's tooltip, and `method_counts` counts `triangulation_rejected`.
+- Result: 1 rejection (Ward 29 `w1247745245`, 14.3 m off → wall_hit).
+- Tiruppur's single building stays triangulated. Its point is inside its large footprint, 35 m from the centre.
+
+**Uncertainty (self-consistency, a precision measure, not accuracy).**
+- For a triangulated building, every camera pair that sees **both** corners unclipped gives its own corner midpoint.
+  `uncertainty_m` = the median distance of those pair estimates from the final point.
+- It is null when no pair sees both corners, and null ("not estimated") for `wall_hit` and `footprint_centre`.
+
+**Official outputs** (recomputed from the saved run files with `tools/building_positions.py`; footprints from the
+cached Overpass pull; no YOLO / OCR / VLM / Street View):
+- `data/areas/<slug>/building_positions.json`: the same file a live run saves.
+- `export.json` `predicted_position`: the only change to export.json, checked field by field against a backup.
+- All three areas reloaded into the database. Review decisions were kept, and row counts match `meta.counts`.
+- The experimental `building_positions.p45.json` files and `tools/p45_building_positions.py` are removed; their
+  helpers moved to `tools/building_positions.py`.
+
+| area | buildings | triangulated | wall_hit | footprint_centre | self-consistency: n / median / p90 (not estimated) |
+|---|---|---|---|---|---|
+| Ward 29 | 381 | 38 | 224 | 119 | 21 / 2.46 m / 6.48 m (17) |
+| Trichy | 66 | 21 | 28 | 17 | 11 / 3.99 m / 5.45 m (10) |
+| Tiruppur | 1 | 1 | 0 | 0 | 0 (1) |
+
+**Evaluation** (`tools/eval_gate1.py` → `model_card.json` `gate1_position`: status "not verified", rule, method
+counts, self_consistency, "vs OSM wall", "vs Google pin" with the pin-vs-OSM disagreement). The development tables
+(box centre vs corners, D26) stay in `data/areas/<slug>/gate1_eval.json`.
+- **Status:** not verified. No reference accurate to ~1 m is available, so a 3.5 m result can't be confirmed or ruled
+  out. The evaluation tool is ready for surveyed points.
+
+**UI** (no new map instance):
+- **Building "How do we know?":** a small SVG plan in the design tokens (both themes) with the footprint outline, the
+  footprint centre (+), the predicted point, the uncertainty circle or "not estimated", and the method badge
+  (`labels.ts` `positionMethodLabel`).
+- **Main map:** the selected building's predicted point and uncertainty circle at OBJECT zoom (`layers.ts` `pred-unc`,
+  `pred-pt`).
+- **Trust:** section "Position accuracy — target <= 3.5 m (FarmwiseAI Gate 1)". Every number comes from model_card.
+  Wall hit is labelled "on the wall by construction", and no pooled "all buildings vs OSM wall" figure is shown
+  because it would be circular.
+- **Schemas:** the export and model-card schemas carry the new fields (`npm run check:data` passes).
+
+**Colab worker:** copy `pipeline/geo_cascadia/buildloc.py` (new), `run_area.py` and `export.py` (changed) to Drive.
+`buildloc.py` needs no new dependency: shapely and numpy are already used, and there is no scikit-learn.
+
+### D28. Plausibility against the road-facing wall; rule variants A (>= 3 cameras) vs B (>= 2) — B chosen
+**Plausibility fix** (owner, `buildloc.py`):
+- A triangulated point is rejected when it is > 10 m from the building's **road-facing wall** (the footprint edge it
+  should lie on). The footprint polygon is used only when no street line is available. Fallback: wall_hit →
+  footprint_centre.
+- Reason text: "triangulation rejected: implausible (X m from road-facing wall)".
+- `predict_positions(..., min_cameras=3)` is the production rule. `min_cameras=2` exists only for this comparison.
+  With exactly 2 cameras, the uncertainty is null.
+
+**Comparison** (`tools/compare_position_rules.py`; saved files + cached OSM footprints only, no YOLO / OCR / VLM /
+Street View / Places; output `data/areas/<slug>/rule_variants.json`). Distances are to the road-facing OSM wall:
+
+| area | variant | triangulated / wall_hit / footprint_centre / rejected | triangulated vs OSM wall: n, median, p90, % <= 3.5 m | 2-camera-only subset |
+|---|---|---|---|---|
+| Ward 29 | A (>= 3) | 28 / 232 / 121 / 11 | 28, 3.33 m, 9.29 m, 50.0% | — |
+| Ward 29 | B (>= 2) | 36 / 224 / 121 / 11 | 36, 3.48 m, 8.00 m, 50.0% | 8, 3.75 m, 8.00 m, 50.0% |
+| Trichy | A | 17 / 32 / 17 / 4 | 17, 4.75 m, 8.92 m, 47.1% | — |
+| Trichy | B | 19 / 30 / 17 / 4 | 19, 4.04 m, 8.92 m, 47.4% | 2, 3.49 m, 4.04 m, 50.0% |
+| Tiruppur | A and B | 0 / 1 / 0 / 1 (26.6 m) | — | — |
+
+**Notes:**
+- The check and the score use the same reference, so surviving points are capped at 10 m from the wall. These numbers
+  are not independent of the check.
+- **The official output is not switched.** export.json, the database and model_card still hold the D27 output, made
+  with the footprint-polygon check.
+- Regenerating the official output with the new check changes 10 + 4 + 1 buildings (listed in `rule_variants.json`).
+  It also needs `eval_gate1.py`, which re-fetches the pins, to refresh model_card. That waits for the owner's decision.
+
+**Also fixed:** a positive cost that rounds to zero shows "< $0.0001", never "$0.0000" (`lib/utils.ts` `usd`, used by
+the evidence drawer and the cost panel).
+
+**Decision (owner, 26 Sep): variant B.** Triangulated needs >= 2 camera positions, with the road-facing-wall
+plausibility check (`predict_positions(min_cameras=2)` is the default, so live P6 runs use it).
+- A 2-camera result shows as "Triangulated (2 cameras)" with uncertainty "not estimated".
+- The official output was regenerated for all three areas: `tools/building_positions.py`, then the database reload
+  (review decisions kept: #94 and #97 still approved), then `tools/eval_gate1.py` (39 Places detail lookups for the
+  cached place_ids, no new searches).
+- New counts (triangulated / wall_hit / footprint_centre, rejected):
+  - Ward 29: 36 / 224 / 121, 11 rejected;
+  - Trichy: 19 / 30 / 17, 4 rejected;
+  - Tiruppur: 0 / 1 / 0, 1 rejected.
+- Self-consistency (estimated n / median / p90): Ward 29 17 / 2.51 m / 7.46 m; Trichy 9 / 3.14 m / 5.45 m.
+- The Trust page adds: "The pass rate rose mainly because implausible points (>10 m from the wall) were rejected, and
+  the check and the score use the same wall, so this is a comparison, not accuracy."
+

@@ -2,7 +2,7 @@
 import { strict as assert } from 'node:assert'
 import { placeLabels, type Rect } from '../src/lib/labelLayout'
 import { jobStatus } from '../src/lib/labels'
-import { noun, plural } from '../src/lib/utils'
+import { costText, noun, plural, usd } from '../src/lib/utils'
 import { mainLine, pointAt, project, slice } from '../src/map/trim'
 
 let n = 0
@@ -56,6 +56,17 @@ t('trim: distances along the street, snapping and slicing', () => {
   assert.ok(Math.abs(project(m, [77 + 120 / kx, lat + 30 / ky]) - 120) < 0.5)            // snaps to the nearest point
   const s = slice(m, 150, 250)
   assert.equal(s.length, 3)                                                                // keeps the corner
+})
+
+t('usd: tiny positive costs never show $0.0000', () => {
+  assert.equal(usd(0.00002), '< $0.0001')
+  assert.equal(usd(0.0002), '$0.0002')
+  assert.equal(usd(0), '$0.0000')
+  assert.equal(usd(null), '—')
+  assert.equal(costText(1, 0), 'cost not recorded')              // 1 call stored at $0.0: unknown, not zero
+  assert.equal(costText(0, 0), '$0.0000')
+  assert.equal(costText(2, 0.00002), '< $0.0001')
+  assert.equal(costText(2, 0.0012), '$0.0012')
 })
 
 console.log(`${n} UI tests passed`)

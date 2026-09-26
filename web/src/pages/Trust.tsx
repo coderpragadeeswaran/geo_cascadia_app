@@ -34,7 +34,7 @@ const REDUCED = typeof window !== 'undefined' && window.matchMedia?.('(prefers-r
 
 const NAV: [string, string][] = [
   ['questions', 'How questions are answered'], ['detector', 'Detector'], ['use', 'Building use'], ['floors', 'Floors'], ['names', 'Shop names'],
-  ['positions', 'Positions'], ['matching', 'Register matching'], ['cost', 'Cost: routed vs all-VLM'], ['rejected', 'Tried and dropped'],
+  ['positions', 'Positions'], ['gate1', 'Building position (Gate 1)'], ['matching', 'Register matching'], ['cost', 'Cost: routed vs all-VLM'], ['rejected', 'Tried and dropped'],
   ['consistency', 'Stored vs computed'], ['gap-checks', 'Gap length checks'], ['limits', 'Limits of this data'],
 ]
 
@@ -155,6 +155,7 @@ export default function Trust() {
             <p className="t-small ink2 mt-2">Conclusion: {m.positions.independent_camera_check_n30.conclusion}.</p>
           </Sec>
 
+          {m.gate1_position && <Gate1 g={m.gate1_position} names={Object.fromEntries((areas ?? []).map((a) => [a.slug, shortArea(a.name)]))} />}
           <Sec id="matching" title="Register matching (planted errors)" lead={m.matching_planted_errors.note}>
             <table className="w-full max-w-[640px]"><tbody>
               <Tr head cells={['what', 'precision', 'recall']} />
@@ -202,7 +203,7 @@ export default function Trust() {
               {areas?.filter((a) => a.coverage.share_views_no_mapped_building != null).map((a) => (
                 <li key={a.slug}><b>{shortArea(a.name)}:</b> {pct(a.coverage.share_views_no_mapped_building)} of camera views face frontage with no OpenStreetMap building outline; buildings are checked only where an outline exists ({fmt.format(a.counts.buildings)}), lights and signs everywhere.</li>
               ))}
-              {k && <li><b>Positions:</b> {fmt.format(k.assets - k.assets_triangulated)} of {plural(k.assets, 'pole or streetlight')} here were seen from one camera only; they are approximate and go to review ({m.positions.independent_camera_check_n30.single_camera_on_or_near} single-camera positions were on or near the true spot).</li>}
+              {k && <li><b>Positions:</b> {fmt.format(k.assets - k.assets_triangulated)} of {plural(k.assets, 'pole or streetlight')} here were seen from one camera only; they are approximate and go to review ({m.positions.independent_camera_check_n30.single_camera_on_or_near} single-camera positions were close to where a second camera placed them, a consistency check, not surveyed positions).</li>}
               <li><b>Streetlights:</b> the detector finds lamp heads in photos; it cannot tell whether a lamp works. A VLM check was rejected ({m.streetlights.vlm_lamp_check}).</li>
               <li><b>Registers:</b> synthetic, with planted errors; real municipal registers were not available.</li>
               <li><b>Withheld:</b> facade condition and door numbers are not shown as findings (see “Tried and dropped”).</li>
@@ -215,3 +216,72 @@ export default function Trust() {
     </div>
   )
 }
+
+/** D27: building position accuracy vs the FarmwiseAI Gate 1 target. Every number from model_card.json "gate1_position"
+ *  (written by tools/eval_gate1.py); nothing computed here. */
+const M = (v: unknown) => (typeof v === 'number' ? `${v} m` : '—')
+const P = (v: unknown) => (typeof v === 'number' ? `${v}%` : '—')
+const METHOD_ROWS: [string, string][] = [['triangulated', 'Triangulated'], ['wall_hit (uses map footprint)', 'Wall hit (uses map footprint: on the wall by construction)'],
+  ['footprint_centre (fallback)', 'Footprint centre (fallback)']]
+
+function Gate1({ g, names }: { g: Any; names: Record<string, string> }) {
+  const slugs = Object.keys(g.method_counts ?? {}).sort((a, b) => (g.method_counts[b].buildings ?? 0) - (g.method_counts[a].buildings ?? 0))
+  const nm = (s: string) => names[s] ?? s
+  const wall = g['vs OSM wall'] ?? {}, pin = g['vs Google pin'] ?? {}
+  return (
+    <Sec id="gate1" title={`Position accuracy — target ≤ ${g.target_m} m (FarmwiseAI Gate 1)`}
+      lead={<>Where each building is, predicted from the camera rays; the building&apos;s map position stays its footprint centre.</>}>
+      <p className="flex flex-wrap items-center gap-2">
+        <span className="chip px-2.5 text-[14.5px]" style={{ borderColor: 'var(--ns-discrepancy)', color: 'var(--ns-discrepancy)' }}>Status: {g.status === 'not verified' ? 'Not verified' : g.status}</span>
+        <span className="t-small ink2">{g.status_note}</span>
+      </p>
+      <ul className="t-small ink2 mt-3 space-y-0.5">
+        <li><b className="text-ink">Triangulated:</b> {g.rule?.triangulated}</li>
+        <li><b className="text-ink">Wall hit:</b> {g.rule?.wall_hit}</li>
+        <li><b className="text-ink">Footprint centre:</b> {g.rule?.footprint_centre}</li>
+        <li><b className="text-ink">Uncertainty:</b> {g.rule?.uncertainty_m}</li>
+        {g.rule?.plausibility && <li><b className="text-ink">Plausibility:</b> {g.rule.plausibility}</li>}
+      </ul>
+
+      <h3 className="t-micro mt-6 mb-1">Method per building</h3>
+      <table className="w-full"><tbody>
+        <Tr head cells={['area', 'buildings', 'triangulated', 'wall hit', 'footprint centre', 'triangulation rejected (> 10 m off)']} />
+        {slugs.map((s) => { const c = g.method_counts[s]; return <Tr key={s} cells={[nm(s), fmt.format(c.buildings), fmt.format(c.triangulated), fmt.format(c.wall_hit), fmt.format(c.footprint_centre), fmt.format(c.triangulation_rejected ?? 0)]} /> })}
+      </tbody></table>
+
+      <h3 className="t-micro mt-6 mb-1">Self-consistency (precision, triangulated only)</h3>
+      <p className="t-small ink3 mb-1">Each camera pair that sees both wall corners gives its own estimate; the spread is its distance from the final point. It measures precision, not accuracy.</p>
+      <table className="w-full"><tbody>
+        <Tr head cells={['area', 'triangulated', 'with an estimate', 'median spread', 'p90 spread', 'not estimated']} />
+        {slugs.map((s) => { const c = g.self_consistency?.[s] ?? {}; return <Tr key={s} cells={[nm(s), fmt.format(c.triangulated ?? 0), fmt.format(c.n ?? 0), M(c.median_m), M(c.p90_m), fmt.format(c.not_estimated ?? 0)]} /> })}
+      </tbody></table>
+
+      <h3 className="t-micro mt-6 mb-1">vs OSM wall (distance to the road-facing footprint edge)</h3>
+      <p className="t-small ink2 mb-1">The pass rate rose mainly because implausible points (&gt;10 m from the wall) were rejected, and the check and the score use the same wall, so this is a comparison, not accuracy.</p>
+      <table className="w-full"><tbody>
+        <Tr head cells={['area · method', 'n', 'median', 'p90', `≤ ${g.target_m} m`]} />
+        {slugs.flatMap((s) => METHOD_ROWS.map(([k, label]) => { const x = wall[s]?.[k]; return x?.n ? <Tr key={s + k} cells={[`${nm(s)} · ${label}`, fmt.format(x.n), M(x.median_m), M(x.p90_m), P(x.within_3_5_m_pct)]} /> : null }))}
+      </tbody></table>
+
+      <h3 className="t-micro mt-6 mb-1">vs Google pin (Places, sign name within 50 m)</h3>
+      <table className="w-full"><tbody>
+        <Tr head cells={['area · method', 'n', 'median', 'p90', `≤ ${g.target_m} m`]} />
+        {slugs.flatMap((s) => {
+          const a = pin[s] ?? {}
+          if (a.status) return [<Tr key={s} cells={[`${nm(s)} · ${a.status}`, '—', '—', '—', '—']} />]
+          const mr = a.match_rate ?? {}
+          return [<Tr key={s + 'm'} cells={[`${nm(s)} · matched: ${plural(mr.buildings_with_sign_text ?? 0, 'building')} with sign text → ${fmt.format(mr.used ?? 0)} with a place`, '', '', '', '']} />,
+            ...METHOD_ROWS.map(([k, label]) => { const x = a[k]; return x?.n ? <Tr key={s + k} cells={[`${nm(s)} · ${label}`, fmt.format(x.n), M(x.median_m), M(x.p90_m), P(x.within_3_5_m_pct)]} /> : null })]
+        })}
+      </tbody></table>
+
+      <h3 className="t-micro mt-6 mb-1">How far the two references disagree (Google pin vs OSM wall, same buildings)</h3>
+      <table className="w-full"><tbody>
+        <Tr head cells={['area', 'n', 'median', 'p90']} />
+        {slugs.map((s) => { const d = pin[s]?.pin_vs_osm_wall; return d?.n ? <Tr key={s} cells={[nm(s), fmt.format(d.n), M(d.median_m), M(d.p90_m)]} /> : null })}
+      </tbody></table>
+      <p className="t-small mt-4">{g.status_note}</p>
+    </Sec>
+  )
+}
+

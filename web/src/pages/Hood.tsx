@@ -127,7 +127,7 @@ export default function Hood() {
         note: 'Lengths are the pipeline’s straight-line fit; where the road bends, the along-road length is checked on the Trust page.' },
       { id: 'signs', n: '08', figure: sg?.crops ?? 0, unit: 'sign crops', line: `Signs were read by OCR first; only unclear ones went to the vision-language model, and a VLM name is kept only if OCR supports it. ${plural(k.named_businesses, 'building')} got a good name; ${fmt.format(k.names_confirmed_by_google)} of them are also on Google Maps.`,
         segs: Object.entries(tiers).map(([l, v]) => ({ v, label: l, kind: /OCR/.test(l) ? 'kept' as const : /VLM/.test(l) ? 'find' as const : 'drop' as const })),
-        note: ub ? `${plural(ub.sign_candidates_checked_by_vlm, 'sign')} on frontage with no building outline were checked; ${fmt.format(k.unmapped_businesses)} kept as businesses not on the map (the VLM said ${fmt.format(ub.vlm_said_not_business)} were not businesses).` : undefined },
+        note: ub ? `${plural(ub.sign_candidates_checked_by_vlm, 'sign')} on frontage with no building outline were checked; ${fmt.format(k.unmapped_businesses)} kept as businesses with no mapped building (the VLM said ${fmt.format(ub.vlm_said_not_business)} were not businesses).` : undefined },
       { id: 'review', n: '09', figure: k.low_confidence_observations, unit: 'items for a person', line: 'Everything the models are unsure about goes to human review instead of onto the map as fact.' },
     ]
   }

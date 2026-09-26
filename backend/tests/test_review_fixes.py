@@ -327,3 +327,28 @@ def test_trimmed_job_uses_only_the_stretch(online):
     finally:
         with online.app.state.data.pool.connection() as c:
             c.execute("delete from jobs where id = %s", (job["id"],))
+
+
+# ------------------------------------------------------------------ D27: predicted building positions are served
+def test_predicted_positions_served_and_match_model_card(offline):
+    import json as _json
+    mc = _json.load(open(os.path.join(ROOT, "data", "model_card.json"), encoding="utf-8"))["gate1_position"]
+    for slug in AREAS:
+        rows = offline.get(f"/areas/{slug}/buildings?page_size=500").json()["rows"]
+        counts = {}
+        for b in rows:
+            p = b["predicted_position"]
+            assert set(p) == {"lat", "lon", "method", "n_cameras", "uncertainty_m", "reason"}
+            assert p["reason"] is None or (p["reason"].startswith("triangulation rejected: implausible (")
+                                           and p["method"] != "triangulated")
+            assert p["method"] in ("triangulated", "wall_hit", "footprint_centre")
+            if p["method"] != "triangulated":
+                assert p["uncertainty_m"] is None
+            else:
+                assert p["n_cameras"] >= 2
+                if p["n_cameras"] == 2:
+                    assert p["uncertainty_m"] is None                  # D28: 2 cameras -> not estimated
+            counts[p["method"]] = counts.get(p["method"], 0) + 1
+        want = {k: v for k, v in mc["method_counts"][slug].items() if k not in ("buildings", "triangulation_rejected") and v}
+        assert sum(bool(b["predicted_position"]["reason"]) for b in rows) == mc["method_counts"][slug]["triangulation_rejected"]
+        assert counts == want and len(rows) == mc["method_counts"][slug]["buildings"]

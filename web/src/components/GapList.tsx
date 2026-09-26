@@ -13,14 +13,15 @@ export type Gap = Pick<GapRow, 'id' | 'street' | 'length_m' | 'gap_type' | 'pole
 
 export function GapHow({ g }: { g: Gap }) {
   return (
-    <HowWeKnow links={[{ page: 'trust', section: 'gap-checks', label: 'Gap length checks' }, { page: 'hood', section: 'streetlights', label: 'How lamps are found' }]}>
-      <Fact k="Rule">no streetlight detected within {g.interval_m ?? 60} m along the road ({g.computed ? 'computed by the app with the pipeline’s method; the pipeline stored only 60 m' : 'pipeline, stored 60 m interval'})</Fact>
-      <Fact k="Recorded length"><span className="t-data">{fmt.format(g.length_m)} m</span> <span className="ink3">(pipeline, straight-line fit)</span></Fact>
+    <HowWeKnow summary={<>Along this {fmt.format(g.length_m)} m stretch the detector saw no streetlight within {g.interval_m ?? 60} m of the camera stops{g.poles_inside ? `; ${plural(g.poles_inside, 'pole')} ${g.poles_inside === 1 ? 'stands' : 'stand'} here without a lamp` : ''}. It sees lamps in photos; it cannot tell whether a lamp works.</>}
+      links={[{ page: 'trust', section: 'gap-checks', label: 'Gap length checks' }, { page: 'hood', section: 'streetlights', label: 'How lamps are found' }]}>
+      <Fact k="Rule" hint={g.computed ? 'computed by the app with the pipeline’s method; the pipeline stored only 60 m' : 'pipeline, stored 60 m interval'}>No streetlight seen within {g.interval_m ?? 60} m along the road</Fact>
+      <Fact k="Length" hint="recorded, straight-line fit"><span className="t-data">{fmt.format(g.length_m)} m</span>, measured in a straight line</Fact>
       {g.display_mode === 'along_road' && g.along_road_m != null && (
-        <Fact k="Along the road"><span className="t-data">≈ {fmt.format(g.along_road_m)} m</span>{g.length_differs ? <span className="ink3"> · differs by more than 10 %</span> : <span className="ink3"> · within 10 %</span>}</Fact>
+        <Fact k="Along the bends"><span className="t-data">≈ {fmt.format(g.along_road_m)} m</span> following the road{g.length_differs ? <span className="ink3">: more than 10% different from the straight-line length</span> : <span className="ink3">: within 10% of the straight-line length</span>}</Fact>
       )}
-      <Fact k="Drawn">{g.display_mode === 'along_road' ? 'along the street line' : g.display_mode === 'check' ? 'as recorded (straight), marked to check' : 'as recorded (straight)'}</Fact>
-      <Fact k="Poles inside"><span className="t-data">{g.poles_inside}</span> · {g.gap_type}</Fact>
+      <Fact k="On the map">{g.display_mode === 'along_road' ? 'Drawn along the street' : g.display_mode === 'check' ? 'Drawn straight, as recorded, and marked to check' : 'Drawn straight, as recorded'}</Fact>
+      <Fact k="Poles here" hint={g.gap_type}><span className="t-data">{g.poles_inside}</span>: {gapTypeLabel(g.gap_type)}</Fact>
       {g.display_mode === 'check' && <Fact k="Check">{g.note}</Fact>}
       <Fact k="ID"><span className="t-data">{g.id}</span></Fact>
     </HowWeKnow>

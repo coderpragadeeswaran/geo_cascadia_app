@@ -1,10 +1,12 @@
 /** The ask bar: a plain-English question about this area (rule-based QueryEngine, docs/QUERY.md). On focus it shows
  *  example questions for this area, a way to build a question only by clicking, and how questions are understood. */
+import { useMap } from '@vis.gl/react-google-maps'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, Loader2, MousePointerClick, Search } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { exampleQuestions, runQuery } from '@/lib/query'
-import { useAreaData } from '@/lib/useAreaData'
+import { propsFor, useAreaData } from '@/lib/useAreaData'
+import { flyTo, OBJECT_TILT } from '@/map/camera'
 import { useUi } from '@/store/ui'
 import { QueryHelp } from './QueryHelp'
 
@@ -17,7 +19,7 @@ export function AskBar() {
   useEffect(() => { if (document.activeElement !== input.current) setText(qText ?? '') }, [qText])
   const setPalette = useUi((s) => s.setPaletteOpen)
   const setBuilder = useUi((s) => s.setBuilder)
-  const { records } = useAreaData()
+  const { records, props } = useAreaData()
   const input = useRef<HTMLInputElement>(null)
   // this area's streets, busiest with findings first, so the examples use real names
   const streets = useMemo(() => {
@@ -27,7 +29,28 @@ export function AskBar() {
     return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([s]) => s)
   }, [records])
   const examples = exampleQuestions(streets)
-  const ask = (q: string) => { setText(q); setOpen(false); input.current?.blur(); if (q.trim().length > 1) runQuery({ text: q.trim() }) }
+  const map = useMap('main')
+  // an exact building / pole / streetlight / business ID (e.g. w1252504688) opens that object: select, fly, drawer
+  const openById = (q: string) => {
+    if (!records) return false
+    const id = q.trim().toLowerCase()
+    const hit = ([['building', records.buildings], ['asset', records.assets], ['unmapped_business', records.unmapped]] as const)
+      .flatMap(([k, xs]) => (xs as { id: string; lat: number; lon: number; type?: string }[]).filter((x) => x.id.toLowerCase() === id).map((x) => ({ k, x })))[0]
+    if (!hit) return false
+    const p = propsFor(props, hit.k === 'asset' ? hit.x.type ?? 'pole' : hit.k, hit.x.id)
+    if (!p) return false
+    const ui = useUi.getState()
+    ui.setQuery(null)
+    ui.select(p)
+    if (map) flyTo(map, { center: { lat: hit.x.lat, lng: hit.x.lon }, zoom: Math.max(map.getZoom() ?? 18, 19), tilt: ui.flat ? 0 : OBJECT_TILT }, { instant: ui.flat })
+    return true
+  }
+  const ask = (q: string) => {
+    setOpen(false); input.current?.blur()
+    if (openById(q)) { setText(''); return }
+    setText(q)
+    if (q.trim().length > 1) runQuery({ text: q.trim() })
+  }
 
   return (
     <div className="relative min-w-0 flex-1">
@@ -57,6 +80,7 @@ export function AskBar() {
               </button>
               <QueryHelp compact />
             </div>
+            <p className="t-small ink3 px-2 pt-1.5">Or type an ID (e.g. <span className="t-data">{records?.buildings[0]?.id ?? 'w…'}</span>) to open that building, pole or business.</p>
           </motion.div>
         )}
       </AnimatePresence>

@@ -2,11 +2,11 @@
  *  (verifier content, D16). This area's own run counters come from a resumed run → shown greyed with the badge (D1). */
 import { useAreaDetail, useModelCard } from '@/api/queries'
 import { useUi } from '@/store/ui'
-import { plural } from '@/lib/utils'
+import { plural, usd as usd4 } from '@/lib/utils'
 
 type Any = any // eslint-disable-line @typescript-eslint/no-explicit-any
 const pct = (v: unknown) => (typeof v === 'number' ? `${Math.round(v * 100)}%` : '—')
-const usd = (v: unknown) => (typeof v === 'number' ? `$${v < 0.01 ? v.toFixed(4) : v.toFixed(3)}` : '—')
+const usd = (v: unknown) => (typeof v === 'number' ? usd4(v, v < 0.01 ? 4 : 3) : '—')
 
 function Pair({ label, routed, all, fmtV, better }: { label: string; routed: number; all: number; fmtV: (v: number) => string; better: 'lower' | 'higher' }) {
   const max = Math.max(routed, all) || 1

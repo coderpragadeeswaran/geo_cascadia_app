@@ -115,6 +115,8 @@ export interface LayerCtx {
   analyseRest?: Position[][] | null
   /** drive the street: the branch being driven, camera position, travel heading and view heading */
   drive: DriveMark | null
+  /** D27: the selected building's predicted position (point + uncertainty radius in metres, null = not estimated) */
+  predicted?: { position: Position; radius_m: number | null } | null
 }
 
 const dash = new PathStyleExtension({ dash: true })
@@ -390,6 +392,15 @@ export function buildLayers(ctx: LayerCtx): Layer[] {
     const pos = pt && !Array.isArray(pt) ? [pt.lon, pt.lat] as Position : pt
     if (pos) L.push(new ScatterplotLayer({ id: 'sel-pt', data: [pos], getPosition: (d) => d, radiusUnits: 'pixels', getRadius: near ? 13 : 9,
       filled: false, stroked: true, lineWidthUnits: 'pixels', getLineWidth: 2.5, getLineColor: rgba(c.sodium) }))
+    // D27: predicted position of the selected building, at OBJECT zoom only (uncertainty circle in metres, then the point)
+    const pr = band === 'object' ? ctx.predicted : null
+    if (pr) {
+      if (pr.radius_m) L.push(new ScatterplotLayer({ id: 'pred-unc', data: [pr.position], getPosition: (d) => d, radiusUnits: 'meters',
+        getRadius: pr.radius_m, filled: true, getFillColor: rgba(c.sodium, 40), stroked: true, lineWidthUnits: 'pixels',
+        getLineWidth: 1.5, getLineColor: rgba(c.sodium, 210) }))
+      L.push(new ScatterplotLayer({ id: 'pred-pt', data: [pr.position], getPosition: (d) => d, radiusUnits: 'pixels', getRadius: 6,
+        filled: true, getFillColor: rgba(c.sodium), stroked: true, lineWidthUnits: 'pixels', getLineWidth: 2, getLineColor: rgba(c.bg0) }))
+    }
   }
   return L
 }

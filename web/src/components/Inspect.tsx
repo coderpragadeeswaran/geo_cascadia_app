@@ -15,7 +15,7 @@ function Body({ p }: { p: AnyProps }) {
       return (<>
         <Title eyebrow="Analysed area" title={shortArea(p.name)} />
         <Line><N n={p.card.counts.buildings} /> {noun(p.card.counts.buildings, 'building')} checked · <N n={p.card.counts.streetlight_gaps_60m} /> {noun(p.card.counts.streetlight_gaps_60m, 'dark stretch')}</Line>
-        <Line><N n={p.card.counts.unmapped_businesses} /> {noun(p.card.counts.unmapped_businesses, 'business')} not on the map</Line>
+        <Line><N n={p.card.counts.unmapped_businesses} /> {noun(p.card.counts.unmapped_businesses, 'business')} with no mapped building</Line>
       </>)
     case 'street':
       return (<>
@@ -48,7 +48,7 @@ function Body({ p }: { p: AnyProps }) {
       </>)
     case 'unmapped_business':
       return (<>
-        <Title eyebrow="Business not on the map" title={p.name ?? '—'} />
+        <Title eyebrow="Business with no mapped building" title={p.name ?? '—'} />
         <Line>{p.street ?? '—'} · approximate position</Line>
       </>)
     case 'missing_asset_record':
@@ -118,7 +118,7 @@ export function CoverageNotice() {
       style={{ borderLeftColor: 'var(--ns-sodium)', background: 'color-mix(in srgb, var(--ns-bg1) 90%, transparent)' }}>
       <b className="text-ink">Few buildings are on the map here.</b>{' '}
       {pct != null && <>{pct}% of the camera views face frontage with no building outline in OpenStreetMap. </>}
-      Buildings were checked only where an outline exists ({c.buildings}); streetlights, poles and signs were checked everywhere ({plural(c.assets, 'pole or light', 'poles and lights')}, {plural(c.unmapped_businesses, 'business')} not on the map).
+      Buildings were checked only where an outline exists ({c.buildings}); streetlights, poles and signs were checked everywhere ({plural(c.assets, 'pole or light', 'poles and lights')}, {plural(c.unmapped_businesses, 'business')} with no mapped building).
     </p>
   )
 }

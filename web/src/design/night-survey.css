@@ -88,3 +88,7 @@
 .ns .map-card { width: max-content; min-width: 220px; max-width: min(300px, calc(100vw - 32px)); overflow-wrap: anywhere; }
 .ns .map-card * { white-space: normal; }
 .ns .map-card .kbd { white-space: nowrap; }
+
+/* a chip whose label may be long (position method badge): wraps instead of overflowing, in both themes */
+.ns .chip.chip-wrap { height: auto; min-height: 30px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; padding-top: 3px; padding-bottom: 3px; line-height: 1.3; }
+

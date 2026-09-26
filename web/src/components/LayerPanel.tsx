@@ -12,7 +12,7 @@ const GROUPS: { title: string; items: { key: LayerKey; label: string; hint: stri
     { key: 'assets', label: 'Streetlights and poles', hint: 'Lamps glow; poles appear at street level' },
     { key: 'uncertainty', label: 'Approximate positions', hint: 'Dashed circle = seen from one camera only' },
     { key: 'gaps', label: 'Dark stretches', hint: 'No streetlight seen within 60 m' },
-    { key: 'unmapped', label: 'Businesses not on the map', hint: 'Shop signs with no building outline' },
+    { key: 'unmapped', label: 'Businesses with no mapped building', hint: 'Shop signs where OpenStreetMap has no building outline' },
     { key: 'missing', label: 'In the register, not seen', hint: 'Synthetic register record, nothing detected' },
     { key: 'review', label: 'Waiting for review', hint: 'Dashed outline on items a person should check' },
   ] },

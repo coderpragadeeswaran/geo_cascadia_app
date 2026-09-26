@@ -9,7 +9,7 @@ import type { EvidenceBox, EvidenceViewData } from '@/api/types'
 import { cn, plural } from '@/lib/utils'
 import { useUi } from '@/store/ui'
 import { Crosshair, EvidencePhoto } from './EvidencePhoto'
-import { Fact, HowWeKnow, useHow } from './HowWeKnow'
+import { Fact, HowWeKnow } from './HowWeKnow'
 import { placeLabels } from '@/lib/labelLayout'
 import { measureText, useFontsReady } from '@/lib/textWidth'
 
@@ -22,7 +22,8 @@ const TARGET_NAME = { building: 'This building', pole: 'This pole', lamp: 'This 
 function Boxes({ boxes, all, hidden, targetName }: { boxes: EvidenceBox[]; all: boolean; hidden: Set<string>; targetName: string }) {
   // targets last so they sit on top
   const shown = boxes.filter((b) => b.target || (all && !hidden.has(b.cls))).sort((a, b) => Number(a.target) - Number(b.target))
-  const texts = shown.map((b) => (b.target ? (all ? `${targetName.toLowerCase()} · ${CLS_LABEL[b.cls]} ${b.conf.toFixed(2)}` : targetName) : `${CLS_LABEL[b.cls]} ${b.conf.toFixed(2)}`))
+  // "building 43%": how sure the detector was (confidence 0.43)
+  const texts = shown.map((b) => (b.target ? (all ? `${targetName.toLowerCase()} · ${CLS_LABEL[b.cls]} ${Math.round(b.conf * 100)}%` : targetName) : `${CLS_LABEL[b.cls]} ${Math.round(b.conf * 100)}%`))
   const labelled = shown.map((b) => all || b.target)
   // only labelled boxes take label space; spots[i] lines up with shown[i]
   const idx = shown.map((_, i) => i).filter((i) => labelled[i])
@@ -63,7 +64,8 @@ export function EvidenceViews({ kind, id, at, target }: {
   const { data: views, isPending, isError } = useEvidence(area, kind, id)
   const [i, setI] = useState(0)
   const [hidden, setHidden] = useState<Set<string>>(new Set())
-  const all = useHow((s) => s.open)
+  // this photo's own "How do we know?": open = draw everything the detector found (it never opens other sections)
+  const [all, setAll] = useState(false)
   const dive = useUi((s) => s.dive)
   const setDive = useUi((s) => s.setDive)
   useEffect(() => { setI(0) }, [id])
@@ -94,7 +96,9 @@ export function EvidenceViews({ kind, id, at, target }: {
           <Rotate3d /> {dive ? 'Back to map' : 'Live 360°'}
         </button>
       </div>
-      <HowWeKnow label="How do we know? (all detections)" links={[{ page: 'hood', section: 'detection', label: 'How detection works' }, { page: 'trust', section: 'detector', label: 'Detector accuracy' }]}>
+      <HowWeKnow label="How do we know? (everything the detector found)" open={all} onOpenChange={setAll}
+        summary={<>The detector marked {plural(v.boxes.length, 'thing')} in this photo. Each box says what it is and how sure the detector was{v.target === 'box' ? `; the orange box is this ${kind === 'asset' ? 'object' : kind === 'unmapped' ? 'sign' : 'building'}` : ''}.</>}
+        links={[{ page: 'hood', section: 'detection', label: 'How detection works' }, { page: 'trust', section: 'detector', label: 'Detector accuracy' }]}>
         <div className="flex flex-wrap gap-1.5 pb-1" role="group" aria-label="Show detections by class">
           {(Object.keys(CLS_LABEL) as EvidenceBox['cls'][]).filter((c) => counts[c]).map((c) => (
             <button key={c} onClick={() => toggle(c)} aria-pressed={!hidden.has(c)} className="chip px-2 text-[14.5px]"
@@ -103,13 +107,13 @@ export function EvidenceViews({ kind, id, at, target }: {
             </button>
           ))}
         </div>
-        <Fact k="Boxes">{plural(v.boxes.length, 'YOLO detection')} on this photo, with confidence; dashed = not used for positioning</Fact>
-        <Fact k="This photo">{v.source === 'exact' ? `the pipeline’s own view (heading ${Math.round(v.heading)}°, pitch ${v.pitch}°, fov ${v.fov}°)`
-          : v.source === 'projected' ? `aimed at the object (fov ${v.fov}°); boxes projected from the same panorama’s views at ${v.projected_from?.map((h) => `${Math.round(h)}°`).join(', ')}`
-            : 'no stored detections for this view'}</Fact>
-        {v.target === 'box' && v.aim_offset_deg != null && <Fact k="Match">the box nearest the aimed direction: {v.aim_offset_deg}° off centre</Fact>}
-        {v.note && <Fact k="Note">{v.note}</Fact>}
-        <Fact k="Panorama"><span className="t-data">{v.pano_id}</span></Fact>
+        <Fact k="Boxes" hint={`${plural(v.boxes.length, 'YOLO detection')}, confidence`}>Solid boxes were used to work out positions; dashed boxes were not (tilted photos, or photos uploaded by the public). The percentage is how sure the detector was.</Fact>
+        <Fact k="This photo" hint={v.source === 'exact' ? `heading ${Math.round(v.heading)}°, pitch ${v.pitch}°, fov ${v.fov}°` : v.source === 'projected' ? `fov ${v.fov}°, projected` : undefined}>{v.source === 'exact' ? `The same photo the analysis used: facing ${Math.round(v.heading)}°, tilted ${v.pitch}°, ${v.fov}° wide.`
+          : v.source === 'projected' ? `Pointed at the object (${v.fov}° wide). The boxes come from the analysis photos taken from the same spot, facing ${v.projected_from?.map((h) => `${Math.round(h)}°`).join(', ')}, redrawn into this view.`
+            : 'No detector results are stored for this photo.'}</Fact>
+        {v.target === 'box' && v.aim_offset_deg != null && <Fact k="Which box">The box closest to where the camera was aimed: {v.aim_offset_deg}° from the middle of the photo</Fact>}
+        {v.note && !(v.source === 'projected' && v.target === 'box') && <Fact k="Note">{v.note}</Fact>}
+        <Fact k="Photo ID" hint="Street View panorama"><span className="t-data">{v.pano_id}</span></Fact>
       </HowWeKnow>
     </div>
   )

@@ -1,0 +1,245 @@
+{
+ "slug": "tiruppur_uthukuli_road",
+ "buildings": 1,
+ "coverage": {
+  "before": {
+   "triangulated": 1,
+   "triangulated_centre": 0,
+   "single_ray": 0,
+   "none": 0
+  },
+  "after": {
+   "triangulated": 1,
+   "triangulated_centre": 0,
+   "single_ray": 0,
+   "none": 0
+  }
+ },
+ "after_fallbacks": {
+  "corner_clipped_all_views": 0,
+  "corner_not_triangulable": 0
+ },
+ "after_uncertainty_not_estimated": 1,
+ "method_counts": {
+  "triangulated": 0,
+  "wall_hit": 1,
+  "footprint_centre": 0,
+  "triangulation_rejected": 1
+ },
+ "self_consistency": {
+  "triangulated": 0,
+  "estimated": 0,
+  "not_estimated": 0,
+  "n": 0,
+  "median_m": null,
+  "p90_m": null,
+  "pair_estimates": 0
+ },
+ "official": {
+  "vs OSM facade": {
+   "triangulated": {
+    "n": 0,
+    "median_m": null,
+    "p90_m": null,
+    "within_3_5_m_pct": null,
+    "worst_5": []
+   },
+   "wall_hit (uses map footprint)": {
+    "n": 1,
+    "median_m": 0.0,
+    "p90_m": 0.0,
+    "within_3_5_m_pct": 100.0,
+    "worst_5": [
+     {
+      "building_id": "w344655428",
+      "m": 0.0
+     }
+    ]
+   },
+   "footprint_centre (fallback)": {
+    "n": 0,
+    "median_m": null,
+    "p90_m": null,
+    "within_3_5_m_pct": null,
+    "worst_5": []
+   },
+   "all buildings": {
+    "n": 1,
+    "median_m": 0.0,
+    "p90_m": 0.0,
+    "within_3_5_m_pct": 100.0,
+    "worst_5": [
+     {
+      "building_id": "w344655428",
+      "m": 0.0
+     }
+    ]
+   }
+  },
+  "vs Google pin": {
+   "triangulated": {
+    "n": 0,
+    "median_m": null,
+    "p90_m": null,
+    "within_3_5_m_pct": null,
+    "worst_5": []
+   },
+   "wall_hit (uses map footprint)": {
+    "n": 0,
+    "median_m": null,
+    "p90_m": null,
+    "within_3_5_m_pct": null,
+    "worst_5": []
+   },
+   "footprint_centre (fallback)": {
+    "n": 0,
+    "median_m": null,
+    "p90_m": null,
+    "within_3_5_m_pct": null,
+    "worst_5": []
+   },
+   "all buildings": {
+    "n": 0,
+    "median_m": null,
+    "p90_m": null,
+    "within_3_5_m_pct": null,
+    "worst_5": []
+   },
+   "match_rate": {
+    "buildings_with_sign_text": 1,
+    "place_found_within_50m": 0,
+    "used": 0
+   },
+   "pin_vs_osm_wall": {
+    "n": 0,
+    "median_m": null,
+    "p90_m": null,
+    "within_3_5_m_pct": null,
+    "worst_5": []
+   }
+  }
+ },
+ "vs OSM facade": {
+  "triangulated": {
+   "before": {
+    "n": 1,
+    "median_m": 30.48,
+    "p90_m": 30.48,
+    "within_3_5_m_pct": 0.0,
+    "worst_5": [
+     {
+      "building_id": "w344655428",
+      "m": 30.5
+     }
+    ]
+   },
+   "after": {
+    "n": 1,
+    "median_m": 26.61,
+    "p90_m": 26.61,
+    "within_3_5_m_pct": 0.0,
+    "worst_5": [
+     {
+      "building_id": "w344655428",
+      "m": 26.6
+     }
+    ]
+   }
+  },
+  "footprint centroid (baseline)": {
+   "before": {
+    "n": 1,
+    "median_m": 61.64,
+    "p90_m": 61.64,
+    "within_3_5_m_pct": 0.0,
+    "worst_5": [
+     {
+      "building_id": "w344655428",
+      "m": 61.6
+     }
+    ]
+   },
+   "after": {
+    "n": 1,
+    "median_m": 61.64,
+    "p90_m": 61.64,
+    "within_3_5_m_pct": 0.0,
+    "worst_5": [
+     {
+      "building_id": "w344655428",
+      "m": 61.6
+     }
+    ]
+   }
+  }
+ },
+ "vs Google pin": {
+  "status": "run",
+  "match_rate": {
+   "buildings_with_sign_text": 1,
+   "place_found_within_50m": 0,
+   "used": 0
+  },
+  "api_calls": {
+   "search": 0,
+   "details": 0
+  },
+  "triangulated": {
+   "before": {
+    "n": 0,
+    "median_m": null,
+    "p90_m": null,
+    "within_3_5_m_pct": null,
+    "worst_5": []
+   },
+   "after": {
+    "n": 0,
+    "median_m": null,
+    "p90_m": null,
+    "within_3_5_m_pct": null,
+    "worst_5": []
+   }
+  },
+  "footprint centroid (baseline)": {
+   "before": {
+    "n": 0,
+    "median_m": null,
+    "p90_m": null,
+    "within_3_5_m_pct": null,
+    "worst_5": []
+   },
+   "after": {
+    "n": 0,
+    "median_m": null,
+    "p90_m": null,
+    "within_3_5_m_pct": null,
+    "worst_5": []
+   }
+  },
+  "reference_check_pin_vs_osm_facade": {
+   "n": 0,
+   "median_m": null,
+   "p90_m": null,
+   "within_3_5_m_pct": null,
+   "worst_5": []
+  }
+ },
+ "rows": [
+  {
+   "id": "w344655428",
+   "street": "Uthukuli Road",
+   "official_method": "wall_hit",
+   "official_uncertainty_m": null,
+   "official_pairs": 0,
+   "official_facade_m": 0.0,
+   "before_method": "triangulated",
+   "before_uncertainty_m": 9.53,
+   "before_facade_m": 30.48,
+   "after_method": "triangulated",
+   "after_uncertainty_m": null,
+   "after_facade_m": 26.61,
+   "centroid_facade_m": 61.64,
+   "place_id": null
+  }
+ ]
+}

@@ -14,3 +14,18 @@ const PLURALS: Record<string, string> = { stretch: 'stretches', 'dark stretch': 
 export const noun = (n: number, one: string, many?: string) => (n === 1 ? one : many ?? PLURALS[one] ?? `${one}s`)
 /** "1 building", "2 buildings", "1,234 dark stretches" (Indian digit grouping, like fmt) */
 export const plural = (n: number, one: string, many?: string) => `${fmt.format(n)} ${noun(n, one, many)}`
+
+/** a per-object VLM cost: calls were made but the run stored no cost (the pipeline did not record the floors call's
+ *  tokens, e.g. 163 Ward 29 buildings store 1 call at $0.0) -> "cost not recorded", never a made-up amount */
+export function costText(calls: number, amount: number | null | undefined) {
+  if (calls > 0 && !amount) return 'cost not recorded'
+  return usd(amount ?? 0)
+}
+
+/** US dollars with `digits` decimals; a positive amount that would round to zero shows "< $0.0001" (never "$0.0000") */
+export function usd(v: number | null | undefined, digits = 4) {
+  if (v == null || !Number.isFinite(v)) return '—'
+  const step = 10 ** -digits
+  if (v > 0 && v < step / 2) return `< $${step.toFixed(digits)}`
+  return `$${v.toFixed(digits)}`
+}

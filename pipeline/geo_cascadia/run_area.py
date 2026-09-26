@@ -8,6 +8,7 @@ from .area import Area
 from .plan import capture_plan, building_register
 from .detect import run_detection
 from .geometry import locate_assets, fuse_and_vote_streetlights, signs_by_building, building_views
+from .buildloc import building_rays, locate_unmapped_buildings, predict_positions
 from .ocr import run_ocr
 from .vlm import VLM, run_names, run_building_attrs, finalize_buildings
 from .reference import street_names, places_crosscheck
@@ -85,6 +86,14 @@ def run_area(polygon, out_dir, cfg=None, area_name="area", street_filter=None, p
     signs = signs_by_building(dets, area)
     views = building_views(dets, area)
     save("assets", assets); save("building_views", views)
+    # predicted building position by the fixed rule (D27, D28): triangulated (>= 2 cameras, plausible) / wall_hit /
+    # footprint_centre.
+    # lat/lon stay the footprint centroid. Same code for every area and every live street.
+    brays = building_rays(dets, area, ("building", "signboard"))
+    bpos = predict_positions(dets, area, buildings, {r["name"]: r["geom"] for r in area.streets}, cfg,
+                             rays=[r for r in brays if r["cls"] == "building"])
+    bfree, bfree_stats = locate_unmapped_buildings(dets, area, cfg, rays=brays)
+    save("building_positions", {"by_building": bpos, "no_footprint": bfree, "no_footprint_stats": bfree_stats})
     stage("geometry")
     # 6. OCR
     ocr_res, ocr_names, ocr_stats = run_ocr(dets, cfg, out_dir, progress)
@@ -140,7 +149,8 @@ def run_area(polygon, out_dir, cfg=None, area_name="area", street_filter=None, p
                  "validation": cfg.validation, "planted_error_scores": planted, "asset_register_scores": asset_score}
     dash = build_dashboard(results, A, gaps, queue, run_stats)
     dash["kpi"]["unmapped_businesses"] = len(ub)
-    exp = build_export(area_name, cfg, buildings, results, views, vbld, ocr_res, A, missing, gaps, queue, dash, panos, run_stats)
+    exp = build_export(area_name, cfg, buildings, results, views, vbld, ocr_res, A, missing, gaps, queue, dash, panos, run_stats,
+                       positions=bpos)
     exp["unmapped_businesses"] = ub; exp["meta"]["counts"]["unmapped_businesses"] = len(ub)
     save("dashboard", dash); save("export", exp)
     json.dump(to_geojson(exp), open(f"{out_dir}/export.geojson", "w"))

@@ -58,7 +58,7 @@ function AreaSwitcher() {
               <div className="t-data ink2 mt-0.5 flex flex-wrap gap-x-2">
                 <span>{plural(a.counts.buildings, 'building')}</span>
                 <span>{plural(a.counts.streetlight_gaps_60m, 'dark stretch')}</span>
-                <span>{plural(a.counts.unmapped_businesses, 'business')} off the map</span>
+                <span>{plural(a.counts.unmapped_businesses, 'business')} with no mapped building</span>
               </div>
               {a.coverage.level === 'partial' && <div className="t-small ink3 mt-1">Few buildings are on the map here, so mostly lights and signs were analysed.</div>}
             </div>

@@ -38,7 +38,7 @@ function usePlaces(input: string) {
 
 const LAYERS: { k: LayerKey; label: string }[] = [
   { k: 'buildings', label: 'Buildings' }, { k: 'assets', label: 'Poles & streetlights' }, { k: 'gaps', label: 'Streetlight gaps' },
-  { k: 'unmapped', label: 'Businesses not on the map' }, { k: 'streetHealth', label: 'Road colour by findings' }, { k: 'density', label: 'Where findings cluster' },
+  { k: 'unmapped', label: 'Businesses with no mapped building' }, { k: 'streetHealth', label: 'Road colour by findings' }, { k: 'density', label: 'Where findings cluster' },
   { k: 'review', label: 'Waiting-for-review outlines' }, { k: 'coverage', label: 'Street View coverage' },
 ]
 

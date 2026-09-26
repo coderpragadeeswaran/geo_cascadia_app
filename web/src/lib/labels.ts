@@ -95,6 +95,34 @@ export function reviewReasons(reasons: string[], finding: { match_status?: strin
   return out
 }
 
+/** Predicted building position method (D27), as a badge: plain words; the technical name is positionMethodTerm */
+export function positionMethodLabel(p: { method: string; n_cameras: number }) {
+  if (p.method === 'triangulated') return `Where ${plural(p.n_cameras, 'camera view')} cross`
+  if (p.method === 'wall_hit') return 'Where the camera’s line of sight meets the front wall on the map'
+  return 'Middle of the building outline on the map (fallback)'
+}
+/** the technical name of the method, for the small grey hint */
+export const positionMethodTerm = (method: string) =>
+  method === 'triangulated' ? 'triangulated' : method === 'wall_hit' ? 'wall hit, uses the map footprint' : 'footprint centre'
+/** the badge's tooltip: how the point was found (and why the camera views were not used, when they were rejected) */
+export function positionMethodWhy(p: { method: string; reason?: string | null }) {
+  const base = p.method === 'triangulated' ? 'The two ends of the front wall were located from 2 or more camera positions; the point is halfway between them.'
+    : p.method === 'wall_hit' ? 'Where the best camera’s line of sight meets the building’s street-facing wall on the map (so it depends on the map outline).'
+      : 'No camera’s line of sight reached the street-facing wall, so the middle of the building outline is used.'
+  const m = p.reason ? /\(([\d.]+) m from ([^)]+)\)/.exec(p.reason) : null
+  const why = p.reason ? (m ? ` The camera views were not used: they put the building ${m[1]} m from the ${m[2]}, which is not plausible (the limit is 10 m).` : ` ${p.reason}.`) : ''
+  return base + why
+}
+
+/** floor count status, name quality and Google flags in plain words */
+export const floorsStatusPlain = (s: string | null | undefined) =>
+  s === 'measured' ? 'measured from the photo' : s === 'low_confidence' ? 'an estimate: the roof was not clearly visible' : s === 'not_measured' ? 'not measured' : pretty(s)
+export const nameQualityPlain = (q: string | null | undefined) =>
+  q === 'good' ? 'read clearly' : q === 'fragment' ? 'only partly readable' : q === 'tamil_unverified' ? 'Tamil text, not confirmed' : pretty(q)
+export const googleFlagPlain = (f: string) =>
+  f === 'sign_not_in_google_within_40m' ? 'The sign name is not on Google Maps within 40 m'
+    : f === 'google_business_but_observed_residential' ? 'Google lists a business here, but the photo shows a home' : pretty(f)
+
 /** A job's status for people (review fix 13): a cancelled job is stored as failed + "cancelled by user" but shown as
  *  "Cancelled" in a neutral colour; "failed" (red) is kept for real failures. */
 export const CANCELLED_MESSAGE = 'cancelled by user'

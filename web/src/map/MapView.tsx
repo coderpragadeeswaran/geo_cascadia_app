@@ -5,7 +5,7 @@ import { GoogleMapsOverlay } from '@deck.gl/google-maps'
 import type { PickingInfo } from '@deck.gl/core'
 import { Map, useMap, type MapCameraChangedEvent } from '@vis.gl/react-google-maps'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useActiveJobs, useAreaGeo, useAreas } from '@/api/queries'
+import { useActiveJobs, useAreaGeo, useAreas, useBuildings } from '@/api/queries'
 import type { AnyProps, GapProps, QueryResponse } from '@/api/types'
 import { colors, motion } from '@/design/tokens'
 import { queryApplies } from '@/lib/query'
@@ -121,6 +121,13 @@ function DeckLayers({ introDone }: { introDone: boolean }) {
     : (preview.lines.coordinates as Position[][])), [preview, trim, main])
   const analyseRest = useMemo(() => (trim && preview?.lines ? (preview.lines.coordinates as Position[][]) : null), [preview, trim])
   const drive = useDriveMark()
+  // D27: the selected building's predicted position (from its record), drawn at object zoom
+  const { data: bRecords } = useBuildings(area)
+  const predicted = useMemo(() => {
+    if (!selected || !('kind' in selected) || selected.kind !== 'building' || !('id' in selected)) return null
+    const p = bRecords?.find((x) => x.id === selected.id)?.predicted_position
+    return p ? { position: [p.lon, p.lat] as Position, radius_m: p.uncertainty_m } : null
+  }, [selected, bRecords])
   useFrame(map, split, focus)
 
   // opening: the streetlights fade on after the fly-in (reduced motion / 2D: lit at once)
@@ -168,8 +175,8 @@ function DeckLayers({ introDone }: { introDone: boolean }) {
 
   const layers = useMemo(
     () => buildLayers({ mode, band, flat, layers: layerToggles, areas: areas ?? [], activeArea: area, split, jobs, pulse: animate ? pulse : 0,
-      selectedId: selected && 'id' in selected ? selected.id : null, focus, lightsOn, analyseLines, analysePoly, analyseRest, drive }),
-    [mode, band, flat, layerToggles, areas, area, split, jobs, pulse, animate, selected, focus, lightsOn, analyseLines, analysePoly, analyseRest, drive],
+      selectedId: selected && 'id' in selected ? selected.id : null, focus, lightsOn, analyseLines, analysePoly, analyseRest, drive, predicted }),
+    [mode, band, flat, layerToggles, areas, area, split, jobs, pulse, animate, selected, focus, lightsOn, analyseLines, analysePoly, analyseRest, drive, predicted],
   )
 
   useEffect(() => {

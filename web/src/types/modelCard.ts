@@ -54,6 +54,15 @@ export function makeModelCardSchemas(mode: SchemaMode) {
       street_view_price_usd_per_image: z.number(),
       cpu_fallback_per_street_min: z.record(z.string(), NumOrText),
     }),
+    // D26/D27: building position vs the Gate 1 target (tools/eval_gate1.py); per-area tables are keyed by area slug
+    gate1_position: obj({
+      _note: Text, generated: z.string(), target_m: z.number(), status: z.string(), status_note: Text,
+      rule: z.record(z.string(), Text),
+      method_counts: z.record(z.string(), z.record(z.string(), z.number())),
+      self_consistency: z.record(z.string(), z.record(z.string(), z.number().nullable())),
+      'vs OSM wall': z.record(z.string(), z.record(z.string(), z.unknown())),
+      'vs Google pin': z.record(z.string(), z.record(z.string(), z.unknown())),
+    }).optional(),
   })
   return { ModelCard }
 }

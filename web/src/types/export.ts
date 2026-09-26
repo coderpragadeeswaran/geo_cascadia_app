@@ -66,6 +66,12 @@ export function makeExportSchemas(mode: SchemaMode) {
       shop_units: z.number().int().nullable(),
       condition: obj({ value: z.string().nullable(), withheld: z.literal(true), why: z.string() }), // never shown as a finding
     }),
+    // D27: predicted position (triangulated / wall_hit / footprint_centre); lat/lon above stay the footprint centroid
+    predicted_position: obj({
+      lat: z.number(), lon: z.number(), method: z.enum(['triangulated', 'wall_hit', 'footprint_centre']),
+      n_cameras: z.number().int(), uncertainty_m: z.number().nullable(),
+      reason: z.string().nullable().optional(),          // e.g. "triangulation rejected: implausible (14.2 m from footprint)"
+    }).nullable().optional(),
     register: obj({
       source: z.literal('SYNTHETIC'),
       property_id: z.string().nullable(), record_use: z.string().nullable(), record_floors: z.number().int().nullable(),

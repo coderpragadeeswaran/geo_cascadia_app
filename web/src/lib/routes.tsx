@@ -9,22 +9,25 @@ const pct = (v: unknown) => (typeof v === 'number' ? `${Math.round(v * 100)}%` :
 // model_card sections are typed loosely in the zod schema; these notes read known paths only
 type MC = any   // eslint-disable-line @typescript-eslint/no-explicit-any
 
-interface RouteInfo { tier: 1 | 2 | 3; label: string; note: (mc: MC) => string; link: HowLink }
+interface RouteInfo { tier: 1 | 2 | 3; label: string; plain: string; note: (mc: MC) => string; link: HowLink }
+/** label = the technical name (grey hint); plain = what a non-expert reads; note = the measured accuracy in plain words
+ *  (numbers unchanged, from model_card) */
 const ROUTES: Record<string, RouteInfo> = {
-  tier1_local_clip: { tier: 1, label: 'T1 · local CLIP router', link: { page: 'trust', section: 'use', label: 'Building use accuracy' },
-    note: (m) => { const h = m.building_use.local_router.ward29_heldout; return `Local router (${m.building_use.local_router.method}). Ward 29 held-out: local ${pct(h.local_only)}, routed ${pct(h.routed)}, VLM-only ${pct(h.vlm_only)} (n=${h.n}).` } },
-  tier3_vlm: { tier: 3, label: 'T3 · VLM (Nova Lite)', link: { page: 'trust', section: 'use', label: 'Building use accuracy' },
-    note: (m) => `Use accuracy ${pct(m.building_use.vlm_accuracy.value)} (n=${m.building_use.vlm_accuracy.n}, ${m.building_use.vlm_accuracy.metric}).` },
-  tier3_vlm_fewshot: { tier: 3, label: 'T3 · VLM few-shot', link: { page: 'trust', section: 'floors', label: 'Floor count accuracy' },
-    note: (m) => `${m.floors.method}. Ward 29: ${pct(m.floors.ward29.exact)} exact, ${pct(m.floors.ward29.within_1)} within ±1 floor (n=${m.floors.ward29.n}); baseline ${pct(m.floors.ward29.baseline_exact)} exact.` },
-  tier2_ocr: { tier: 2, label: 'T2 · OCR (PaddleOCR)', link: { page: 'trust', section: 'names', label: 'Shop name accuracy' },
-    note: (m) => `${m.ocr.engine}. Crop-level names (n=31): OCR only ${pct(m.names.crop_level_n31.ocr_only)}, routed OCR→VLM ${pct(m.names.crop_level_n31.routed_ocr_then_vlm)}.` },
-  'tier3_vlm+ocr_gate': { tier: 3, label: 'T3 · VLM + OCR gate', link: { page: 'trust', section: 'names', label: 'Shop name accuracy' },
-    note: (m) => `VLM name kept because OCR supports it. Routed ${pct(m.names.crop_level_n31.routed_ocr_then_vlm)} vs all-VLM ${pct(m.names.crop_level_n31.all_vlm)} (n=31). ${m.names.vlm_only_names_confirmed}.` },
-  tier3_vlm_unverified: { tier: 3, label: 'T3 · VLM, not supported by OCR', link: { page: 'trust', section: 'names', label: 'Shop name accuracy' },
-    note: (m) => `Read by the VLM only, not supported by OCR: treated as unverified. ${m.names.vlm_only_names_confirmed}.` },
-  'tier1_yolo + geometry': { tier: 1, label: 'T1 · YOLO detector + geometry', link: { page: 'trust', section: 'detector', label: 'Detector accuracy' },
-    note: (m) => { const c = m.detector.per_class; return `${m.detector.production}. Test set: pole P ${pct(c.pole.P)} / R ${pct(c.pole.R)} (n=${c.pole.n}), lamp P ${pct(c.lamp_head.P)} / R ${pct(c.lamp_head.R)} (n=${c.lamp_head.n}).` } },
+  // use: the production system is the built-in model with AI fallback (routed); lead with ITS number, then the path used
+  tier1_local_clip: { tier: 1, label: 'T1 · local CLIP router', plain: 'Decided by a small built-in model (no cloud AI)', link: { page: 'trust', section: 'use', label: 'Building use accuracy' },
+    note: (m) => { const h = m.building_use.local_router.ward29_heldout; return `The production system (built-in model with AI fallback) was right ${pct(h.routed)} of the time on ${h.n} hand-checked Ward 29 buildings. For comparison: built-in model alone ${pct(h.local_only)}, AI image check alone ${pct(h.vlm_only)}.` } },
+  tier3_vlm: { tier: 3, label: 'T3 · VLM (Nova Lite)', plain: 'Decided by the AI image check', link: { page: 'trust', section: 'use', label: 'Building use accuracy' },
+    note: (m) => { const h = m.building_use.local_router.ward29_heldout; return `The AI image check was right ${pct(m.building_use.vlm_accuracy.value)} of the time on ${m.building_use.vlm_accuracy.n} hand-checked buildings (${m.building_use.vlm_accuracy.metric}). The production system (built-in model with AI fallback) was right ${pct(h.routed)} on ${h.n} hand-checked Ward 29 buildings.` } },
+  tier3_vlm_fewshot: { tier: 3, label: 'T3 · VLM few-shot', plain: 'AI image check, shown two example buildings first', link: { page: 'trust', section: 'floors', label: 'Floor count accuracy' },
+    note: (m) => `On ${m.floors.ward29.n} Ward 29 buildings checked by hand: exact floor count ${pct(m.floors.ward29.exact)} of the time, within one floor ${pct(m.floors.ward29.within_1)}; without the examples ${pct(m.floors.ward29.baseline_exact)} exact.` },
+  tier2_ocr: { tier: 2, label: 'T2 · OCR (PaddleOCR)', plain: 'Text reader', link: { page: 'trust', section: 'names', label: 'Shop name accuracy' },
+    note: (m) => `On 31 sign photos checked by hand: the text reader alone got the name right ${pct(m.names.crop_level_n31.ocr_only)} of the time, text reader then AI ${pct(m.names.crop_level_n31.routed_ocr_then_vlm)}.` },
+  'tier3_vlm+ocr_gate': { tier: 3, label: 'T3 · VLM + OCR gate', plain: 'AI read, confirmed by the text reader', link: { page: 'trust', section: 'names', label: 'Shop name accuracy' },
+    note: (m) => `Kept because the text reader saw the same words. This way names were right ${pct(m.names.crop_level_n31.routed_ocr_then_vlm)} of the time vs ${pct(m.names.crop_level_n31.all_vlm)} for the AI alone (31 sign photos). ${m.names.vlm_only_names_confirmed}.` },
+  tier3_vlm_unverified: { tier: 3, label: 'T3 · VLM, not supported by OCR', plain: 'AI read only, not confirmed', link: { page: 'trust', section: 'names', label: 'Shop name accuracy' },
+    note: (m) => `The text reader did not see the same words, so treat this name as unconfirmed. ${m.names.vlm_only_names_confirmed}.` },
+  'tier1_yolo + geometry': { tier: 1, label: 'T1 · YOLO detector + geometry', plain: 'Object detector, then camera geometry', link: { page: 'trust', section: 'detector', label: 'Detector accuracy' },
+    note: (m) => { const c = m.detector.per_class; return `In test photos it found ${pct(c.pole.R)} of the poles and ${pct(c.pole.P)} of its pole finds were real (${c.pole.n} poles); lamps: found ${pct(c.lamp_head.R)}, ${pct(c.lamp_head.P)} real (${c.lamp_head.n} lamps).` } },
 }
 
 export const routeInfo = (route: string | null | undefined) => (route ? ROUTES[route] : undefined)
@@ -34,12 +37,17 @@ export function RouteBadge({ route }: { route: string | null | undefined }) {
   return <span className="tag">{ROUTES[route]?.label ?? route}</span>
 }
 
-/** "T1 · local CLIP router — note (model_card)" for How do we know? */
+/** How do we know?: the plain name, what it scored (model_card), and the technical name as a small grey hint */
 export function RouteLine({ route }: { route: string | null | undefined }) {
   const { data: mc } = useModelCard()
-  if (!route) return <span className="ink3">not measured (no usable view)</span>
+  if (!route) return <span className="ink3">Not measured: no clear photo</span>
   const r = ROUTES[route]
-  return <span><span className="tag mr-1.5">{r?.label ?? route}</span>{r && mc ? <span className="ink2">{r.note(mc as MC)} <span className="ink3">(model_card)</span></span> : null}</span>
+  return (
+    <span>
+      <b className="font-[560]">{r?.plain ?? route}</b>{r && mc ? <span className="ink2">. {r.note(mc as MC)}</span> : null}
+      <span className="ink3 text-[13px]"> · {r?.label ?? route}{r && mc ? ' (model_card)' : ''}</span>
+    </span>
+  )
 }
 
 export function routeNote(route: string | null | undefined, mc: ModelCard | undefined) {

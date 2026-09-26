@@ -1,0 +1,49 @@
+{
+ "slug": "tiruppur_uthukuli_road",
+ "buildings": 1,
+ "A": {
+  "method_counts": {
+   "triangulated": 0,
+   "wall_hit": 1,
+   "footprint_centre": 0,
+   "rejected": 1
+  },
+  "triangulated_vs_osm_wall": {
+   "n": 0,
+   "median_m": null,
+   "p90_m": null,
+   "within_3_5_m_pct": null
+  }
+ },
+ "B": {
+  "method_counts": {
+   "triangulated": 0,
+   "wall_hit": 1,
+   "footprint_centre": 0,
+   "rejected": 1
+  },
+  "triangulated_vs_osm_wall": {
+   "n": 0,
+   "median_m": null,
+   "p90_m": null,
+   "within_3_5_m_pct": null
+  },
+  "two_camera_only_vs_osm_wall": {
+   "n": 0,
+   "median_m": null,
+   "p90_m": null,
+   "within_3_5_m_pct": null
+  }
+ },
+ "A_vs_official_changes": [
+  "w344655428"
+ ],
+ "reasons": {
+  "A": {
+   "w344655428": "triangulation rejected: implausible (26.6 m from road-facing wall)"
+  },
+  "B": {
+   "w344655428": "triangulation rejected: implausible (26.6 m from road-facing wall)"
+  }
+ }
+}
