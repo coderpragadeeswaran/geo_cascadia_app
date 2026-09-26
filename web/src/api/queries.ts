@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import type { ModelCard } from '@/types/modelCard'
 import { api } from './client'
-import type { AreaCard, AreaDetail, AreaGeoJSON, Asset, Building, Job, PublicConfig, ReviewItem, ReviewRow, UnmappedBusiness } from './types'
+import type { AreaCard, AreaDetail, AreaGeoJSON, Asset, Building, EvidenceViewData, Job, PublicConfig, ReviewItem, ReviewRow, UnmappedBusiness } from './types'
 
 export const useConfig = () =>
   useQuery({ queryKey: ['config'], queryFn: () => api<PublicConfig>('/config/public'), staleTime: Infinity, retry: 1 })
@@ -38,6 +38,14 @@ export const useObjectDetail = (area: string | null, kind: 'building' | 'asset' 
     enabled: !!(area && kind && id),
   })
 
+/** detection boxes on each evidence photo of an object (design pass B §2) */
+export const useEvidence = (area: string | null, kind: 'building' | 'asset' | 'unmapped', id: string) =>
+  useQuery({
+    queryKey: ['evidence', area, kind, id],
+    queryFn: () => api<{ views: EvidenceViewData[] }>(`/areas/${area}/evidence/${kind}/${encodeURIComponent(id)}`).then((r) => r.views),
+    enabled: !!area, staleTime: Infinity,
+  })
+
 export const useModelCard = () =>
   useQuery({ queryKey: ['model-card'], queryFn: () => api<ModelCard>('/model-card'), staleTime: Infinity })
 
@@ -49,5 +57,5 @@ export const useActiveJobs = () =>
     staleTime: 10_000,
   })
 
-export const post = <T,>(path: string, body: unknown) =>
-  api<T>(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+export const post = <T,>(path: string, body: unknown, signal?: AbortSignal) =>
+  api<T>(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal })

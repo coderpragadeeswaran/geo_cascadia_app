@@ -58,28 +58,30 @@ export function kpis(r: Records, street: string | null) {
 }
 export type Kpis = ReturnType<typeof kpis>
 
+/** KPI definitions in plain words (docs/DESIGN.md declutter rule 2: five numbers + More). Every dashboard.kpi value
+ *  stays reachable; "use not known" (D9) is one of the five. */
 export interface KpiDef {
-  key: keyof Kpis; label: string; tone?: 'no-record' | 'discrepancy' | 'unclassified' | 'review' | 'matched'
-  apply?: Partial<Filter>; tab?: 'charts' | 'streetlights'; sub?: (k: Kpis) => string
+  /** `one`: the label when the count is exactly 1 ("Dark stretch"), see kpiLabel */
+  key: keyof Kpis; label: string; one?: string; main?: boolean; tone?: 'no-record' | 'discrepancy' | 'unclassified' | 'review' | 'matched'
+  apply?: Partial<Filter>; sub?: string; overview?: boolean
 }
 export const KPI_DEFS: KpiDef[] = [
-  { key: 'buildings_analysed', label: 'Buildings', apply: {} },
-  { key: 'unmatched_properties', label: 'No register record', tone: 'no-record', apply: { match: 'no_record' } },
-  { key: 'buildings_with_discrepancy', label: 'Discrepancy', tone: 'discrepancy', apply: { match: 'discrepancy' } },
-  { key: 'use_not_classified', label: 'Use: not classified', tone: 'unclassified', apply: { use: '__none' },
-    sub: (k) => `of ${k.buildings_analysed} buildings` },
-  { key: 'streetlights', label: 'Streetlights', apply: { subject: 'assets', assetType: 'streetlight' } },
-  { key: 'poles', label: 'Poles', apply: { subject: 'assets', assetType: 'pole' } },
-  { key: 'assets_triangulated', label: 'Triangulated', apply: { subject: 'assets', triangulated: true },
-    sub: (k) => `of ${k.assets} assets` },
-  { key: 'streetlight_gaps', label: 'Streetlight gaps', tone: 'no-record', tab: 'streetlights', sub: () => 'no lamp ≤ 60 m' },
-  { key: 'named_businesses', label: 'Named businesses', apply: { nameQ: 'good' } },
-  { key: 'names_confirmed_by_google', label: 'Google-confirmed', tone: 'matched', apply: { google: true } },
-  { key: 'sign_text_unverified', label: 'Sign text unverified', apply: { nameQ: 'unverified' } },
-  { key: 'low_confidence_observations', label: 'In review queue', tone: 'review', apply: { review: true } },
-  { key: 'unmapped_businesses', label: 'Unmapped businesses', apply: { subject: 'unmapped' } },
-  { key: 'streets_covered', label: 'Streets', tab: 'charts' },
+  { key: 'buildings_analysed', label: 'Buildings checked', one: 'Building checked', main: true, apply: {} },
+  { key: 'unmatched_properties', label: 'Not in register', main: true, tone: 'no-record', apply: { match: 'no_record' } },
+  { key: 'buildings_with_discrepancy', label: 'Differ from register', one: 'Differs from register', main: true, tone: 'discrepancy', apply: { match: 'discrepancy' } },
+  { key: 'streetlight_gaps', label: 'Dark stretches', one: 'Dark stretch', main: true, apply: { gaps: true }, sub: 'no streetlight seen in 60 m' },
+  { key: 'use_not_classified', label: 'Use not known', main: true, tone: 'unclassified', apply: { use: '__none' } },
+  { key: 'streetlights', label: 'Streetlights', one: 'Streetlight', apply: { subject: 'assets', assetType: 'streetlight' } },
+  { key: 'poles', label: 'Poles, no lamp seen', one: 'Pole, no lamp seen', apply: { subject: 'assets', assetType: 'pole' } },
+  { key: 'named_businesses', label: 'Shop names read', one: 'Shop name read', apply: { nameQ: 'good' } },
+  { key: 'names_confirmed_by_google', label: 'Also on Google Maps', apply: { google: true } },
+  { key: 'sign_text_unverified', label: 'Signs to double-check', one: 'Sign to double-check', apply: { nameQ: 'unverified' } },
+  { key: 'low_confidence_observations', label: 'Waiting for review', tone: 'review', apply: { review: true } },
+  { key: 'unmapped_businesses', label: 'Businesses not on the map', one: 'Business not on the map', apply: { subject: 'unmapped' } },
+  { key: 'streets_covered', label: 'Streets', one: 'Street', overview: true },
 ]
+/** singular / plural KPI label for a count (walkthrough 2 fix 5) */
+export const kpiLabel = (d: KpiDef, n: number | null | undefined) => (n === 1 && d.one ? d.one : d.label)
 /** the filter a KPI click applies (keeps the selected street) */
 export const kpiFilter = (d: KpiDef, street: string | null): Filter => ({ ...EMPTY_FILTER, ...(d.apply ?? {}), street })
 
@@ -119,7 +121,8 @@ const NONE: Focus = { buildings: null, assets: null, unmapped: null, gaps: null,
 export function focusOf(r: Records | null, f: Filter, q: QueryResponse | null, gapStreets: Map<string, string>): Focus {
   if (!r) return NONE
   const street = f.street ? new Set([f.street]) : null
-  if (q) {
+  // a partly understood question is not applied to the map until the person accepts it (docs/QUERY.md)
+  if (q && (q.accepted || !q.understanding || q.understanding.status === 'ok')) {
     const ids = (kind: string) => new Set((q.rows ?? []).filter((x) => x.kind === kind || (kind === 'asset' && (x.kind === 'pole' || x.kind === 'streetlight'))).map((x) => String(x.id)))
     const empty = new Set<string>()
     switch (q.intent) {
@@ -141,7 +144,7 @@ export function focusOf(r: Records | null, f: Filter, q: QueryResponse | null, g
   }
   // choosing a record type in the table (buildings / assets / unmapped) is not a filter: only a street or an attribute
   // filter emphasises the map
-  const attr = !!(f.match || f.use || f.nameQ || f.google || f.review || f.assetType || f.triangulated)
+  const attr = !!(f.match || f.use || f.nameQ || f.google || f.review || f.assetType || f.triangulated || f.gaps)
   if (!f.street && !attr) return NONE
   const onlyStreet = !attr
   const inStreet = <T extends { street?: string | null; id: string }>(xs: T[]) => new Set(xs.filter((x) => !f.street || x.street === f.street).map((x) => x.id))
@@ -149,6 +152,7 @@ export function focusOf(r: Records | null, f: Filter, q: QueryResponse | null, g
   const empty = new Set<string>()
   if (onlyStreet) return { buildings: inStreet(r.buildings), assets: inStreet(r.assets), unmapped: inStreet(r.unmapped), gaps, streets: street, key: `s:${f.street}` }
   const key = `f:${JSON.stringify(f)}`
+  if (f.gaps) return { buildings: empty, assets: empty, unmapped: empty, gaps, streets: street, key }
   if (f.subject === 'assets') return { buildings: empty, assets: new Set(r.assets.filter((a) => matchAsset(a, f)).map((a) => a.id)), unmapped: empty, gaps: empty, streets: street, key }
   if (f.subject === 'unmapped') return { buildings: empty, assets: empty, unmapped: new Set(r.unmapped.filter((u) => matchUnmapped(u, f)).map((u) => u.id)), gaps: empty, streets: street, key }
   return { buildings: new Set(r.buildings.filter((b) => matchBuilding(b, f)).map((b) => b.id)),

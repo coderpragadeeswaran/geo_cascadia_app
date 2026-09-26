@@ -1,4 +1,9 @@
 /** Camera helpers: fit a bbox, and a smooth fly-to (skipped in 2D / reduce-motion mode). */
+
+/** 3D tilt at street level and when flying to an object. A tilted vector map loads tiles toward the horizon (JS heap:
+ *  object zoom ≈ 61 MB at 50°, ≈ 43 MB flat, measured), so the tilt is kept moderate. */
+export const STREET_TILT = 40
+export const OBJECT_TILT = 42
 export type Cam = { center: google.maps.LatLngLiteral; zoom: number; tilt?: number; heading?: number }
 
 export function fitZoom(bbox: [number, number, number, number], w: number, h: number, pad = 80) {

@@ -1,23 +1,57 @@
-/** "Analyse a street" (CLAUDE.md §9.4.1): pick → confirm sheet (street, length, estimate from model_card) → job card
- *  with honest states. With no worker online the job says so ("queued — no analysis worker connected"), not an error. */
+/** "Analyse a street" sheet (CLAUDE.md §9.4.1, design pass B §3): a live "asking OpenStreetMap…" state with elapsed
+ *  seconds and Cancel; a clear busy message; the confirm sheet with the street's display name, "Already analysed in …"
+ *  (Open / Analyse anyway) and an estimate scaled by length; then the job card with honest states (no worker online is
+ *  "queued", not an error). The exact snapped street is drawn on the map while the sheet is open. */
 import { useQueryClient } from '@tanstack/react-query'
+import { useMap } from '@vis.gl/react-google-maps'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Crosshair, Loader2, X } from 'lucide-react'
-import { useEffect } from 'react'
-import { Button } from '@/components/ui/button'
-import { fmt } from '@/lib/utils'
+import { Loader2, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { post, useAreas } from '@/api/queries'
+import type { JobPreview } from '@/api/types'
+import { jobStatus, shortArea } from '@/lib/labels'
+import { fmt, noun } from '@/lib/utils'
 import { useAnalyse } from '@/map/analyse'
+import { flyToBounds } from '@/map/MapView'
+import { mainLine, MIN_STRETCH_M } from '@/map/trim'
 import { useUi } from '@/store/ui'
 
 const STAGES = ['panoramas', 'area', 'plan', 'detect', 'geometry', 'ocr', 'vlm', 'reference', 'match', 'export']
+const card = 'sheet pointer-events-auto w-[min(470px,92vw)] px-5 py-4'
+
+function Elapsed({ since }: { since: number }) {
+  const [now, setNow] = useState(performance.now())
+  useEffect(() => { const t = setInterval(() => setNow(performance.now()), 250); return () => clearInterval(t) }, [])
+  return <span className="t-data">{Math.floor((now - since) / 1000)} s</span>
+}
+
+/** The estimate for what will be analysed: the preview's for the whole street, re-asked (debounced) while the end dots
+ *  are dragged — the same backend rule, scaled by the stretch length (fix 10). */
+function useStretchEstimate() {
+  const preview = useAnalyse((s) => s.preview)
+  const trim = useAnalyse((s) => s.trim)
+  const [trimmed, setTrimmed] = useState<{ len: number; est: JobPreview['estimate'] } | null>(null)
+  const len = trim ? Math.round(trim.b - trim.a) : null
+  useEffect(() => {
+    if (len == null) return
+    let off = false
+    const t = setTimeout(() => {
+      post<{ estimate: JobPreview['estimate'] }>('/jobs/estimate', { length_m: len })
+        .then((r) => { if (!off) setTrimmed({ len, est: r.estimate }) }).catch(() => {})
+    }, 120)
+    return () => { off = true; clearTimeout(t) }
+  }, [len])
+  if (len == null) return { est: preview?.estimate ?? null, busy: false }
+  return { est: trimmed?.est ?? preview?.estimate ?? null, busy: trimmed?.len !== len }
+}
 
 export function AnalysePanel() {
   const on = useUi((s) => s.analyse)
-  const setAnalyse = useUi((s) => s.setAnalyse)
+  const offline = useUi((s) => s.offline)
   const a = useAnalyse()
   const qc = useQueryClient()
-
-  // poll the job while it is queued / running
+  const map = useMap('main')
+  const { data: areas } = useAreas()
   const status = a.job?.status
   useEffect(() => {
     if (!status || !['queued', 'running'].includes(status)) return
@@ -26,47 +60,97 @@ export function AnalysePanel() {
   }, [status])
   useEffect(() => { if (status === 'done') qc.invalidateQueries({ queryKey: ['areas'] }) }, [status, qc])
 
-  const cancelPick = () => { setAnalyse(false); a.reset() }
-  const card = 'glass glass-strong pointer-events-auto w-[min(460px,92vw)] px-4 py-3'
+  const leave = () => { useUi.getState().setAnalyse(false); a.reset() }
+  const { est, busy: estBusy } = useStretchEstimate()
+  const trimmable = (mainLine(a.preview?.lines)?.length ?? 0) >= MIN_STRETCH_M * 2
+  const p = a.preview
+  // frame the snapped street so its highlight is in view above the sheet
+  useEffect(() => {
+    if (!map || !p?.lines?.coordinates.length) return
+    const pts = p.lines.coordinates.flat()
+    const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1])
+    // the sheet covers ~300 px at the bottom: frame the street above it so both end dots can be dragged (fix 10)
+    flyToBounds(map, [Math.min(...xs) - 0.0003, Math.min(...ys) - 0.0003, Math.max(...xs) + 0.0003, Math.max(...ys) + 0.0003], { maxZoom: 17.2, bottomPx: 300 })
+  }, [map, p])
+  const already = p?.already ?? []
+  const openExisting = (slug: string, street: string) => {
+    const ui = useUi.getState()
+    a.reset(); ui.setAnalyse(false)
+    if (ui.area !== slug) ui.setArea(slug)
+    setTimeout(() => {
+      useUi.getState().selectStreet(street)
+      const ar = areas?.find((x) => x.slug === slug)
+      if (map && ar && !p?.lines) flyToBounds(map, ar.bbox)
+    }, ui.area !== slug ? 900 : 0)
+  }
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-10 z-30 flex justify-center">
+    <div className="pointer-events-none absolute inset-x-0 bottom-9 z-30 flex justify-center">
       <AnimatePresence mode="wait">
-        {on && !a.preview && (
-          <motion.div key="pick" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className={card} role="status">
-            <div className="flex items-center gap-2.5">
-              {a.loading ? <Loader2 className="size-4 animate-spin text-accent" /> : <Crosshair className="size-4 text-accent" />}
-              <p className="flex-1 text-[13px]">{a.loading ? 'Finding the street under your click…' : <>Click a street with <b className="text-[#4fa3ff]">blue Street View coverage</b>.</>}</p>
-              <Button size="sm" onClick={cancelPick}>Cancel <kbd className="text-[10px] text-faint">Esc</kbd></Button>
-            </div>
-            {a.error && <p className="mt-2 text-[12px] text-no-record">{a.error}</p>}
+        {on && !p && (
+          <motion.div key="pick" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className={card} role="status" aria-live="polite">
+            {a.loading && a.startedAt != null ? (
+              <div className="flex items-center gap-3">
+                <Loader2 className="size-4 shrink-0 animate-spin sodium" />
+                <p className="flex-1">Asking OpenStreetMap which street this is… <Elapsed since={a.startedAt} /></p>
+                <button className="btn btn-line" onClick={() => a.cancelPick()}>Cancel</button>
+              </div>
+            ) : a.error ? (
+              <div className="flex items-start gap-3">
+                <p className="flex-1" style={{ color: a.error.kind === 'busy' ? 'var(--ns-sodium)' : undefined }}>{a.error.message}</p>
+                {a.error.kind === 'busy' && a.clickAt && <button className="btn btn-sodium" onClick={() => a.pick(a.clickAt!.lat, a.clickAt!.lng)}>Try again</button>}
+                <button className="btn" onClick={leave}>Leave</button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <p className="flex-1">Point at a street with a <b style={{ color: '#4fa3ff' }}>blue</b> Street View line and click it.</p>
+                <button className="btn" onClick={leave}>Cancel <span className="kbd">Esc</span></button>
+              </div>
+            )}
           </motion.div>
         )}
-        {on && a.preview && (
+        {on && p && (
           <motion.div key="confirm" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className={card} role="dialog" aria-label="Confirm analysis">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <div className="eyebrow">Analyse this street?</div>
-                <div className="mt-0.5 text-[15px] font-semibold">{a.preview.street}</div>
-                <div className="tnum text-[12px] text-muted">{fmt.format(a.preview.length_m)} m · {a.preview.osm_ways} OSM way{a.preview.osm_ways === 1 ? '' : 's'}</div>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="t-micro">Analyse this street?</div>
+                <div className="t-title mt-1">{p.street}</div>
+                <div className="t-small ink2 mt-0.5">
+                  {a.trim ? <><span className="t-data">{fmt.format(Math.round(a.trim.b - a.trim.a))} m</span> of {fmt.format(p.length_m)} m · <button className="link" onClick={() => a.setTrim(null)}>whole street</button></>
+                    : <><span className="t-data">{fmt.format(p.length_m)} m</span> · highlighted on the map</>}
+                  {p.name_source === 'osm' && ' · name from OpenStreetMap'}{p.name_source === 'unnamed' && ' · no name in OpenStreetMap'}</div>
+                <div className="t-small ink3 mt-0.5">Drag the orange end dots on the map to analyse only part of it{trimmable ? '' : ' (this street is too short to trim)'}.</div>
               </div>
-              <Button size="icon-sm" onClick={() => a.reset()} aria-label="Pick another street"><X /></Button>
+              <button className="btn btn-icon" onClick={() => a.reset()} aria-label="Pick another street"><X /></button>
             </div>
-            {a.preview.already_analysed_in.length > 0 && (
-              <p className="mt-2 rounded-md bg-accent-soft px-2 py-1.5 text-[12px] text-accent">This point is already inside: {a.preview.already_analysed_in.join(', ')}.</p>
+            {p.note && <p className="t-small mt-2" style={{ color: 'var(--ns-sodium)' }}>{p.note}</p>}
+            {already.length > 0 && !a.anyway ? (
+              <div className="mt-3 border-l-2 pl-3" style={{ borderColor: 'var(--ns-sodium)' }}>
+                <p>Already analysed in <b>{shortArea(already[0].area)}</b>{already[0].street !== p.street ? <> as <b>{already[0].street}</b></> : null}.</p>
+                <p className="t-small ink3 mt-0.5">{already[0].by === 'way_ids' ? 'Same OpenStreetMap road.' : `${Math.round(already[0].overlap * 100)}% of it runs along an analysed street.`}</p>
+                <div className="mt-3 flex gap-2">
+                  <button className="btn btn-solid" onClick={() => openExisting(already[0].slug, already[0].street)}>Open</button>
+                  <button className="btn btn-line" onClick={() => useAnalyse.setState({ anyway: true })}>Analyse anyway</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {est ? (
+                  <dl className="mt-4 grid grid-cols-3" aria-live="polite" style={{ opacity: estBusy ? 0.6 : 1 }}>
+                    {[['Street View', `≈ ${fmt.format(est.street_view_images)}`, `${noun(est.street_view_images, 'image')}${est.street_view_usd != null ? ` · ≈ $${est.street_view_usd}` : ''}`],
+                      ['GPU (Colab)', `≈ ${est.gpu_minutes}`, noun(Number(est.gpu_minutes), 'minute')],
+                      ['CPU only', `≈ ${est.cpu_minutes_full_ocr}`, `${noun(Number(est.cpu_minutes_full_ocr), 'minute')} · fast OCR ${est.cpu_minutes_fast_ocr}`]].map(([k, v, s], i) => (
+                      <div key={k} className={i ? 'rule-l pl-4' : ''}><dt className="t-micro">{k}</dt><dd className="t-figure mt-1" style={{ fontSize: 21.5 }}>{v}</dd><dd className="t-small ink3">{s}</dd></div>
+                    ))}
+                  </dl>
+                ) : <p className="t-small ink3 mt-3">No estimate available (reference run missing).</p>}
+                {est && <p className="t-small ink3 mt-2">Estimate{a.trim ? ' for the trimmed stretch' : ''}: {est.basis}</p>}
+                {a.error && <p className="t-small mt-2" style={{ color: 'var(--ns-no-record)' }}>{a.error.message}</p>}
+                <div className="mt-4 flex justify-end gap-2">
+                  <button className="btn" onClick={leave}>Cancel</button>
+                  <button className="btn btn-solid" disabled={a.loading || offline} onClick={() => a.start()}>{a.loading && <Loader2 className="animate-spin" />} {offline ? 'Offline — read-only' : 'Start analysis'}</button>
+                </div>
+              </>
             )}
-            {a.preview.estimate ? (
-              <div className="mt-2.5 grid grid-cols-3 gap-2 text-[12px]">
-                <Stat label="Street View images" value={`≈ ${fmt.format(a.preview.estimate.street_view_images)}`} sub={a.preview.estimate.street_view_usd != null ? `≈ $${a.preview.estimate.street_view_usd}` : undefined} />
-                <Stat label="GPU (Colab)" value={`≈ ${a.preview.estimate.gpu_minutes} min`} />
-                <Stat label="CPU fallback" value={`${a.preview.estimate.cpu_minutes_full_ocr} min`} sub={`fast OCR ${a.preview.estimate.cpu_minutes_fast_ocr} min`} />
-              </div>
-            ) : <p className="mt-2 text-[12px] text-muted">No estimate available (reference run missing).</p>}
-            {a.preview.estimate && <p className="mt-1.5 text-[10.5px] leading-snug text-faint">Estimate, {a.preview.estimate.basis}</p>}
-            {a.error && <p className="mt-2 text-[12px] text-no-record">{a.error}</p>}
-            <div className="mt-3 flex justify-end gap-1.5">
-              <Button size="sm" onClick={cancelPick}>Cancel</Button>
-              <Button size="sm" variant="accent" disabled={a.loading} onClick={() => a.start()}>{a.loading && <Loader2 className="animate-spin" />} Start analysis</Button>
-            </div>
           </motion.div>
         )}
         {!on && a.job && <JobCard key="job" />}
@@ -75,45 +159,37 @@ export function AnalysePanel() {
   )
 }
 
-const Stat = ({ label, value, sub }: { label: string; value: string; sub?: string }) => (
-  <div className="rounded-lg bg-hover px-2 py-1.5"><div className="text-[10.5px] text-muted">{label}</div><div className="tnum font-semibold">{value}</div>{sub && <div className="tnum text-[10.5px] text-faint">{sub}</div>}</div>
-)
-
 function JobCard() {
   const { job, workerOnline, cancelJob, error } = useAnalyse()
   const setArea = useUi((s) => s.setArea)
   if (!job) return null
   const close = () => useAnalyse.setState({ job: null, preview: null, clickAt: null })
   const stageIdx = job.stage ? STAGES.indexOf(job.stage) : -1
-  const tone = { queued: 'text-accent', running: 'text-accent', done: 'text-matched', failed: 'text-no-record', no_street_view: 'text-discrepancy', expired_token: 'text-discrepancy' }[job.status] ?? 'text-muted'
   const message = {
-    queued: workerOnline ? 'Queued. The analysis worker will pick it up shortly.' : 'Queued — no analysis worker connected. It starts when the Colab worker (phase 6) comes online.',
-    running: `Running: ${job.stage ?? 'starting'}${job.total ? ` (${job.done ?? 0} / ${job.total})` : ''}.`,
+    queued: workerOnline ? 'Queued. The analysis worker will pick it up shortly.' : 'Queued — the analysis worker is offline. It starts when the Colab worker comes online.',
+    running: `Running: ${job.stage ?? 'starting'}${job.total ? ` (${job.done ?? 0} of ${job.total})` : ''}.`,
     done: 'Done. The new area is ready.',
-    failed: job.message === 'cancelled by user' ? 'Cancelled.' : `Failed: ${job.message ?? 'unknown error'}`,
+    failed: jobStatus(job).key === 'cancelled' ? 'Cancelled. Nothing was analysed.' : `Failed: ${job.message ?? 'unknown error'}`,
     no_street_view: `No usable Street View here: ${job.message ?? ''}`,
     expired_token: 'Paused: the worker’s AWS token expired. Refresh the keys in Colab and re-run the worker cell; it resumes.',
   }[job.status] ?? job.status
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="glass glass-strong pointer-events-auto w-[min(460px,92vw)] px-4 py-3" role="status" aria-live="polite">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="eyebrow">Analysis job</div>
-          <div className="truncate text-[14px] font-semibold">{job.street ?? 'New street'}</div>
-        </div>
-        <span className={`text-[12px] font-semibold ${tone}`}>{job.status.replace(/_/g, ' ')}</span>
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className={card} role="status" aria-live="polite">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0"><div className="t-micro">Analysis</div><div className="t-title mt-1 truncate">{job.street ?? 'New street'}</div></div>
+        <span className="t-small" style={{ color: jobStatus(job).color }}>{jobStatus(job).label}</span>
       </div>
-      <p className="mt-1 text-[12.5px] leading-snug text-fg/85">{message}</p>
+      <p className="t-small ink2 mt-1">{message}</p>
       {(job.status === 'running' || job.status === 'queued') && (
-        <div className="mt-2 flex gap-1" aria-label="Pipeline stages">
-          {STAGES.map((s, i) => <span key={s} title={s} className={`h-1.5 flex-1 rounded-full ${i < stageIdx ? 'bg-accent' : i === stageIdx ? 'animate-pulse bg-accent' : 'bg-hover'}`} />)}
+        <div className="mt-3 flex gap-1" aria-label="Pipeline stages">
+          {STAGES.map((s, i) => <span key={s} title={s} className="h-1 flex-1 rounded-full" style={{ background: i < stageIdx ? 'var(--ns-sodium)' : i === stageIdx ? 'var(--ns-sodium-glow)' : 'var(--ns-line-strong)' }} />)}
         </div>
       )}
-      {error && <p className="mt-1.5 text-[12px] text-no-record">{error}</p>}
-      <div className="mt-2.5 flex justify-end gap-1.5">
-        {['queued', 'running', 'expired_token'].includes(job.status) && <Button size="sm" onClick={() => cancelJob()}>Cancel job</Button>}
-        {job.status === 'done' && job.area_slug && <Button size="sm" variant="accent" onClick={() => { setArea(job.area_slug!); close() }}>Open new area</Button>}
-        <Button size="sm" onClick={close}>{['queued', 'running'].includes(job.status) ? 'Hide' : 'Close'}</Button>
+      {error && <p className="t-small mt-1.5" style={{ color: 'var(--ns-no-record)' }}>{error.message}</p>}
+      <div className="mt-3 flex justify-end gap-2">
+        {['queued', 'running', 'expired_token'].includes(job.status) && <button className="btn btn-line" onClick={() => cancelJob()}>Cancel job</button>}
+        {job.status === 'done' && job.area_slug && <button className="btn btn-solid" onClick={() => { setArea(job.area_slug!); close() }}>Open the new area</button>}
+        <button className="btn" onClick={close}>{['queued', 'running'].includes(job.status) ? 'Hide' : 'Close'}</button>
       </div>
     </motion.div>
   )

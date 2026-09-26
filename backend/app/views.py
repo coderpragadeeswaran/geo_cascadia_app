@@ -9,6 +9,7 @@ from collections import Counter
 
 from geo_cascadia.workspace import QueryEngine, build_dashboard
 
+from . import queryparse
 from .derived import computed_counts, consistency
 from .streetgeo import gap_consistency
 
@@ -252,27 +253,106 @@ def review_row(bundle, q):
 
 
 # ---------------------------------------------------------------- /query
-def run_query(bundle, text):
+STORED_GAP_M = 60                   # the only interval the pipeline exported (fix 2)
+GOOGLE_FLAG = "sign_not_in_google_within_40m"
+
+
+def run_query(bundle, text, explain=True, gaps_at=None, scope_street=None):
     """QueryEngine.run + a uniform response. why_empty: the engine's funnel for building queries; for other intents
-    a funnel built the same way (all → filters → 0)."""
+    a funnel built the same way (all → filters → 0). Typed questions go through queryparse first (synonyms + what was
+    understood / ignored, docs/QUERY.md); chips built by clicking are canonical text and skip that step.
+
+    gaps_at(interval) → {"rows", "display"} | None: dark stretches at intervals other than the stored 60 m, computed
+    with the pipeline's method (gaps.GapCalc); None = can't be computed → said plainly, never reported as 0 (fix 2).
+    scope_street: the street the person had selected; a typed question that names no street is answered on it and says
+    so with a Street chip (fix 3: one scope, never two). A by-street chart covers every street and ignores it."""
     qe = engine(bundle)
-    parsed, res = qe.run(text)
+    und = None
+    if explain:
+        read_as, und = queryparse.understand(qe, text, compose_query)
+        read_as = _scoped(qe, read_as, und, scope_street)
+        parsed, res = qe.run(read_as)
+    else:
+        parsed, res = qe.run(text)
     parsed = copy.deepcopy(parsed)
     funnel = parsed.pop("why_empty", None)
     it = parsed["intent"]
-    out = {"text": text, "parsed_filters": parsed, "intent": it, "rows": None, "groups": None, "why_empty": []}
-    if isinstance(res, dict):                       # group_by street
+    out = {"text": text, "parsed_filters": parsed, "intent": it, "rows": None, "groups": None, "why_empty": [], "understanding": und}
+    all_gaps = None
+    if it == "streetlight_gaps" and parsed["interval_m"] != STORED_GAP_M:
+        iv = parsed["interval_m"]
+        comp = gaps_at(iv) if gaps_at else None
+        if comp is None:
+            out.update(rows=[], total=None, gaps={"interval_m": iv, "computed": False, "available": False, "note":
+                       f"Dark stretches at {iv} m can't be computed for this area: the camera plan (plan.json) is not "
+                       f"available. Only the pipeline's stored {STORED_GAP_M} m stretches exist."})
+            return out
+        all_gaps, st = comp["rows"], parsed.get("street")
+        rows = sorted([g for g in all_gaps if not st or g["street"] == st], key=lambda g: -g["length_m"])
+        out["rows"] = [{**_query_row(it, g, comp["display"]), "computed": True,
+                        "path": (comp["display"].get(g["id"]) or {}).get("path")} for g in rows]
+        out["total"] = len(rows)
+        out["gaps"] = {"interval_m": iv, "computed": True, "available": True, "note": gaps_note()}
+    elif isinstance(res, dict):                       # group_by street
         out["groups"] = [{"key": k, "count": v} for k, v in res.items()]
         out["total"] = sum(res.values())
     else:
         disp = bundle.get("gap_display") or {}
         out["rows"] = [_query_row(it, r, disp) for r in res]
         out["total"] = len(res)
+        if it == "streetlight_gaps":
+            out["gaps"] = {"interval_m": STORED_GAP_M, "computed": False, "available": True, "note": "stored by the pipeline"}
+    if it == "buildings" and parsed.get("ref_flag") == GOOGLE_FLAG:
+        out["note"] = _google_note(qe, parsed, out["total"])
     if funnel:
         out["why_empty"] = [{"step": s, "count": n} for s, n in funnel]
     elif out["total"] == 0:
-        out["why_empty"] = _other_funnel(bundle, qe, parsed)
+        out["why_empty"] = _other_funnel(bundle, qe, parsed, all_gaps)
     return out
+
+
+def _scoped(qe, read_as, und, street):
+    """Answer a question that names no street on the selected street (fix 3), if QueryEngine reads it back exactly."""
+    parsed = {k: v for k, v in qe.parse(read_as).items() if k != "why_empty"}
+    if not street or street not in qe.streets or parsed.get("street") or parsed.get("group_by") == "street":
+        return read_as
+    want = normalize_filters({**parsed, "street": street})
+    try:
+        t2 = compose_query(want)
+    except FilterError:
+        return read_as
+    if {k: v for k, v in qe.parse(t2).items() if k != "why_empty"} != want:
+        return read_as
+    und["scoped_to"] = street
+    if und["understood"]:
+        und["understood"] = und["understood"] + [{"phrase": "", "meaning": f"on {street} (the street you selected)"}]
+    return t2
+
+
+def gaps_note():
+    from .gaps import COMPUTED_NOTE
+    return COMPUTED_NOTE
+
+
+USE_WORDS = {"commercial": "shops", "mixed": "mixed use", "residential": "homes", "institutional": "institutional",
+             "other": "other use", None: "use not known"}
+
+
+def _google_note(qe, f, total):
+    """Fix 5: "businesses not on Google" (34) vs Trust's 23 of 116 named businesses on Google (93 not). Both come
+    from the records: the flag marks a building whose sign name was not found on Google within 40 m, whatever its use."""
+    flagged = [m for m in qe.M if GOOGLE_FLAG in (m.get("ref_flags") or [])]
+    if len(flagged) == total:
+        return None
+    by = Counter(m.get("obs_use") for m in flagged)
+    other = [(u, n) for u, n in by.most_common() if u not in ("commercial", "mixed")]
+    rest = ", ".join(f"{USE_WORDS.get(u, u)} {n}" for u, n in other)
+    what = "shops & businesses (commercial or mixed use)" if f.get("use") == "commercial" else "buildings"
+    scope = f" on {f['street']}" if f.get("street") else ""
+    verb = "has" if total == 1 else "have"
+    tail = f", including {sum(n for _, n in other)} that are not shops ({rest})." if other and f.get("use") == "commercial" else "."
+    return (f"{total} {what}{scope} {verb} a sign name that was not found on Google within 40 m. In the whole area "
+            f"{len(flagged)} named buildings are not on Google{tail}")
 
 
 def _query_row(intent, r, disp=None):
@@ -294,13 +374,13 @@ def _query_row(intent, r, disp=None):
     return {"kind": "review_item", **r}       # review
 
 
-def _other_funnel(bundle, qe, f):
+def _other_funnel(bundle, qe, f, all_gaps=None):
     it, st = f["intent"], f.get("street")
     if it == "streetlight_gaps":
-        k = str(min((40, 60, 100), key=lambda v: abs(v - f["interval_m"])))
-        steps = [(f"{k} m gap analysis available", len(qe.G.get(k, [])))]
+        allg = all_gaps if all_gaps is not None else qe.G.get(str(STORED_GAP_M), [])
+        steps = [(f"{f['interval_m']} m gap analysis available", len(allg))]
         if st:
-            steps.append((f"on {st}", sum(g["street"] == st for g in qe.G.get(k, []))))
+            steps.append((f"on {st}", sum(g["street"] == st for g in allg)))
     elif it == "assets":
         steps = [(f"{f['asset_type']}s detected", sum(a["cls"] == f["asset_type"] for a in qe.A))]
         if st:
@@ -351,7 +431,7 @@ def compose_query(f):
         if f.get("floors_op"):
             if f["floors_op"] not in OP_WORDS or "floors_n" not in f:
                 raise FilterError("floors filter needs an operator (>, >=, <, ==) and a number")
-            w.append(f"with {OP_WORDS[f['floors_op']]} {f['floors_n']} visible floors")
+            w.append(f"with {OP_WORDS[f['floors_op']]} {queryparse.plural(f['floors_n'], 'visible floor')}")
         if f.get("match_status") == "no_record":
             w.append("that do not have a matching property record")
         elif f.get("match_status") == "discrepancy":
@@ -368,7 +448,7 @@ def compose_query(f):
     return " ".join(parts)
 
 
-def run_filters(bundle, filters):
+def run_filters(bundle, filters, gaps_at=None):
     want = normalize_filters(filters)
     if want["intent"] != "buildings":
         want.pop("group_by", None)
@@ -376,7 +456,7 @@ def run_filters(bundle, filters):
     got = {k: v for k, v in engine(bundle).parse(text).items() if k != "why_empty"}
     if got != want:
         raise FilterError(f"these filters can't be expressed for QueryEngine (read back as {got})")
-    return run_query(bundle, text)
+    return run_query(bundle, text, explain=False, gaps_at=gaps_at)
 
 
 # ---------------------------------------------------------------- analyse-a-street estimate
@@ -394,9 +474,30 @@ def job_estimate(length_m, ref_bundle, model_card):
     price = ct.get("street_view_price_usd_per_image")
     gpu = ct.get("ward29_full_run_gpu_minutes")
     cpu = (ct.get("cpu_fallback_per_street_min") or {})
+    # model_card gives CPU minutes "per street": a Ward 29 street, whose mean analysed length is the reference
+    n_streets = len([s for s in ref_bundle["streets"] if s.get("length_m")])
+    per_street_m = ref_len / n_streets if n_streets else None
+    k = length_m / per_street_m if per_street_m else None
+    full = cpu.get("full_ocr")
     return {"street_view_images": images, "street_view_usd": round(images * price, 2) if price else None,
             "gpu_minutes": round(gpu * length_m / ref_len, 1) if gpu else None,
-            "cpu_minutes_full_ocr": cpu.get("full_ocr"), "cpu_minutes_fast_ocr": cpu.get("fast_ocr_estimate"),
-            "basis": (f"scaled by length from the Ward 29 run: {views} planned views over {round(ref_len)} m of streets; "
-                      f"GPU {gpu} min for Ward 29 and ${price}/image from model_card. VLM calls not included."),
+            "cpu_minutes_full_ocr": _scale(full, k), "cpu_minutes_fast_ocr": _scale(cpu.get("fast_ocr_estimate"), k),
+            "basis": (f"scaled by length from the Ward 29 run: {views} planned views and {gpu} GPU minutes over {round(ref_len)} m "
+                      f"of streets; CPU {full} min per street from model_card, per Ward 29 street of {round(per_street_m or 0)} m on "
+                      f"average; ${price} per Street View image. VLM calls not included."),
             "is_estimate": True}
+
+
+def _scale(v, k):
+    """model_card minutes (a number or a "3-5" range) × length factor, rounded; a range stays a range"""
+    if v is None or k is None:
+        return v
+    if isinstance(v, (int, float)):
+        return max(1, round(v * k))
+    lo, _, hi = str(v).partition("-")
+    try:
+        a, b = float(lo), float(hi or lo)
+    except ValueError:
+        return v
+    a, b = max(1, round(a * k)), max(1, round(b * k))
+    return f"{a}–{b}" if b != a else str(a)

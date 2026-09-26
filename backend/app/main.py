@@ -8,6 +8,7 @@ Every JSON response carries `"offline": true|false` — true when the DB is unre
 data/areas/*.json (docs/DECISIONS.md D4).
 """
 import json
+import logging
 import os
 import sys
 from typing import Optional
@@ -22,7 +23,7 @@ from .settings import ROOT, Settings
 
 sys.path.insert(0, os.path.join(ROOT, "pipeline"))   # geo_cascadia (import only — never modified)
 
-from . import views  # noqa: E402
+from . import drive, evidence, gaps, views  # noqa: E402
 from .storage import StorageError  # noqa: E402
 from .store import Data, OfflineError  # noqa: E402
 
@@ -59,16 +60,33 @@ class QueryIn(BaseModel):
     text: Optional[str] = Field(None, min_length=2, max_length=300,
                                 examples=["Show commercial buildings with more than two visible floors that do not have a matching property record"])
     filters: Optional[dict] = Field(None, description="edited filter chips (parsed_filters shape) instead of text")
+    scope_street: Optional[str] = Field(None, description="the street selected in the app; a typed question that names "
+                                        "no street is answered on it (shown as a Street chip)")
+
+
+def _log_setup():
+    """Data-mode changes (offline fallback + its reason, reconnects) go to the API console next to uvicorn's lines."""
+    lg = logging.getLogger("geo_cascadia")
+    if not lg.handlers:
+        h = logging.StreamHandler()
+        h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s", "%H:%M:%S"))
+        lg.addHandler(h)
+        lg.setLevel(logging.INFO)
+        lg.propagate = False
 
 
 def create_app(settings: Optional[Settings] = None) -> FastAPI:
     settings = settings or Settings()
+    _log_setup()
     app = FastAPI(title="GEO-CASCADIA API", version="0.2.0",
                   description="Street View asset & property intelligence. Registers are SYNTHETIC demo data. "
                               "Every response carries `offline` (true = read-only JSON fallback).")
     app.state.settings = settings
     app.state.data = Data(settings)
     app.state.model_card = ModelCard(os.path.join(settings.data_dir, "model_card.json"))
+    app.state.detections = evidence.Detections(settings.areas_dir)
+    app.state.plans = drive.Plans(settings.areas_dir)
+    app.state.gapcalc = gaps.GapCalc(settings.areas_dir)
     app.state.workers = {}
     app.add_middleware(GZipMiddleware, minimum_size=2000)
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"])
@@ -199,6 +217,32 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         res, off = D.read(fn)
         return {"offline": off, **res}
 
+    @app.get("/areas/{slug}/evidence/{kind}/{obj_id}", tags=["evidence"])
+    def evidence_boxes(slug: str, kind: str, obj_id: str, D: Data = Depends(get_data)):
+        """Every detection box (building, pole, lamp_head, signboard + confidence) on each evidence photo of an object, with
+        the object's own box marked. Asset photos are re-aimed views: boxes are projected from the same panorama's views."""
+        if kind not in ("building", "asset", "unmapped"):
+            raise HTTPException(422, "kind must be building, asset or unmapped")
+        res, off = D.read(lambda s: evidence.evidence(app.state.detections, need(s, slug), kind, obj_id))
+        if res is None:
+            raise HTTPException(404, f"{kind} {obj_id!r} not found in {slug!r}")
+        return {"offline": off, "area": slug, "kind": kind, "id": obj_id, "views": res}
+
+    @app.get("/areas/{slug}/drive", tags=["areas"])
+    def drive_street(slug: str, street: str = Query(..., description="street display name"), D: Data = Depends(get_data)):
+        """Drive the street: the real camera stops of one street in driving order (per merged branch, strictly increasing
+        along-road distance, forward = road tangent), with dark stretches, lamps, poles, buildings and businesses placed
+        by the same distance."""
+        def fn(s):
+            b = need(s, slug)
+            return drive.drive(b, app.state.plans.get(slug), street)
+        res, off = D.read(fn)
+        if res is None:
+            raise HTTPException(404, f"street {street!r} not found in {slug!r}")
+        if not res["branches"]:
+            raise HTTPException(404, f"no camera stops recorded on {street!r} (plan.json)")
+        return {"offline": off, "area": slug, **res}
+
     # ------------------------------------------------------------ query
     @app.post("/query", tags=["query"])
     def query(body: QueryIn, D: Data = Depends(get_data)):
@@ -207,8 +251,12 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         if bool(body.text) == bool(body.filters):
             raise HTTPException(422, "give either text or filters")
         try:
-            res, off = D.read(lambda s: views.run_filters(need(s, body.area), body.filters) if body.filters
-                              else views.run_query(need(s, body.area), body.text))
+            def fn(s):
+                b = need(s, body.area)
+                gaps_at = lambda iv: app.state.gapcalc.get(b, iv)
+                return views.run_filters(b, body.filters, gaps_at) if body.filters \
+                    else views.run_query(b, body.text, gaps_at=gaps_at, scope_street=body.scope_street)
+            res, off = D.read(fn)
         except views.FilterError as e:
             raise HTTPException(422, str(e)) from None
         return {"offline": off, "area": body.area, **res}

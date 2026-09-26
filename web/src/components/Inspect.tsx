@@ -1,108 +1,88 @@
-/** Hover card (follows the cursor), status chips, low-coverage notice. Selection opens the evidence drawer. */
+/** Hover card (follows the cursor, plain words) and the low-coverage note. A click opens the evidence panel. */
 import { useAreas } from '@/api/queries'
-import type { AnyProps, BuildingProps } from '@/api/types'
+import type { AnyProps, GapProps } from '@/api/types'
+import { assetRegLabel, ASSET_REG, floorsText, gapTypeLabel, matchLabel, shortArea, useLabel } from '@/lib/labels'
+import { useAreaData } from '@/lib/useAreaData'
+import { fmt, noun, plural } from '@/lib/utils'
 import { useUi } from '@/store/ui'
-import { cn, fmt, fmt1 } from '@/lib/utils'
+import { StatusDot } from './FindingsTable'
 
-const STATUS: Record<string, { label: string; cls: string }> = {
-  matched: { label: 'Matched', cls: 'text-matched bg-[rgb(45_212_191/0.12)]' },
-  discrepancy: { label: 'Discrepancy', cls: 'text-discrepancy bg-[rgb(245_165_36/0.13)]' },
-  no_record: { label: 'No record', cls: 'text-no-record bg-[rgb(244_82_91/0.13)]' },
-  unrecorded_asset: { label: 'Not in register', cls: 'text-no-record bg-[rgb(244_82_91/0.13)]' },
-  unconfirmed_detection: { label: 'Unconfirmed', cls: 'text-unclassified bg-[rgb(148_163_184/0.14)]' },
-}
-export const StatusChip = ({ s }: { s: string | null | undefined }) => {
-  const x = (s && STATUS[s]) || { label: s ?? '—', cls: 'text-muted bg-hover' }
-  return <span className={cn('inline-flex h-5 items-center rounded-md px-1.5 text-[11px] font-semibold', x.cls)}>{x.label}</span>
-}
-const KV = ({ k, v }: { k: string; v: React.ReactNode }) => (
-  <div className="flex items-baseline justify-between gap-4 py-[2px] text-[12px]"><span className="text-muted">{k}</span><span className="tnum text-right text-fg">{v}</span></div>
-)
-const pretty = (s: string | null | undefined) => (s ? s.replace(/_/g, ' ') : '—')
-
-function floorsText(p: BuildingProps) {
-  if (p.floors == null) return <span className="text-unclassified">not classified</span>
-  return <>{p.floors}{p.floors_status === 'low_confidence' && <span className="ml-1 text-faint">(low confidence)</span>}</>
-}
+const Line = ({ children }: { children: React.ReactNode }) => <div className="t-small ink2 py-[1px]">{children}</div>
 
 function Body({ p }: { p: AnyProps }) {
   switch (p.kind) {
     case 'area':
       return (<>
-        <Title eyebrow="Analysed area" title={p.name.replace(/^Unseen street: /, '')} />
-        <KV k="Buildings" v={fmt.format(p.card.counts.buildings)} />
-        <KV k="Poles & streetlights" v={fmt.format(p.card.counts.assets)} />
-        <KV k="Streetlight gaps (60 m)" v={fmt.format(p.card.counts.streetlight_gaps_60m)} />
-        <KV k="Unmapped businesses" v={fmt.format(p.card.counts.unmapped_businesses)} />
+        <Title eyebrow="Analysed area" title={shortArea(p.name)} />
+        <Line><N n={p.card.counts.buildings} /> {noun(p.card.counts.buildings, 'building')} checked · <N n={p.card.counts.streetlight_gaps_60m} /> {noun(p.card.counts.streetlight_gaps_60m, 'dark stretch')}</Line>
+        <Line><N n={p.card.counts.unmapped_businesses} /> {noun(p.card.counts.unmapped_businesses, 'business')} not on the map</Line>
       </>)
     case 'street':
       return (<>
         <Title eyebrow="Street" title={p.name} />
-        {p.osm_name && p.osm_name !== p.name && <div className="-mt-1 mb-1 truncate text-[10.5px] text-faint">OSM: {p.osm_name}</div>}
-        <KV k="Length" v={p.length_m != null ? `${fmt.format(Math.round(p.length_m))} m` : '—'} />
         {p.has_stats ? (<>
-          <KV k="Buildings" v={p.buildings ?? 0} />
-          <KV k="No record · discrepancy" v={`${p.no_record ?? 0} · ${p.discrepancy ?? 0}`} />
-          <KV k="Issues per km" v={p.issues_per_km != null ? fmt1.format(p.issues_per_km) : '—'} />
-          <KV k="Streetlights · poles" v={`${p.streetlights ?? 0} · ${p.poles ?? 0}`} />
-          <KV k="Gap length (60 m rule)" v={`${fmt.format(p.gap_m_60 ?? 0)} m`} />
-        </>) : <KV k="Issues per km" v={<span className="text-unclassified">no data for this line</span>} />}
+          <Line><N n={p.buildings ?? 0} /> {noun(p.buildings ?? 0, 'building')} · <span className="t-data" style={{ color: 'var(--ns-no-record)' }}>{p.no_record ?? 0}</span> not in register · <span className="t-data" style={{ color: 'var(--ns-discrepancy)' }}>{p.discrepancy ?? 0}</span> {(p.discrepancy ?? 0) === 1 ? 'differs' : 'differ'}</Line>
+          <Line><N n={p.streetlights ?? 0} /> {noun(p.streetlights ?? 0, 'streetlight')} · <span className="t-data text-ink">{fmt.format(Math.round(p.gap_m_60 ?? 0))} m</span> dark</Line>
+        </>) : <Line>No findings joined to this line</Line>}
+        <div className="t-small ink3 mt-1">Click to see this street</div>
       </>)
     case 'building':
       return (<>
-        <Title eyebrow={`Building · ${p.id}`} title={p.name ?? p.street} right={<StatusChip s={p.match_status} />} />
-        {p.name && <KV k="Street" v={p.street} />}
-        <KV k="Use" v={p.use ? pretty(p.use) : <span className="text-unclassified">not classified</span>} />
-        <KV k="Floors" v={floorsText(p)} />
-        {p.discrepancies.length > 0 && <KV k="Discrepancies" v={p.discrepancies.map(pretty).join(', ')} />}
-        {p.review_status && <KV k="Review" v={<span className="text-review">{p.review_status}</span>} />}
+        <Title eyebrow="Building" title={p.name ?? `${p.use ? useLabel(p.use) : 'Building'} on ${p.street}`} />
+        <StatusDot wrap s={p.match_status} label={matchLabel(p.match_status, true)} />
+        <Line>{p.use ? useLabel(p.use) : 'Use not known'} · {floorsText(p.floors, p.floors_status)}</Line>
       </>)
     case 'pole':
     case 'streetlight':
       return (<>
-        <Title eyebrow={`${p.kind === 'pole' ? 'Utility pole' : 'Streetlight'} · ${p.id}`} title={p.street ?? '—'} right={<StatusChip s={p.register_status} />} />
-        <KV k="Position" v={p.approximate ? 'approximate (single camera)' : `triangulated · ${p.cameras_used} cameras`} />
-        <KV k="Uncertainty" v={p.uncertainty_m != null ? `± ${fmt1.format(p.uncertainty_m)} m` : '—'} />
-        <KV k="Confidence" v={p.confidence ?? '—'} />
+        <Title eyebrow={p.kind === 'pole' ? 'Pole, no lamp seen' : 'Streetlight'} title={p.street ?? '—'} />
+        <StatusDot wrap s={ASSET_REG[p.register_status ?? '']?.status ?? null} label={assetRegLabel(p.register_status, true)} />
+        <Line>{p.approximate ? 'Approximate position' : `Pinpointed from ${plural(p.cameras_used ?? 0, 'camera position')}`}</Line>
       </>)
     case 'streetlight_gap':
       return (<>
-        <Title eyebrow="Streetlight gap · 60 m rule" title={p.street} />
-        <KV k="Length (recorded)" v={`${fmt.format(p.length_m)} m`} />
-        {p.display_mode === 'along_road' && p.length_differs && p.along_road_m != null &&
-          <KV k="Along the road" v={`≈ ${fmt.format(p.along_road_m)} m`} />}
-        <KV k="Finding" v={p.gap_type} />
-        <KV k="Poles inside" v={p.poles_inside} />
-        {p.display_mode === 'check' && p.note && (
-          <p className="mt-1.5 rounded-md bg-[rgb(245_165_36/0.12)] px-2 py-1.5 text-[11px] leading-snug text-discrepancy">Check: {p.note}</p>
-        )}
-        {p.display_mode === 'along_road' && p.length_differs && p.note && (
-          <p className="mt-1.5 text-[10.5px] leading-snug text-faint">{p.note}</p>
-        )}
+        <Title eyebrow="Dark stretch" title={`${fmt.format(Math.round(p.length_m))} m of ${p.street}`} />
+        <GapContext p={p} />
+        <Line>{gapTypeLabel(p.gap_type)}</Line>
+        {p.display_mode === 'check' && <Line><span className="sodium">Needs checking: the road bends here</span></Line>}
       </>)
     case 'unmapped_business':
       return (<>
-        <Title eyebrow="Unmapped business · approximate" title={p.name ?? '—'} />
-        <KV k="Street" v={p.street ?? '—'} />
-        <KV k="Sightings" v={p.sightings ?? '—'} />
+        <Title eyebrow="Business not on the map" title={p.name ?? '—'} />
+        <Line>{p.street ?? '—'} · approximate position</Line>
       </>)
     case 'missing_asset_record':
       return (<>
-        <Title eyebrow="Register record · synthetic" title={p.id} />
-        <KV k="Street" v={p.street ?? '—'} />
-        <KV k="Finding" v={p.why ?? '—'} />
+        <Title eyebrow="In the register, not seen" title={p.id} />
+        <Line>{p.street ?? '—'} · synthetic register</Line>
       </>)
   }
 }
 
-function Title({ eyebrow, title, right }: { eyebrow: string; title: string; right?: React.ReactNode }) {
+const N = ({ n }: { n: number }) => <span className="t-data text-ink">{fmt.format(n)}</span>
+
+/** Walkthrough 2 fix 6: "1 of 3 dark stretches on Uthukuli Road (516 m total)", from the same stretches the map shows
+ *  (the stored 60 m ones, or a question's computed interval), ranked longest first; lengths are the recorded ones (D13). */
+function GapContext({ p }: { p: GapProps }) {
+  const { gaps } = useAreaData()
+  const q = useUi((s) => s.query)
+  const computed = !!q?.gaps?.computed && (q.rows ?? []).some((r) => r.id === p.id)
+  const all = (computed ? (q!.rows as unknown as GapProps[]) : gaps.map((g) => g.props as GapProps)).filter((g) => g.street === p.street)
+  if (!all.length) return null
+  const rank = [...all].sort((a, b) => b.length_m - a.length_m).findIndex((g) => g.id === p.id) + 1
+  const total = all.reduce((s, g) => s + g.length_m, 0)
   return (
-    <div className="mb-1.5 flex items-start justify-between gap-3">
-      <div className="min-w-0">
-        <div className="eyebrow truncate">{eyebrow}</div>
-        <div className="mt-0.5 truncate text-[13.5px] font-semibold">{title}</div>
-      </div>
-      {right}
+    <Line>{all.length === 1 ? 'The only dark stretch' : <>{rank} of {plural(all.length, 'dark stretch')}</>} on {p.street}
+      {all.length > 1 && <> (<span className="t-data text-ink">{fmt.format(Math.round(total))} m</span> total)</>}
+      {computed && <span className="ink3"> · within {p.interval_m} m, computed</span>}</Line>
+  )
+}
+
+function Title({ eyebrow, title }: { eyebrow: string; title: string }) {
+  return (
+    <div className="mb-1 min-w-0">
+      <div className="t-micro">{eyebrow}</div>
+      <div className="mt-0.5 break-words text-[16.5px] font-[580] leading-snug">{title}</div>
     </div>
   )
 }
@@ -110,41 +90,35 @@ function Title({ eyebrow, title, right }: { eyebrow: string; title: string; righ
 export function HoverCard() {
   const h = useUi((s) => s.hovered)
   const selected = useUi((s) => s.selected)
-  if (!h || (selected && 'id' in selected && 'id' in h.props && selected.id === h.props.id)) return null
-  const left = Math.min(h.x + 16, window.innerWidth - 290)
-  const top = Math.min(h.y + 16, window.innerHeight - 200)
+  const page = useUi((s) => s.page)
+  if (!h || page !== 'explore' || (selected && 'id' in selected && 'id' in h.props && selected.id === h.props.id)) return null
+  const stage = document.querySelector('[data-map-stage]')?.getBoundingClientRect()
+  const left = Math.min(h.x + 16, (stage?.width ?? window.innerWidth) - 320)
+  const top = Math.min(h.y + 16, (stage?.height ?? window.innerHeight) - 190)
   return (
-    <div className="glass glass-strong pointer-events-none fixed z-30 w-[270px] px-3.5 py-3" style={{ left, top }} role="tooltip">
+    <div className="map-card sheet pointer-events-none absolute z-40 px-3.5 py-3" style={{ left, top }} role="tooltip">
       <Body p={h.props} />
     </div>
   )
 }
 
-/** Low-coverage notice for the open area (Trichy / Tiruppur); Ward 29 has full coverage, so none. */
+/** Low building-map coverage (Trichy / Tiruppur): why few buildings were analysed. Numbers from data (view counts from
+ *  the run's coverage stats; buildings, assets, businesses counted from the records). */
 export function CoverageNotice() {
   const area = useUi((s) => s.area)
   const band = useUi((s) => s.band)
+  const analyse = useUi((s) => s.analyse)
   const { data: areas } = useAreas()
   const a = areas?.find((x) => x.slug === area)
-  if (!a || band === 'city' || a.coverage.level !== 'partial') return null
-  return <div className="glass pointer-events-auto px-3 py-2.5"><CoverageBanner c={a.coverage} /></div>
-}
-
-/** Low map coverage: explains why few buildings were analysed (numbers from data: view counts from the run's coverage
- *  stats, building / asset / business counts computed from the records). */
-function CoverageBanner({ c }: { c: import('@/api/types').AreaCard['coverage'] }) {
+  if (!a || band === 'city' || analyse || a.coverage.level !== 'partial') return null
+  const c = a.coverage
   const pct = c.share_views_no_mapped_building != null ? Math.round(c.share_views_no_mapped_building * 100) : null
-  const strong = (c.share_views_no_mapped_building ?? 0) >= 0.5
   return (
-    <div role="note" className="rounded-lg border border-[rgb(245_165_36/0.35)] bg-[rgb(245_165_36/0.1)] px-2.5 py-2 text-[11px] leading-snug">
-      <div className="mb-0.5 font-semibold text-discrepancy">{strong ? 'Low map coverage' : 'Partial map coverage'}</div>
-      <p className="text-fg/85">
-        {pct != null && <><b className="tnum">{pct}%</b> of camera views (<span className="tnum">{c.views_facing_no_mapped_building} of {c.views_planned}</span>) face
-        frontage with no building outline in OpenStreetMap. </>}
-        Buildings are analysed only where an outline exists: <b className="tnum">{c.buildings}</b> here.
-        Poles, streetlights and signs were analysed everywhere: <b className="tnum">{c.assets}</b> assets and{' '}
-        <b className="tnum">{c.unmapped_businesses}</b> businesses on unmapped frontage (approximate positions).
-      </p>
-    </div>
+    <p className="sheet t-small ink2 pointer-events-auto mx-5 mt-2 max-w-[640px] border-l-2 px-3 py-2" role="note"
+      style={{ borderLeftColor: 'var(--ns-sodium)', background: 'color-mix(in srgb, var(--ns-bg1) 90%, transparent)' }}>
+      <b className="text-ink">Few buildings are on the map here.</b>{' '}
+      {pct != null && <>{pct}% of the camera views face frontage with no building outline in OpenStreetMap. </>}
+      Buildings were checked only where an outline exists ({c.buildings}); streetlights, poles and signs were checked everywhere ({plural(c.assets, 'pole or light', 'poles and lights')}, {plural(c.unmapped_businesses, 'business')} not on the map).
+    </p>
   )
 }

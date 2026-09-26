@@ -21,22 +21,21 @@ def _db(online):
 def test_review_round_trip(online):
     item = online.get("/review?area=ward29&status=pending&item_type=building&page_size=1").json()["rows"][0]
     iid, ref = item["id"], item["ref_id"]
+    ev = None
     try:
         r = online.patch(f"/review/{iid}", data={"action": "appeal"})
         assert r.status_code == 422                                             # appeal needs a note
         r = online.patch(f"/review/{iid}", data={"action": "approve", "reviewer": "pytest", "note": "looks right"})
         assert r.status_code == 200, r.text
+        ev = r.json()["event_id"]
         assert r.json()["status"] == "approved" and r.json()["reviewer"] == "pytest"
         b = online.get(f"/buildings/ward29/{ref}").json()["building"]
         assert b["review"]["status"] == "approved"                              # map/record reflect the decision
         feats = online.get("/areas/ward29/geojson?layers=buildings").json()["features"]
         assert next(f for f in feats if f["properties"]["id"] == ref)["properties"]["review_status"] == "approved"
-    finally:
-        with _db(online).pool.connection() as c:
-            c.execute("update review_items set status = 'pending', reviewer = null, note = null, updated_at = now() where id = %s", (iid,))
-            c.execute("update buildings b set review_status = 'pending' from areas a where a.id = b.area_id "
-                      "and a.slug = 'ward29' and b.id = %s", (ref,))
-        _db(online).db.invalidate("ward29")
+    finally:                                                                    # undo OUR decision only (D24)
+        if ev is not None:
+            assert online.post(f"/review/{iid}/undo", json={"item_id": iid, "event_id": ev}).status_code == 200
     assert online.get(f"/review/{iid}").json()["status"] == "pending"
 
 

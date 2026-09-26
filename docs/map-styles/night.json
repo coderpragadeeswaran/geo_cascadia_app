@@ -49,6 +49,66 @@
       }
     },
     {
+      "id": "natural.land.landCover.forest",
+      "geometry": {
+        "fillColor": "#0b111f"
+      }
+    },
+    {
+      "id": "natural.land.landCover.shrub",
+      "geometry": {
+        "fillColor": "#0b111f"
+      }
+    },
+    {
+      "id": "natural.land.landCover.crops",
+      "geometry": {
+        "fillColor": "#0b111f"
+      }
+    },
+    {
+      "id": "natural.land.landCover.dryCrops",
+      "geometry": {
+        "fillColor": "#0b111f"
+      }
+    },
+    {
+      "id": "pointOfInterest.recreation",
+      "geometry": {
+        "fillColor": "#0d1524"
+      }
+    },
+    {
+      "id": "pointOfInterest.recreation.park",
+      "geometry": {
+        "fillColor": "#0d1524"
+      }
+    },
+    {
+      "id": "pointOfInterest.recreation.natureReserve",
+      "geometry": {
+        "fillColor": "#0d1524"
+      }
+    },
+    {
+      "id": "pointOfInterest.recreation.sportsField",
+      "geometry": {
+        "fillColor": "#0d1524"
+      }
+    },
+    {
+      "id": "pointOfInterest.recreation.golfCourse",
+      "geometry": {
+        "fillColor": "#0d1524"
+      }
+    },
+    {
+      "id": "pointOfInterest.other.cemetery",
+      "geometry": {
+        "fillColor": "#0d1524"
+      }
+    },
+    {
       "id": "infrastructure.urbanArea",
       "geometry": {
         "fillColor": "#0e1429"
@@ -147,7 +207,7 @@
     },
     {
       "id": "political.landParcel",
-      "label": {
+      "geometry": {
         "visible": false
       }
     }

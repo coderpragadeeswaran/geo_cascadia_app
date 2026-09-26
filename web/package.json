@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
     "check:data": "tsx scripts/check-data.ts",
-    "map-styles": "tsx scripts/export-map-styles.ts"
+    "map-styles": "tsx scripts/export-map-styles.ts",
+    "test:ui": "tsx --tsconfig tsconfig.app.json scripts/test-ui.ts"
   },
   "dependencies": {
     "@deck.gl/aggregation-layers": "^9.4.0",

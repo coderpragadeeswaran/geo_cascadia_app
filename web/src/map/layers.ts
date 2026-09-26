@@ -1,28 +1,30 @@
-/** deck.gl layers for the zoom-driven map (CLAUDE.md §9.3).
- *  city   (z ≤ 13): analysed areas glow as outlines with a count badge; pulsing dot for running jobs
- *  area   (z 14–16): streets coloured by health, dashed glowing streetlight gaps, hexbin density of findings
- *  street (z 17–18): footprints extruded by observed floors (no floor count → flat + hatched, never a guessed height),
- *                    asset icons with uncertainty circles (dashed = approximate), hollow pins for unmapped businesses
- *  object (z ≥ 19):  same as street; selection drives the evidence dive (P4)
- */
+/** deck.gl layers in the NIGHT SURVEY map language (docs/DESIGN.md "Map language"), by zoom band (CLAUDE.md §9.3):
+ *  city   (z < 13.5): analysed areas glow as sodium outlines with a count badge; pulsing dot for running jobs
+ *  area   (13.5–16.5): analysed roads lit (sodium glow), every streetlight gap a DARK stretch on top, streetlights glow;
+ *                      buildings only as findings points (no record / discrepancy). Poles, matched buildings and
+ *                      unmapped businesses appear from street level (declutter rule 8)
+ *  street (16.5–18.5) / object (≥ 18.5): footprints extruded by observed floors (no floor count → flat + hatched, never a
+ *                      guessed height), poles with uncertainty rings (dashed = approximate), lamps, unmapped rings
+ *  Colours come from design/tokens.ts (one palette for CSS and deck.gl). */
 import { HexagonLayer } from '@deck.gl/aggregation-layers'
 import type { Layer } from '@deck.gl/core'
 import { FillStyleExtension, PathStyleExtension } from '@deck.gl/extensions'
-import { GeoJsonLayer, IconLayer, PathLayer, PolygonLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers'
+import { IconLayer, PathLayer, PolygonLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers'
 import type { LineString, MultiLineString, MultiPolygon, Point, Polygon } from 'geojson'
 import type {
   AnyProps, AreaCard, AreaFeature, AssetProps, Band, BuildingProps, GapProps, Job, MissingProps, StreetProps, UnmappedProps,
 } from '@/api/types'
+import { colors, rgba, statusColor, type Mode, type RGBA } from '@/design/tokens'
 import type { Focus } from '@/lib/derive'
 import type { LayerKey } from '@/store/ui'
-import { C, DENSITY_RANGE, healthColor, matchColor, registerColor, withAlpha } from './colors'
 import { HATCH_MAPPING, ICONS, hatchAtlas } from './icons'
+import { plural } from '@/lib/utils'
 
 /** Display scale for extrusion only: observed floors × 3.2 m. Not a measured height. */
 export const FLOOR_HEIGHT_M = 3.2
 
 /** lon/lat pair (deck.gl's Position is stricter than GeoJSON's number[]) */
-type Position = [number, number]
+export type Position = [number, number]
 type D<P, G> = { p: P } & G
 type BuildingD = D<BuildingProps, { polygon: Position[][] }>
 type AssetD = D<AssetProps, { position: Position; ring: Position[] }>
@@ -89,7 +91,10 @@ export function splitFeatures(features: AreaFeature[]): Split {
   return s
 }
 
+export interface DriveMark { branch: Position[]; at: Position; heading: number; look: number }
+
 export interface LayerCtx {
+  mode: Mode
   band: Band
   flat: boolean
   layers: Record<LayerKey, boolean>
@@ -99,70 +104,93 @@ export interface LayerCtx {
   jobs: Job[]
   pulse: number
   selectedId: string | null
-  light: boolean
   /** filter / query emphasis: everything outside these ids is dimmed (one global store, CLAUDE.md §9.4) */
   focus: Focus
-  /** analyse mode: the street polygon returned by /jobs/preview */
+  /** opening: streetlights fade on (0 → 1) */
+  lightsOn: number
+  /** analyse mode: the exact snapped street line(s) and the job polygon from /jobs/preview */
+  analyseLines: Position[][] | null
   analysePoly: Position[][] | null
+  /** trimmed: the whole picked street, drawn faint under the kept stretch */
+  analyseRest?: Position[][] | null
+  /** drive the street: the branch being driven, camera position, travel heading and view heading */
+  drive: DriveMark | null
 }
 
-const pick = { pickable: true, autoHighlight: true, highlightColor: [255, 255, 255, 70] as [number, number, number, number] }
 const dash = new PathStyleExtension({ dash: true })
 const hatch = new FillStyleExtension({ pattern: true })
+// additive blending at night: overlapping lamp halos brighten like real light
+const ADD = { parameters: { blend: true, blendColorOperation: 'add', blendColorSrcFactor: 'src-alpha', blendColorDstFactor: 'one',
+  blendAlphaOperation: 'add', blendAlphaSrcFactor: 'one', blendAlphaDstFactor: 'one' } } as object
+const hash = (s: string) => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return ((h >>> 0) % 1000) / 1000 }
+const mix = (a: RGBA, b: RGBA, t: number, al: number): RGBA => [0, 1, 2].map((k) => Math.round(a[k] + (b[k] - a[k]) * t)).concat(al) as RGBA
 
 function outerRings(poly: Polygon | MultiPolygon): Position[][] {
   return (poly.type === 'Polygon' ? [poly.coordinates[0]] : poly.coordinates.map((p) => p[0])) as Position[][]
 }
 
+/** street health (optional layer): issues per km, one hue from quiet ink to peony (sequential, docs/DESIGN.md) */
+export const HEALTH_STOPS = [0, 10, 20, 40]
+export function healthColor(mode: Mode, perKm: number | null | undefined, a = 235): RGBA {
+  const c = colors[mode]
+  if (perKm == null) return rgba(c.unclassified, 160)
+  return mix(rgba(c.ink3), rgba(c.noRecord), Math.min(1, Math.max(0, perKm / 40)), a)
+}
+
+/** asset register findings get a status ring (synthetic register): not in register = peony, differs = glacier */
+/** status colour for map marks: at night lifted 18 % toward white so the soft v2 dots and footprints read on the dark map */
+const mark = (mode: Mode, s: string | null | undefined, a = 255): RGBA => {
+  const c = statusColor(mode, s, a)
+  return mode === 'night' ? mix(c, [255, 255, 255, a], 0.18, a) : c
+}
+
+const assetStatus = (s: string | null | undefined) => (s === 'unrecorded_asset' ? 'no_record' : s === 'discrepancy' ? 'discrepancy' : null)
+
 export function buildLayers(ctx: LayerCtx): Layer[] {
-  const { band, flat, layers: on, split, light, focus: F } = ctx
+  const { band, flat, layers: on, split, focus: F, mode } = ctx
+  const c = colors[mode]
+  const night = mode === 'night'
   const fk = F.key
   const dimB = (id: string) => !!F.buildings && !F.buildings.has(id)
   const dimA = (id: string) => !!F.assets && !F.assets.has(id)
   const dimG = (id: string) => !!F.gaps && !F.gaps.has(id)
   const dimU = (id: string) => !!F.unmapped && !F.unmapped.has(id)
   const L: Layer[] = []
+  const city = band === 'city'
   const near = band === 'street' || band === 'object'
+  const lit = ctx.lightsOn
+  const lamp = (id: string) => Math.max(0, Math.min(1, (lit - hash(id) * 0.6) / 0.4))   // staggered fade-on
 
   // ---------------------------------------------------------------- areas (all bands; strongest at city level)
   const outlines = ctx.areas.flatMap((a) => outerRings(a.polygon).map((path) => ({ a, path })))
-  const city = band === 'city'
   L.push(
-    new PathLayer({
-      id: 'area-glow', data: outlines, getPath: (d) => d.path, widthUnits: 'pixels',
-      getWidth: city ? 14 : near ? 0 : 8, getColor: (d) => withAlpha(C.accent, d.a.slug === ctx.activeArea ? (city ? 70 : 40) : 30),
-      jointRounded: true, capRounded: true, updateTriggers: { getWidth: [city, near], getColor: [ctx.activeArea, city] },
-    }),
-    new PathLayer({
-      id: 'area-line', data: outlines, getPath: (d) => d.path, widthUnits: 'pixels', getWidth: city ? 2.5 : 1.5,
-      getColor: withAlpha(light ? [30, 100, 220, 255] : C.accent, near ? 70 : 230), jointRounded: true,
-      updateTriggers: { getWidth: city, getColor: [near, light] },
-    }),
+    new PathLayer({ id: 'area-glow', data: outlines, getPath: (d) => d.path, widthUnits: 'pixels', getWidth: city ? 14 : near ? 0 : 6,
+      getColor: (d) => rgba(c.sodium, d.a.slug === ctx.activeArea ? (city ? 70 : 26) : 22), jointRounded: true, capRounded: true,
+      updateTriggers: { getWidth: [city, near], getColor: [ctx.activeArea, city, mode] }, ...(night ? ADD : {}) }),
+    // the ward outline: dark ink core on a light halo, so it reads on the dark map, on paper and on satellite alike
+    new PathLayer({ id: 'area-halo', data: outlines, getPath: (d) => d.path, widthUnits: 'pixels', getWidth: city ? 6 : 5,
+      getColor: night ? rgba(c.ink, near ? 90 : 170) : rgba('#ffffff', near ? 150 : 230), jointRounded: true, capRounded: true,
+      updateTriggers: { getWidth: city, getColor: [near, mode] } }),
+    new PathLayer({ id: 'area-line', data: outlines, getPath: (d) => d.path, widthUnits: 'pixels', getWidth: city ? 2.5 : 2,
+      getColor: night ? rgba(c.dark, near ? 170 : 255) : rgba(c.ink, near ? 170 : 245), jointRounded: true, capRounded: true,
+      updateTriggers: { getWidth: city, getColor: [near, mode] } }),
+    new PolygonLayer({ id: 'area-fill', visible: city, data: ctx.areas.flatMap((a) => outerRings(a.polygon).map((polygon) => ({ p: { kind: 'area' as const, id: a.slug, name: a.name, card: a }, polygon }))),
+      getPolygon: (d) => d.polygon, getFillColor: rgba(c.sodium, 18), stroked: false, pickable: true, updateTriggers: { getFillColor: mode } }),
   )
-  // Band-specific layers stay mounted and switch with `visible` (no GPU buffer rebuild on every band change).
-  L.push(
-      new ScatterplotLayer<AreaCard>({ id: 'area-halo', visible: city, data: ctx.areas, getPosition: (a) => [(a.bbox[0] + a.bbox[2]) / 2, (a.bbox[1] + a.bbox[3]) / 2],
-        radiusUnits: 'pixels', getRadius: 16, getFillColor: withAlpha(C.accent, 45), stroked: true, lineWidthUnits: 'pixels',
-        getLineWidth: 1.5, getLineColor: withAlpha(C.accent, 200) }),
-      new PolygonLayer({
-        id: 'area-fill', visible: city, data: ctx.areas.flatMap((a) => outerRings(a.polygon).map((polygon) => ({ p: { kind: 'area' as const, id: a.slug, name: a.name, card: a }, polygon }))),
-        getPolygon: (d) => d.polygon, getFillColor: withAlpha(C.accent, 22), stroked: false, ...pick,
-      }),
-      // created only once areas exist: with no text, the 'auto' font atlas is a 1024×0 canvas and WebGL warns
-      // "texSubImage2D: no canvas" (seen when the API answers slowly)
-      ...(ctx.areas.length ? [new TextLayer<AreaCard>({
-        id: 'area-badge', visible: city, data: ctx.areas,
-        getPosition: (a) => [(a.bbox[0] + a.bbox[2]) / 2, a.bbox[3]],
-        getText: (a) => `${a.name.replace(/^Unseen street: /, '')}  ·  ${a.counts.buildings} bldg · ${a.counts.assets} assets`,
-        getSize: 12, fontFamily: 'Inter Variable, Inter, system-ui, sans-serif', fontWeight: 600,
-        getColor: light ? [15, 23, 42, 255] : [232, 237, 245, 255], getPixelOffset: [0, -14],
-        background: true, getBackgroundColor: light ? [255, 255, 255, 230] : [14, 18, 26, 225],
-        backgroundPadding: [9, 5, 9, 5], getBorderColor: withAlpha(C.accent, 150), getBorderWidth: 1,
-        characterSet: 'auto', outlineWidth: 0, updateTriggers: { getColor: light, getBackgroundColor: light },
-      })] : []),
-  )
+  // created only once areas exist: with no text, the 'auto' font atlas is a 1024×0 canvas and WebGL warns (D13)
+  if (ctx.areas.length) {
+    L.push(new TextLayer<AreaCard>({
+      id: 'area-badge', visible: city, data: ctx.areas,
+      getPosition: (a) => [(a.bbox[0] + a.bbox[2]) / 2, a.bbox[3]],
+      getText: (a) => `${a.name.replace(/^Unseen street: /, '')}  ·  ${plural(a.counts.buildings, 'building')} · ${plural(a.counts.streetlight_gaps_60m, 'dark stretch')}`,
+      getSize: 14, fontFamily: "'Anek Tamil Variable', system-ui, sans-serif", fontWeight: 600,
+      getColor: rgba(c.ink), getPixelOffset: [0, -14], background: true, getBackgroundColor: rgba(c.bg2, 235),
+      backgroundPadding: [9, 5, 9, 5], getBorderColor: rgba(c.sodium, 150), getBorderWidth: 1,
+      characterSet: 'auto', outlineWidth: 0, updateTriggers: { getColor: mode, getBackgroundColor: mode, getBorderColor: mode },
+    }))
+  }
 
-  // running jobs: pulsing dot (city + area)
+  // running jobs: pulsing sodium dot (city + area)
   const jobPts = ctx.jobs
     .map((j) => j.input.click ? [j.input.click.lon, j.input.click.lat] : j.input.polygon ? (j.input.polygon.coordinates[0][0] as Position) : null)
     .filter(Boolean) as Position[]
@@ -170,145 +198,198 @@ export function buildLayers(ctx: LayerCtx): Layer[] {
     const t = ctx.pulse
     L.push(
       new ScatterplotLayer({ id: 'job-pulse', data: jobPts, getPosition: (d) => d, radiusUnits: 'pixels', getRadius: 8 + 22 * t,
-        getFillColor: withAlpha(C.accent, Math.round(120 * (1 - t))), updateTriggers: { getRadius: t, getFillColor: t } }),
+        getFillColor: rgba(c.sodium, Math.round(120 * (1 - t))), updateTriggers: { getRadius: t, getFillColor: [t, mode] } }),
       new ScatterplotLayer({ id: 'job-dot', data: jobPts, getPosition: (d) => d, radiusUnits: 'pixels', getRadius: 5,
-        getFillColor: C.accent, stroked: true, getLineColor: C.white, lineWidthUnits: 'pixels', getLineWidth: 2 }),
+        getFillColor: rgba(c.sodium), stroked: true, getLineColor: rgba(c.bg0), lineWidthUnits: 'pixels', getLineWidth: 2 }),
     )
   }
   if (!split) return L
 
-  // ---------------------------------------------------------------- area level
+  // ---------------------------------------------------------------- roads: lit where analysed (area and closer)
   {
-    L.push(new HexagonLayer<Position>({
-      id: 'density', visible: on.density && band === 'area', data: split.findings, getPosition: (d) => d, radius: 45, coverage: 0.88, extruded: false,
-      colorRange: DENSITY_RANGE.map((c) => [c[0], c[1], c[2]] as [number, number, number]), opacity: 0.42,
-      pickable: false, gpuAggregation: false,
-    }))
-  }
-  {
-    const v = on.streetHealth && !city
+    const v = !city
+    const inF = (name: string) => !F.streets || F.streets.has(name)
+    const health = on.streetHealth
     L.push(
-      new PathLayer({ id: 'street-casing', visible: v, data: split.streets, getPath: (d) => d.path, widthUnits: 'pixels',
-        getWidth: near ? 5 : 9, getColor: [0, 0, 0, near ? 60 : 110], capRounded: true, jointRounded: true, updateTriggers: { getWidth: near } }),
-      // selected street(s): bright casing under the health line
-      new PathLayer({ id: 'street-selected', visible: !city && !!F.streets, data: F.streets ? split.streets.filter((d) => F.streets!.has(d.p.name)) : [],
-        getPath: (d) => d.path, widthUnits: 'pixels', getWidth: near ? 9 : 13, getColor: [255, 255, 255, 215], capRounded: true,
-        jointRounded: true, updateTriggers: { getWidth: near } }),
-      new PathLayer({ id: 'street-health', visible: v, data: split.streets, getPath: (d) => d.path, widthUnits: 'pixels',
-        getWidth: near ? 2.5 : 5, getColor: (d) => healthColor(d.p.issues_per_km, F.streets && !F.streets.has(d.p.name) ? 70 : near ? 150 : 240),
-        capRounded: true, jointRounded: true, ...pick, updateTriggers: { getWidth: near, getColor: [near, fk] } }),
+      new PathLayer({ id: 'road-glow', visible: v && night, data: split.streets, getPath: (d) => d.path, widthUnits: 'pixels',
+        getWidth: near ? 26 : 14, getColor: (d) => rgba(c.sodium, Math.round((inF(d.p.name) ? 26 : 8) * lit)), capRounded: true, jointRounded: true,
+        updateTriggers: { getWidth: near, getColor: [lit, fk, mode] }, ...ADD }),
+      // a selected street: chalk casing under the lit line
+      new PathLayer({ id: 'road-selected', visible: v && !!F.streets, data: F.streets ? split.streets.filter((d) => F.streets!.has(d.p.name)) : [],
+        getPath: (d) => d.path, widthUnits: 'pixels', getWidth: near ? 10 : 12, getColor: rgba(c.ink, night ? 150 : 200), capRounded: true,
+        jointRounded: true, updateTriggers: { getWidth: near, getColor: mode } }),
+      new PathLayer({ id: 'road', visible: v, data: split.streets, getPath: (d) => d.path, widthUnits: 'pixels', getWidth: near ? 4 : night ? 3 : 4.5,
+        getColor: (d) => health ? healthColor(mode, d.p.issues_per_km, inF(d.p.name) ? 240 : 70)
+          : night ? rgba(c.sodiumGlow, Math.round((inF(d.p.name) ? 40 + 150 * lit : 30))) : rgba(c.sodiumGlow, inF(d.p.name) ? 230 : 90),
+        capRounded: true, jointRounded: true, pickable: true, autoHighlight: true, highlightColor: rgba(c.ink, 120),
+        updateTriggers: { getWidth: [near, night], getColor: [lit, fk, mode, health] } }),
     )
   }
+  // ---------------------------------------------------------------- dark stretches: no streetlight seen within 60 m
   {
     const v = on.gaps && !city
-    const sure = split.gaps.filter((d) => d.p.display_mode !== 'check')
-    const check = split.gaps.filter((d) => d.p.display_mode === 'check')
+    const focused = F.gaps ? split.gaps.filter((d) => F.gaps!.has(d.p.id)) : []
+    const selGap = ctx.selectedId ? split.gaps.filter((d) => d.p.id === ctx.selectedId) : []
     L.push(
-      new PathLayer({ id: 'gap-glow', visible: v, data: sure, getPath: (d) => d.path, widthUnits: 'pixels', getWidth: near ? 10 : 14,
-        getColor: (d) => withAlpha(C.noRecord, dimG(d.p.id) ? 12 : 55), capRounded: true, jointRounded: true,
-        updateTriggers: { getWidth: near, getColor: fk } }),
-      new PathLayer({ id: 'gap-dash', visible: v, data: sure, getPath: (d) => d.path, widthUnits: 'pixels', getWidth: near ? 3 : 4,
-        getColor: (d) => [255, 96, 104, dimG(d.p.id) ? 60 : 255], getDashArray: [2.2, 1.6], dashJustified: true, extensions: [dash], capRounded: true,
-        jointRounded: true, ...pick, updateTriggers: { getWidth: near, getColor: fk } }),
-      // "check": drawn as recorded; lit camera stops lie on the road between its ends (bent street, D13)
-      new PathLayer({ id: 'gap-check', visible: v, data: check, getPath: (d) => d.path, widthUnits: 'pixels', getWidth: near ? 2.5 : 3,
-        getColor: (d) => [245, 165, 36, dimG(d.p.id) ? 60 : 235], getDashArray: [0.8, 1.8], dashJustified: true, extensions: [dash], capRounded: true,
-        ...pick, updateTriggers: { getWidth: near, getColor: fk } }),
+      // selected dark stretch: a sodium outline around the band
+      new PathLayer({ id: 'dark-selected', visible: v && selGap.length > 0, data: selGap, getPath: (d) => d.path, widthUnits: 'pixels',
+        getWidth: near ? 26 : 19, getColor: rgba(c.sodium, 235), capRounded: true, jointRounded: true, updateTriggers: { getWidth: near, getColor: mode } }),
+      // a question about gaps: the answered stretches get a chalk outline (a dark band can't get brighter)
+      new PathLayer({ id: 'dark-focus', visible: v && focused.length > 0, data: focused, getPath: (d) => d.path, widthUnits: 'pixels',
+        getWidth: near ? 22 : 15, getColor: rgba(c.ink, night ? 150 : 210), capRounded: true, jointRounded: true, updateTriggers: { getWidth: near, getColor: mode } }),
+      new PathLayer({ id: 'dark-edge', visible: v, data: split.gaps, getPath: (d) => d.path, widthUnits: 'pixels', getWidth: near ? 18 : 11,
+        getColor: (d) => (night ? rgba(c.darkEdge, dimG(d.p.id) ? 80 : 200) : rgba(c.dark, dimG(d.p.id) ? 15 : 40)), capRounded: true, jointRounded: true,
+        updateTriggers: { getWidth: near, getColor: [fk, mode] } }),
+      new PathLayer({ id: 'dark', visible: v, data: split.gaps, getPath: (d) => d.path, widthUnits: 'pixels', getWidth: near ? 15 : 8,
+        getColor: (d) => rgba(c.dark, dimG(d.p.id) ? 110 : night ? 250 : 235), capRounded: true, jointRounded: true, pickable: true,
+        updateTriggers: { getWidth: near, getColor: [fk, mode] } }),
+      // "check" (D13): drawn as recorded; lit camera stops lie on the road between its ends → dotted chalk edge
+      new PathLayer({ id: 'dark-check', visible: v, data: split.gaps.filter((d) => d.p.display_mode === 'check'), getPath: (d) => d.path,
+        widthUnits: 'pixels', getWidth: 1.6, getColor: rgba(c.ink2, 220), extensions: [dash], updateTriggers: { getColor: mode },
+        ...({ getDashArray: [1.5, 3], dashJustified: true } as object) }),
     )
   }
-  // ---------------------------------------------------------------- street / object level
+  // ---------------------------------------------------------------- findings density (opt-in, area level)
+  L.push(new HexagonLayer<Position>({
+    id: 'density', visible: on.density && band === 'area', data: split.findings, getPosition: (d) => d, radius: 45, coverage: 0.88, extruded: false,
+    colorRange: [0.25, 0.4, 0.55, 0.7, 0.85, 1].map((k) => mix(rgba(c.bg1), rgba(c.noRecord), k, 255).slice(0, 3) as [number, number, number]),
+    opacity: 0.35, pickable: false, gpuAggregation: false, updateTriggers: { colorRange: mode },
+  }))
+
+  // ---------------------------------------------------------------- buildings
+  const allB = [...split.extruded, ...split.unclassified]
+  // area level: only the findings (matched buildings appear from street level)
+  L.push(new ScatterplotLayer<BuildingD>({ id: 'bld-points', visible: on.buildings && band === 'area',
+    data: allB.filter((d) => d.p.match_status !== 'matched'), getPosition: (d) => [d.p.lon, d.p.lat], radiusUnits: 'pixels',
+    getRadius: 4, stroked: true, lineWidthUnits: 'pixels', getLineWidth: night ? 1 : 0.8, getLineColor: night ? rgba(c.bg0, 200) : rgba(c.ink, 120),
+    getFillColor: (d) => mark(mode, d.p.match_status, dimB(d.p.id) ? 60 : 255), pickable: true,
+    updateTriggers: { getFillColor: [mode, fk], getLineColor: mode } }))
   {
     const v = on.buildings && near
-    // no floor count → flat footprint, hatched, coloured by match status (D9: never a guessed height)
     L.push(
-      new PolygonLayer({ id: 'bld-unclassified-base', visible: v, data: split.unclassified, getPolygon: (d) => d.polygon,
-        getFillColor: (d) => withAlpha(matchColor(d.p.match_status), dimB(d.p.id) ? 8 : 38), stroked: true, lineWidthUnits: 'pixels',
-        getLineWidth: 1.2, getLineColor: (d) => withAlpha(matchColor(d.p.match_status), dimB(d.p.id) ? 45 : 200), ...pick,
-        updateTriggers: { getFillColor: fk, getLineColor: fk } }),
-      new PolygonLayer<BuildingD>({ id: 'bld-unclassified-hatch', visible: v, data: split.unclassified, getPolygon: (d) => d.polygon, stroked: false,
-        getFillColor: (d) => withAlpha(matchColor(d.p.match_status), dimB(d.p.id) ? 30 : 150), extensions: [hatch], pickable: false,
-        updateTriggers: { getFillColor: fk },
-        // FillStyleExtension props (not in PolygonLayer's own prop types)
-        ...({ fillPatternAtlas: hatchAtlas(), fillPatternMapping: HATCH_MAPPING, getFillPattern: () => 'hatch',
-              getFillPatternScale: 0.45, fillPatternMask: true } as object) }),
-      new PolygonLayer({ id: 'bld-extruded', visible: v, data: split.extruded, getPolygon: (d) => d.polygon,
+      // no floor count → flat footprint, hatched, coloured by match status (D9: never a guessed height)
+      new PolygonLayer<BuildingD>({ id: 'bld-flat', visible: v, data: split.unclassified, getPolygon: (d) => d.polygon, stroked: true,
+        lineWidthUnits: 'pixels', getLineWidth: 1, getLineColor: (d) => mark(mode, d.p.match_status, dimB(d.p.id) ? 50 : 210),
+        getFillColor: (d) => rgba(c.unclassified, dimB(d.p.id) ? 15 : night ? 40 : 90), pickable: true,
+        updateTriggers: { getLineColor: [mode, fk], getFillColor: [mode, fk] } }),
+      new PolygonLayer<BuildingD>({ id: 'bld-hatch', visible: v, data: split.unclassified, getPolygon: (d) => d.polygon, stroked: false,
+        getFillColor: (d) => mark(mode, d.p.match_status, dimB(d.p.id) ? 35 : 150), extensions: [hatch], pickable: false,
+        updateTriggers: { getFillColor: [mode, fk] },
+        ...({ fillPatternAtlas: hatchAtlas(), fillPatternMapping: HATCH_MAPPING, getFillPattern: () => 'hatch', getFillPatternScale: 0.45, fillPatternMask: true } as object) }),
+      new PolygonLayer<BuildingD>({ id: 'bld-3d', visible: v, data: split.extruded, getPolygon: (d) => d.polygon,
         extruded: !flat, wireframe: false, getElevation: (d) => (d.p.floors ?? 0) * FLOOR_HEIGHT_M,
-        getFillColor: (d) => withAlpha(matchColor(d.p.match_status), dimB(d.p.id) ? 38 : d.p.floors_status === 'low_confidence' ? 130 : flat ? 150 : 225),
-        stroked: flat, lineWidthUnits: 'pixels', getLineWidth: 1.2, getLineColor: (d) => withAlpha(matchColor(d.p.match_status), 230),
-        material: { ambient: 0.42, diffuse: 0.62, shininess: 24, specularColor: [60, 64, 70] }, ...pick,
-        updateTriggers: { getFillColor: [flat, fk] } }),
+        getFillColor: (d) => mark(mode, d.p.match_status, dimB(d.p.id) ? 40 : d.p.floors_status === 'low_confidence' ? 120 : night ? 205 : 235),
+        stroked: flat, lineWidthUnits: 'pixels', getLineWidth: 1.2, getLineColor: rgba(c.ink, 140),
+        material: { ambient: night ? 0.35 : 0.55, diffuse: 0.55, shininess: 12, specularColor: [40, 40, 50] }, pickable: true,
+        updateTriggers: { getFillColor: [flat, fk, mode], getLineColor: mode } }),
     )
-    {
-      const rv = [...split.extruded, ...split.unclassified].filter((d) => d.p.review_status === 'pending')
-      L.push(new PolygonLayer({ id: 'bld-review', visible: v && on.review, data: rv, getPolygon: (d) => d.polygon, filled: false, stroked: true,
-        extruded: false, lineWidthUnits: 'pixels', getLineWidth: 2.5, getLineColor: C.review }))
-    }
-  }
-  {
-    const v = on.assets && near
-    const big = band === 'object'
-    {
-      L.push(
-        new ScatterplotLayer({ id: 'asset-unc-fill', visible: v && on.uncertainty, data: split.assets, getPosition: (d) => d.position, radiusUnits: 'meters',
-          getRadius: (d) => d.p.uncertainty_m ?? 3.5, getFillColor: (d) => withAlpha(registerColor(d.p.register_status), dimA(d.p.id) ? 0 : 26),
-          updateTriggers: { getFillColor: fk } }),
-        new PathLayer<AssetD>({ id: 'asset-unc-ring', visible: v && on.uncertainty, data: split.assets, getPath: (d) => d.ring, widthUnits: 'pixels', getWidth: 1.4,
-          getColor: (d) => withAlpha(registerColor(d.p.register_status), dimA(d.p.id) ? 35 : 210), extensions: [dash],
-          updateTriggers: { getColor: fk },
-          // PathStyleExtension: dashed ring = approximate (single camera), solid = triangulated
-          ...({ getDashArray: (d: AssetD) => (d.p.approximate ? [3, 2.5] : [0, 0]), dashJustified: true } as object) }),
-      )
-    }
-    L.push(
-      new ScatterplotLayer({ id: 'asset-disc', visible: v, data: split.assets, getPosition: (d) => d.position, radiusUnits: 'pixels',
-        getRadius: big ? 11 : 7.5, getFillColor: (d) => [11, 15, 22, dimA(d.p.id) ? 110 : 235], stroked: true, lineWidthUnits: 'pixels',
-        getLineWidth: big ? 2 : 1.6, getLineColor: (d) => withAlpha(registerColor(d.p.register_status), dimA(d.p.id) ? 60 : 255), ...pick,
-        updateTriggers: { getRadius: big, getLineWidth: big, getFillColor: fk, getLineColor: fk } }),
-      new IconLayer<AssetD>({ id: 'asset-glyph', visible: v, data: split.assets, getPosition: (d) => d.position,
-        getIcon: (d) => ICONS[d.p.kind], getSize: big ? 16 : 11, sizeUnits: 'pixels', getColor: (d) => [255, 255, 255, dimA(d.p.id) ? 70 : 245],
-        pickable: false, updateTriggers: { getSize: big, getColor: fk } }),
-    )
-    {
-      L.push(new ScatterplotLayer<AssetD>({ id: 'asset-review', visible: v && on.review, data: split.assets.filter((d) => d.p.review_status === 'pending'),
-        getPosition: (d) => d.position, radiusUnits: 'pixels', getRadius: 14, filled: false, stroked: true,
-        lineWidthUnits: 'pixels', getLineWidth: 2, getLineColor: C.review }))
-    }
-  }
-  {
-    L.push(new IconLayer({ id: 'missing', visible: on.missing && near, data: split.missing, getPosition: (d) => d.position, getIcon: () => ICONS.missing,
-      getSize: 20, getColor: C.noRecord, ...pick }))
-  }
-  {
-    L.push(new IconLayer({ id: 'unmapped', visible: on.unmapped && near, data: split.unmapped, getPosition: (d) => d.position, getIcon: () => ICONS.pin,
-      getSize: 28, getColor: (d) => withAlpha(C.unmapped, dimU(d.p.id) ? 60 : 255), ...pick, updateTriggers: { getColor: fk } }))
+    const rv = allB.filter((d) => d.p.review_status === 'pending')
+    L.push(new PathLayer<BuildingD>({ id: 'bld-review', visible: v && on.review, data: rv, getPath: (d) => d.polygon[0], widthUnits: 'pixels',
+      getWidth: 1.6, getColor: rgba(c.review, 230), extensions: [dash], updateTriggers: { getColor: mode },
+      ...({ getDashArray: [3, 2], dashJustified: true } as object) }))
   }
 
-  // filter / query results as bright dots at area level (buildings are only drawn from street level down)
+  // ---------------------------------------------------------------- poles & streetlights
+  {
+    const lights = split.assets.filter((a) => a.p.kind === 'streetlight')
+    const poles = split.assets.filter((a) => a.p.kind === 'pole')
+    const v = on.assets && !city
+    // uncertainty: dashed ring = approximate (single camera), solid = triangulated (street level)
+    L.push(
+      new PathLayer<AssetD>({ id: 'asset-unc', visible: v && near && on.uncertainty, data: split.assets, getPath: (d) => d.ring, widthUnits: 'pixels',
+        getWidth: 1.1, getColor: (d) => rgba(c.ink2, dimA(d.p.id) ? 30 : 150), extensions: [dash], updateTriggers: { getColor: [fk, mode] },
+        ...({ getDashArray: (d: AssetD) => (d.p.approximate ? [3, 2.5] : [0, 0]), dashJustified: true } as object) }),
+      // unlit poles: street level only (declutter rule 8)
+      new ScatterplotLayer<AssetD>({ id: 'poles', visible: v && near, data: poles, getPosition: (d) => d.position, radiusUnits: 'pixels',
+        getRadius: band === 'object' ? 4 : 3, getFillColor: (d) => rgba(night ? c.ink2 : c.ink3, dimA(d.p.id) ? 60 : night ? 235 : 220),
+        stroked: true, lineWidthUnits: 'pixels', getLineWidth: 1, getLineColor: rgba(c.bg0, 200), pickable: true,
+        updateTriggers: { getRadius: band, getFillColor: [fk, mode], getLineColor: mode } }),
+      // register finding on an asset (synthetic register): status ring
+      new ScatterplotLayer<AssetD>({ id: 'asset-status', visible: v && near, data: split.assets.filter((d) => assetStatus(d.p.register_status)),
+        getPosition: (d) => d.position, radiusUnits: 'pixels', getRadius: 7, filled: false, stroked: true, lineWidthUnits: 'pixels', getLineWidth: 1.6,
+        getLineColor: (d) => mark(mode, assetStatus(d.p.register_status), dimA(d.p.id) ? 60 : 235), updateTriggers: { getLineColor: [fk, mode] } }),
+      new ScatterplotLayer<AssetD>({ id: 'lamp-halo', visible: v, data: lights, getPosition: (d) => d.position, radiusUnits: 'pixels', getRadius: near ? 30 : 14,
+        getFillColor: (d) => rgba(c.sodiumGlow, Math.round((night ? 42 : 26) * lamp(d.p.id) * (dimA(d.p.id) ? 0.3 : 1))),
+        updateTriggers: { getRadius: near, getFillColor: [lit, fk, mode] }, ...(night ? ADD : {}) }),
+      new ScatterplotLayer<AssetD>({ id: 'lamp-inner', visible: v, data: lights, getPosition: (d) => d.position, radiusUnits: 'pixels', getRadius: near ? 10 : 5,
+        getFillColor: (d) => rgba(c.sodiumGlow, Math.round((night ? 110 : 70) * lamp(d.p.id) * (dimA(d.p.id) ? 0.3 : 1))),
+        updateTriggers: { getRadius: near, getFillColor: [lit, fk, mode] }, ...(night ? ADD : {}) }),
+      new ScatterplotLayer<AssetD>({ id: 'lamp-core', visible: v, data: lights, getPosition: (d) => d.position, radiusUnits: 'pixels', getRadius: near ? 3.8 : 2.2,
+        getFillColor: (d) => (night ? rgba('#fff4e0', Math.round(255 * lamp(d.p.id) * (dimA(d.p.id) ? 0.4 : 1))) : rgba(c.sodium, dimA(d.p.id) ? 90 : 255)),
+        stroked: !night, lineWidthUnits: 'pixels', getLineWidth: 1, getLineColor: rgba(c.bg1, 255), pickable: true,
+        updateTriggers: { getRadius: near, getFillColor: [lit, fk, mode], getLineColor: mode } }),
+    )
+  }
+  // ---------------------------------------------------------------- unmapped businesses (hollow ring = approximate) + register records not seen
+  L.push(
+    new ScatterplotLayer({ id: 'unmapped', visible: on.unmapped && near, data: split.unmapped, getPosition: (d) => d.position, radiusUnits: 'pixels',
+      getRadius: band === 'object' ? 9 : 7, filled: true, getFillColor: rgba(c.bg0, 90), stroked: true, lineWidthUnits: 'pixels', getLineWidth: 1.6,
+      getLineColor: (d) => rgba(c.ink2, dimU(d.p.id) ? 70 : 230), pickable: true, updateTriggers: { getRadius: band, getLineColor: [fk, mode], getFillColor: mode } }),
+    new IconLayer({ id: 'missing', visible: on.missing && near, data: split.missing, getPosition: (d) => d.position, getIcon: () => ICONS.missing,
+      getSize: 18, getColor: rgba(c.noRecord, 230), pickable: true, updateTriggers: { getColor: mode } }),
+  )
+
+  // ---------------------------------------------------------------- filter / question results at area level (everything else dims)
   {
     const pts: Position[] = [
-      ...(F.buildings ? [...split.extruded, ...split.unclassified].filter((d) => F.buildings!.has(d.p.id)).map((d) => [d.p.lon, d.p.lat] as Position) : []),
+      ...(F.buildings ? allB.filter((d) => F.buildings!.has(d.p.id)).map((d) => [d.p.lon, d.p.lat] as Position) : []),
       ...(F.assets ? split.assets.filter((d) => F.assets!.has(d.p.id)).map((d) => d.position) : []),
       ...(F.unmapped ? split.unmapped.filter((d) => F.unmapped!.has(d.p.id)).map((d) => d.position) : []),
     ]
-    L.push(new ScatterplotLayer<Position>({ id: 'focus-dots', visible: band === 'area' && !!fk, data: pts, getPosition: (d) => d,
-      radiusUnits: 'pixels', getRadius: 4.5, getFillColor: [255, 255, 255, 240], stroked: true, lineWidthUnits: 'pixels',
-      getLineWidth: 2, getLineColor: C.accent }))
-  }
-  if (ctx.analysePoly) {
-    L.push(new PolygonLayer({ id: 'analyse-preview', data: [{ polygon: ctx.analysePoly }], getPolygon: (d) => d.polygon,
-      getFillColor: withAlpha(C.accent, 50), stroked: true, lineWidthUnits: 'pixels', getLineWidth: 2, getLineColor: C.accent }))
+    L.push(new ScatterplotLayer<Position>({ id: 'focus-dots', visible: band === 'area' && !!fk && pts.length > 0, data: pts, getPosition: (d) => d,
+      radiusUnits: 'pixels', getRadius: 5, getFillColor: rgba(c.ink, 245), stroked: true, lineWidthUnits: 'pixels',
+      getLineWidth: 2, getLineColor: rgba(c.sodium), updateTriggers: { getFillColor: mode, getLineColor: mode } }))
   }
 
-  // selection ring / outline
-  const sel = near ? ctx.selectedId : null
+  // ---------------------------------------------------------------- analyse: the exact snapped street (distinct from Google's blue coverage)
+  if (ctx.analysePoly) {
+    L.push(new PolygonLayer({ id: 'analyse-area', data: [{ polygon: ctx.analysePoly }], getPolygon: (d) => d.polygon,
+      getFillColor: rgba(c.ink, night ? 16 : 22), stroked: false }))
+  }
+  if (ctx.analyseRest?.length) {
+    L.push(new PathLayer({ id: 'analyse-rest', data: ctx.analyseRest, getPath: (d) => d, widthUnits: 'pixels', getWidth: 4,
+      getColor: rgba(c.ink, 110), capRounded: true, jointRounded: true }))
+  }
+  if (ctx.analyseLines?.length) {
+    const ends = ctx.analyseLines.flatMap((l) => [l[0], l[l.length - 1]])
+    L.push(
+      new PathLayer({ id: 'analyse-casing', data: ctx.analyseLines, getPath: (d) => d, widthUnits: 'pixels', getWidth: 11,
+        getColor: rgba(c.bg0, 230), capRounded: true, jointRounded: true }),
+      new PathLayer({ id: 'analyse-line', data: ctx.analyseLines, getPath: (d) => d, widthUnits: 'pixels', getWidth: 5,
+        getColor: rgba(c.ink, 255), capRounded: true, jointRounded: true }),
+      new ScatterplotLayer({ id: 'analyse-ends', data: ends, getPosition: (d) => d, radiusUnits: 'pixels', getRadius: 5.5,
+        getFillColor: rgba(c.sodium), stroked: true, lineWidthUnits: 'pixels', getLineWidth: 2, getLineColor: rgba(c.bg0) }),
+    )
+  }
+
+  // ---------------------------------------------------------------- drive the street: branch, view wedge, camera + direction arrow
+  if (ctx.drive) {
+    const { branch, at, heading, look } = ctx.drive
+    const kx = 111320 * Math.cos((at[1] * Math.PI) / 180), ky = 110540
+    const wedge: Position[] = [at]
+    for (let a = -45; a <= 45; a += 9) { const h = ((look + a) * Math.PI) / 180; wedge.push([at[0] + (40 * Math.sin(h)) / kx, at[1] + (40 * Math.cos(h)) / ky]) }
+    L.push(
+      new PathLayer({ id: 'drive-branch', data: [branch], getPath: (d) => d, widthUnits: 'pixels', getWidth: near ? 8 : 6,
+        getColor: rgba(c.ink, night ? 70 : 90), capRounded: true, jointRounded: true }),
+      new PolygonLayer({ id: 'drive-wedge', data: [wedge], getPolygon: (d) => d, getFillColor: rgba(c.sodium, 60), stroked: false }),
+      new ScatterplotLayer({ id: 'drive-cam', data: [at], getPosition: (d) => d, radiusUnits: 'pixels', getRadius: 7, getFillColor: rgba(c.sodium),
+        stroked: true, lineWidthUnits: 'pixels', getLineWidth: 2.5, getLineColor: rgba(c.bg0) }),
+      new IconLayer({ id: 'drive-arrow', data: [at], getPosition: (d) => d, getIcon: () => ICONS.arrow, getSize: 30, billboard: false,
+        getAngle: -heading, getColor: rgba(c.sodium), updateTriggers: { getAngle: heading } }),
+    )
+  }
+
+  // ---------------------------------------------------------------- selection
+  const sel = ctx.selectedId
   if (sel) {
-    const b = [...split.extruded, ...split.unclassified].find((d) => d.p.id === sel)
-    if (b) L.push(new GeoJsonLayer({ id: 'sel-bld', data: { type: 'Feature', geometry: { type: 'Polygon', coordinates: b.polygon }, properties: {} } as never,
-      filled: false, stroked: true, lineWidthUnits: 'pixels', getLineWidth: 3, getLineColor: C.white }))
+    const b = near ? allB.find((d) => d.p.id === sel) : null
+    if (b) L.push(new PathLayer({ id: 'sel-bld', data: b.polygon, getPath: (d) => d, widthUnits: 'pixels', getWidth: 3,
+      getColor: rgba(c.sodium), jointRounded: true }))
     const pt = split.assets.find((d) => d.p.id === sel)?.position ?? split.unmapped.find((d) => d.p.id === sel)?.position
-      ?? split.missing.find((d) => d.p.id === sel)?.position
-    if (pt) L.push(new ScatterplotLayer({ id: 'sel-pt', data: [pt], getPosition: (d) => d, radiusUnits: 'pixels', getRadius: 17,
-      filled: false, stroked: true, lineWidthUnits: 'pixels', getLineWidth: 2.5, getLineColor: C.white }))
+      ?? split.missing.find((d) => d.p.id === sel)?.position ?? (!near ? allB.find((d) => d.p.id === sel)?.p : null)
+    const pos = pt && !Array.isArray(pt) ? [pt.lon, pt.lat] as Position : pt
+    if (pos) L.push(new ScatterplotLayer({ id: 'sel-pt', data: [pos], getPosition: (d) => d, radiusUnits: 'pixels', getRadius: near ? 13 : 9,
+      filled: false, stroked: true, lineWidthUnits: 'pixels', getLineWidth: 2.5, getLineColor: rgba(c.sodium) }))
   }
   return L
 }

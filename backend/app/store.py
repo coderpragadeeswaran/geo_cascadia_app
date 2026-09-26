@@ -7,6 +7,7 @@ Both stores build the same per-area *bundle* (export.json shape + live review st
 `offline=True` so every response can say so. Writes never fall back: they raise OfflineError (HTTP 503).
 """
 import json
+import logging
 import os
 import threading
 import time
@@ -17,6 +18,8 @@ from shapely.ops import unary_union
 from . import loader
 from .db import DbUnavailable, Pool
 from .streetgeo import gap_display, named_streets
+
+log = logging.getLogger("geo_cascadia.data")
 
 LAYER_TABLES = {  # layer -> (table, key column, geometry expression)
     "buildings": ("buildings", "id", "coalesce(footprint, geom)"),
@@ -168,6 +171,33 @@ class DbStore:
         with self.pool.connection() as c:
             return [r[0] for r in c.execute("select slug from areas order by slug")]
 
+    def patch_review(self, slug, item, version):
+        """Apply one review decision to the cached bundle in place (review fix 12: no full reload after each write).
+        `item` = the updated review_items row as a dict; `version` = the area's version after the write (_version shape)."""
+        with self._lock:
+            hit = self._cache.get(slug)
+        if not hit:
+            return None
+        b = hit[2]
+        q = next((x for x in b["review_queue"] if x["id"] == item["id"]), None)
+        if q is None:
+            self.invalidate(slug)
+            return None
+        q.update({k: item[k] for k in ("status", "reviewer", "note", "appeal_photo_path", "updated_at")})
+        recs = b["buildings"] if q["item_type"] == "building" else b["assets"]
+        r = next((x for x in recs if x["id"] == q["ref_id"]), None)
+        if r is not None:
+            rv = dict(r.get("review") or {})
+            rv["status"] = q["status"]
+            if q["item_type"] == "building":
+                rv["appeal_note"] = q["note"] if q["status"] == "appealed" else rv.get("appeal_note")
+                rv["appeal_photo_path"] = q["appeal_photo_path"]
+            r["review"] = rv
+        b.pop("_qe", None)                                   # QueryEngine inputs carry review_status
+        with self._lock:
+            self._cache[slug] = (version, time.monotonic(), b)
+        return b
+
     def _version(self, c, slug):
         return c.execute("""select a.id, a.updated_at, (select max(updated_at) from review_items r where r.area_id = a.id),
                                    (select count(*) from review_items r where r.area_id = a.id)
@@ -245,12 +275,28 @@ class Data:
     def mark_offline(self, err):
         self.offline_until = time.monotonic() + self.settings.offline_retry_s
         self.last_error = str(err) or type(err).__name__
+        log.warning("database unavailable - %s - serving the offline JSON copy (read-only) for %.0f s, then retrying",
+                    getattr(err, "reason", self.last_error), self.settings.offline_retry_s)
+
+    def _db(self, fn):
+        """fn on the DB. A failure on a reused idle connection (the Supabase pooler closes idle connections) is retried
+        once, quietly, on a fresh connection before anything is marked offline (review fix 4)."""
+        try:
+            return fn(self.db)
+        except DbUnavailable as e:
+            if not e.stale:
+                raise
+            log.info("database: %s - reconnecting and retrying once", e.reason)
+            self.pool.close()
+            return fn(self.db)
 
     def read(self, fn):
         """Returns (result, offline)."""
         if self.db_online:
             try:
-                res = fn(self.db)
+                res = self._db(fn)
+                if self.last_error:
+                    log.info("database back online")
                 self.last_error = None
                 return res, False
             except DbUnavailable as e:
@@ -261,7 +307,7 @@ class Data:
         if not self.db_online:
             raise OfflineError("offline data mode — read only")
         try:
-            return fn(self.db)
+            return self._db(fn)
         except DbUnavailable as e:
             self.mark_offline(e)
             raise OfflineError("offline data mode — read only") from None

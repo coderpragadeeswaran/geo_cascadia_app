@@ -1,165 +1,127 @@
-/** Findings table (CLAUDE.md §9.4.1 spec columns): id, street, location, use, floors, OCR text / name, route badges,
- *  matched record, review status. Rows follow the one global filter / query; row click opens the evidence drawer. */
-import { type ColumnDef, flexRender, getCoreRowModel, getSortedRowModel, type SortingState, useReactTable } from '@tanstack/react-table'
+/** Findings table that FITS its panel (docs/DESIGN.md declutter rule 3): no horizontal scroll; columns drop by priority
+ *  with container queries. Plain words; IDs, coordinates and model routes are in the row tooltip, the evidence drawer and
+ *  "How do we know?". Rows are virtualised; a row click opens the evidence and flies the map there. */
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useMap } from '@vis.gl/react-google-maps'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import type { Asset, Building, UnmappedBusiness } from '@/api/types'
-import { matchAsset, matchBuilding, matchUnmapped, nameOf, useOf } from '@/lib/derive'
-import { RouteBadge } from '@/lib/routes'
+import { assetRegLabel, ASSET_REG, floorsText, matchLabel, reviewLabel, useLabel } from '@/lib/labels'
+import { nameOf, useOf } from '@/lib/derive'
 import { propsFor, useAreaData } from '@/lib/useAreaData'
 import { cn, fmt } from '@/lib/utils'
-import { flyTo } from '@/map/camera'
-import { useUi, type Subject } from '@/store/ui'
-import { StatusChip } from './Inspect'
-import { WhyEmpty } from './WhyEmpty'
+import { flyTo, OBJECT_TILT } from '@/map/camera'
+import { useUi } from '@/store/ui'
 
-const pretty = (s: string | null | undefined) => (s ? s.replace(/_/g, ' ') : '—')
-const loc = (lat: number, lon: number) => <span className="tnum text-[11px] text-muted">{lat.toFixed(5)}<br />{lon.toFixed(5)}</span>
-const Review = ({ s }: { s: string | null | undefined }) => s ? <span className={cn('text-[11.5px] font-medium', s === 'pending' ? 'text-review' : 'text-muted')}>{s}</span> : <span className="text-faint">—</span>
+const DOT: Record<string, string> = { matched: 'var(--ns-matched)', discrepancy: 'var(--ns-discrepancy)', no_record: 'var(--ns-no-record)' }
+/** `wrap`: in cards the label wraps onto a second line (tables keep one truncated line) */
+export const StatusDot = ({ s, label, wrap }: { s: string | null | undefined; label: string; wrap?: boolean }) => (
+  <span className={wrap ? 'flex min-w-0 items-start gap-1.5' : 'inline-flex min-w-0 items-center gap-1.5'}>
+    <span className={cn('dot', wrap && 'mt-[7px] shrink-0')} style={{ background: s ? DOT[s] ?? 'var(--ns-unclassified)' : 'transparent', boxShadow: s ? undefined : 'inset 0 0 0 1.5px var(--ns-ink3)' }} />
+    <span className={cn('t-small', wrap ? 'min-w-0 break-words' : 'truncate')}>{label}</span>
+  </span>
+)
 
-const B_COLS: ColumnDef<Building>[] = [
-  { id: 'id', header: 'ID', accessorFn: (b) => b.id, size: 104, cell: ({ row: { original: b } }) => <span className="font-mono text-[11px]">{b.id}</span> },
-  { id: 'street', header: 'Street', accessorFn: (b) => b.street, size: 150, cell: ({ getValue }) => <span className="line-clamp-2 text-[12px]">{String(getValue() ?? '—')}</span> },
-  { id: 'loc', header: 'Location', accessorFn: (b) => b.lat, size: 84, cell: ({ row: { original: b } }) => loc(b.lat, b.lon) },
-  { id: 'use', header: 'Use', accessorFn: (b) => useOf(b) ?? '~', size: 132, cell: ({ row: { original: b } }) => (
-    <div className="flex flex-col items-start gap-0.5">{useOf(b) ? <span className="text-[12.5px]">{pretty(useOf(b))}</span> : <span className="text-[12px] text-unclassified">not classified</span>}<RouteBadge route={b.attributes?.use?.route} /></div>) },
-  { id: 'floors', header: 'Floors', accessorFn: (b) => b.attributes?.floors?.value ?? -1, size: 130, cell: ({ row: { original: b } }) => {
+type Kind = 'building' | 'asset' | 'unmapped'
+interface Col<T> { id: string; head: string; p: 1 | 2 | 3; w: string; sort?: (x: T) => string | number; cell: (x: T) => React.ReactNode }
+
+const B_COLS: Col<Building>[] = [
+  { id: 'what', head: 'Building', p: 1, w: 'minmax(0,1fr)', sort: (b) => nameOf(b)?.value ?? b.street, cell: (b) => {
+    const n = nameOf(b)
+    const title = n?.quality === 'good' && n.value ? n.value : useOf(b) ? useLabel(useOf(b)) : 'Building'
+    return <span className="min-w-0"><span className="block truncate">{title}</span><span className="t-small ink3 block truncate">{b.street}</span></span>
+  } },
+  { id: 'use', head: 'Use', p: 2, w: '104px', sort: (b) => useOf(b) ?? '~', cell: (b) => <span className={cn('t-small truncate', !useOf(b) && 'ink3')}>{useOf(b) ? useLabel(useOf(b)) : 'not known'}</span> },
+  { id: 'floors', head: 'Floors', p: 2, w: '52px', sort: (b) => b.attributes?.floors?.value ?? -1, cell: (b) => {
     const f = b.attributes?.floors
-    return <div className="flex flex-col items-start gap-0.5">{f?.value != null ? <span className="tnum text-[12.5px]">{f.value} <span className="text-[11px] text-muted">{f.status === 'low_confidence' ? 'low conf.' : ''}</span></span> : <span className="text-[12px] text-unclassified">not measured</span>}<RouteBadge route={f?.route} /></div>
+    return f?.value != null ? <span className="t-data">{f.value}{f.status === 'low_confidence' ? '?' : ''}</span> : <span className="ink3">—</span>
   } },
-  { id: 'name', header: 'Name / OCR text', accessorFn: (b) => nameOf(b)?.value ?? b.evidence?.sign_view?.ocr_text ?? '', size: 170, cell: ({ row: { original: b } }) => {
-    const n = nameOf(b); const ocr = b.evidence?.sign_view?.ocr_text
-    return <div className="flex min-w-0 flex-col items-start gap-0.5">
-      <span className="line-clamp-1 text-[12.5px]">{n?.value ?? (ocr ? <span className="text-muted">“{ocr}”</span> : '—')}</span>
-      {n?.value && <span className="flex items-center gap-1"><RouteBadge route={n.route} />{n.google_confirmed && <span className="text-[10px] font-semibold text-matched">Google ✓</span>}</span>}
-    </div>
-  } },
-  { id: 'match', header: 'Register match', accessorFn: (b) => b.match_status, size: 150, cell: ({ row: { original: b } }) => (
-    <div className="flex flex-col items-start gap-0.5"><StatusChip s={b.match_status} />
-      <span className="text-[10.5px] text-faint">{b.register?.property_id ? `${b.register.property_id} · ${pretty(b.register.record_use)} · ${b.register.record_floors ?? '—'} fl` : 'no record'}</span></div>) },
-  { id: 'review', header: 'Review', accessorFn: (b) => b.review?.status ?? '', size: 82, cell: ({ row: { original: b } }) => <Review s={b.review?.status} /> },
+  { id: 'reg', head: 'Register', p: 1, w: '118px', sort: (b) => b.match_status, cell: (b) => <StatusDot s={b.match_status} label={matchLabel(b.match_status)} /> },
+  { id: 'review', head: 'Review', p: 3, w: '76px', sort: (b) => b.review?.status ?? '', cell: (b) => <span className={cn('t-small', b.review?.status !== 'pending' && 'ink3')}>{b.review?.status === 'pending' ? 'waiting' : b.review?.status ?? '—'}</span> },
+  { id: 'id', head: 'ID', p: 3, w: '96px', sort: (b) => b.id, cell: (b) => <span className="t-data ink3 truncate">{b.id}</span> },
 ]
-
-const A_COLS: ColumnDef<Asset>[] = [
-  { id: 'id', header: 'ID', accessorFn: (a) => a.id, size: 96, cell: ({ row: { original: a } }) => <span className="font-mono text-[11px]">{a.id}</span> },
-  { id: 'type', header: 'Type', accessorFn: (a) => a.type, size: 96, cell: ({ row: { original: a } }) => <div className="flex flex-col items-start gap-0.5"><span className="text-[12.5px]">{a.type}</span><RouteBadge route={a.route} /></div> },
-  { id: 'street', header: 'Street', accessorFn: (a) => a.street, size: 150, cell: ({ getValue }) => <span className="line-clamp-2 text-[12px]">{String(getValue() ?? '—')}</span> },
-  { id: 'loc', header: 'Location', accessorFn: (a) => a.lat, size: 84, cell: ({ row: { original: a } }) => loc(a.lat, a.lon) },
-  { id: 'pos', header: 'Position', accessorFn: (a) => a.uncertainty_m, size: 130, cell: ({ row: { original: a } }) => (
-    <span className="text-[12px]">{a.method === 'triangulated' ? `triangulated · ${a.cameras_used} cams` : <span className="text-muted">approximate</span>}<br /><span className="tnum text-[11px] text-faint">± {a.uncertainty_m?.toFixed(1)} m · {a.confidence} conf.</span></span>) },
-  { id: 'reg', header: 'Register', accessorFn: (a) => a.register?.status, size: 150, cell: ({ row: { original: a } }) => (
-    <div className="flex flex-col items-start gap-0.5"><StatusChip s={a.register?.status} /><span className="text-[10.5px] text-faint">{a.register?.asset_no ?? '—'}</span></div>) },
-  { id: 'review', header: 'Review', accessorFn: (a) => a.review?.status ?? '', size: 82, cell: ({ row: { original: a } }) => <Review s={a.review?.status} /> },
+const A_COLS: Col<Asset>[] = [
+  { id: 'what', head: 'Seen', p: 1, w: 'minmax(0,1fr)', sort: (a) => a.type, cell: (a) => (
+    <span className="min-w-0"><span className="block truncate">{a.type === 'streetlight' ? 'Streetlight' : 'Pole, no lamp seen'}</span><span className="t-small ink3 block truncate">{a.street ?? '—'}</span></span>) },
+  { id: 'pos', head: 'Position', p: 2, w: '82px', sort: (a) => (a.method === 'triangulated' ? 0 : 1), cell: (a) => <span className={cn('t-small', a.method !== 'triangulated' && 'ink3')}>{a.method === 'triangulated' ? 'pinpointed' : 'approximate'}</span> },
+  { id: 'reg', head: 'Register', p: 1, w: '118px', sort: (a) => a.register?.status ?? '', cell: (a) => <StatusDot s={ASSET_REG[a.register?.status ?? '']?.status ?? null} label={assetRegLabel(a.register?.status)} /> },
+  { id: 'review', head: 'Review', p: 3, w: '76px', sort: (a) => a.review?.status ?? '', cell: (a) => <span className={cn('t-small', a.review?.status !== 'pending' && 'ink3')}>{a.review?.status === 'pending' ? 'waiting' : a.review?.status ?? '—'}</span> },
+  { id: 'id', head: 'ID', p: 3, w: '90px', sort: (a) => a.id, cell: (a) => <span className="t-data ink3 truncate">{a.id}</span> },
 ]
-
-const U_COLS: ColumnDef<UnmappedBusiness>[] = [
-  { id: 'id', header: 'ID', accessorFn: (u) => u.id, size: 84, cell: ({ row: { original: u } }) => <span className="font-mono text-[11px]">{u.id}</span> },
-  { id: 'name', header: 'Name', accessorFn: (u) => u.name, size: 150, cell: ({ getValue }) => <span className="text-[12.5px]">{String(getValue() ?? '—')}</span> },
-  { id: 'ocr', header: 'OCR text', accessorFn: (u) => u.ocr_text, size: 170, cell: ({ getValue }) => <span className="line-clamp-2 text-[12px] text-muted">“{String(getValue() ?? '')}”</span> },
-  { id: 'street', header: 'Street', accessorFn: (u) => u.street, size: 150, cell: ({ getValue }) => <span className="line-clamp-2 text-[12px]">{String(getValue() ?? '—')}</span> },
-  { id: 'loc', header: 'Location (approx.)', accessorFn: (u) => u.lat, size: 100, cell: ({ row: { original: u } }) => loc(u.lat, u.lon) },
-  { id: 'sight', header: 'Sightings', accessorFn: (u) => u.sightings, size: 76, cell: ({ getValue }) => <span className="tnum text-[12px]">{String(getValue() ?? '—')}</span> },
+const U_COLS: Col<UnmappedBusiness>[] = [
+  { id: 'what', head: 'Business (sign)', p: 1, w: 'minmax(0,1fr)', sort: (u) => u.name ?? '', cell: (u) => (
+    <span className="min-w-0"><span className="block truncate">{u.name ?? '—'}</span><span className="t-small ink3 block truncate">{u.street ?? '—'}</span></span>) },
+  { id: 'seen', head: 'Photos', p: 1, w: '64px', sort: (u) => u.sightings ?? 0, cell: (u) => <span className="t-data">{u.sightings ?? '—'}</span> },
+  { id: 'id', head: 'ID', p: 3, w: '84px', sort: (u) => u.id, cell: (u) => <span className="t-data ink3 truncate">{u.id}</span> },
 ]
+const COLS = { building: B_COLS, asset: A_COLS, unmapped: U_COLS } as const
 
-export function FindingsTable() {
-  const { records, props } = useAreaData()
-  const filter = useUi((s) => s.filter)
-  const query = useUi((s) => s.query)
-  const setFilter = useUi((s) => s.setFilter)
-
-  const sets = useMemo(() => {
-    if (!records) return null
-    if (query?.rows && query.intent !== 'streetlight_gaps') {
-      const rows = query.rows as unknown as { kind: string; id: string; item_type?: string; ref_id?: string }[]
-      const bIds = rows.flatMap((r) => (r.kind === 'building' ? [r.id] : r.item_type === 'building' ? [r.ref_id!] : []))
-      const aIds = rows.flatMap((r) => (r.kind === 'pole' || r.kind === 'streetlight' ? [r.id] : r.item_type === 'asset' ? [r.ref_id!] : []))
-      const byId = <T extends { id: string }>(xs: T[], ids: string[]) => { const m = new Map(xs.map((x) => [x.id, x])); return ids.map((i) => m.get(i)).filter(Boolean) as T[] }
-      return { buildings: byId(records.buildings, bIds), assets: byId(records.assets, aIds), unmapped: [] as UnmappedBusiness[] }
-    }
-    return { buildings: records.buildings.filter((b) => matchBuilding(b, filter)), assets: records.assets.filter((a) => matchAsset(a, filter)),
-      unmapped: records.unmapped.filter((u) => matchUnmapped(u, filter)) }
-  }, [records, filter, query])
-
-  const subject: Subject = query?.rows && query.intent === 'assets' ? 'assets'
-    : query?.rows && query.intent === 'review' && sets && !sets.buildings.length ? 'assets'
-    : query ? (filter.subject === 'unmapped' ? 'buildings' : filter.subject) : filter.subject
-
-  if (!sets) return <div className="space-y-2 p-3">{[0, 1, 2, 3, 4].map((i) => <div key={i} className="h-11 animate-pulse rounded-lg bg-hover" />)}</div>
-
-  const counts = { buildings: sets.buildings.length, assets: sets.assets.length, unmapped: sets.unmapped.length }
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-1 px-3 pb-2" role="tablist" aria-label="Record type">
-        {(['buildings', 'assets', 'unmapped'] as const).map((s) => (
-          <button key={s} role="tab" aria-selected={subject === s} onClick={() => setFilter({ subject: s })}
-            disabled={!!query && s === 'unmapped'}
-            className={cn('h-7 cursor-pointer rounded-lg px-2.5 text-[12px] font-medium disabled:cursor-default disabled:opacity-35',
-              subject === s ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-hover hover:text-fg')}>
-            {s === 'unmapped' ? 'Unmapped' : s[0].toUpperCase() + s.slice(1)} <span className="tnum opacity-80">{fmt.format(counts[s])}</span>
-          </button>
-        ))}
-      </div>
-      {query && query.total === 0 && query.intent !== 'streetlight_gaps' ? (
-        <div className="px-3.5 py-2">
-          <p className="mb-2 text-[13px] font-semibold">No results for this question</p>
-          <WhyEmpty steps={query.why_empty} noun={query.intent === 'review' ? 'review items' : query.intent === 'assets' ? 'assets' : 'buildings'} />
-        </div>
-      ) : subject === 'buildings' ? <Grid data={sets.buildings} cols={B_COLS} kind="building" props={props} />
-        : subject === 'assets' ? <Grid data={sets.assets} cols={A_COLS} kind="asset" props={props} />
-          : <Grid data={sets.unmapped} cols={U_COLS} kind="unmapped_business" props={props} />}
-    </div>
-  )
+const tip = (kind: Kind, x: Building | Asset | UnmappedBusiness) => {
+  const base = `${x.id} · ${x.street ?? '—'} · ${x.lat.toFixed(5)}, ${x.lon.toFixed(5)}`
+  if (kind === 'building') { const b = x as Building; return `${base} · ${floorsText(b.attributes?.floors?.value, b.attributes?.floors?.status)} · ${reviewLabel(b.review?.status)}` }
+  return base
 }
 
-function Grid<T extends { id: string; lat: number; lon: number; type?: string }>({ data, cols, kind, props }: {
-  data: T[]; cols: ColumnDef<T>[]; kind: string; props: ReturnType<typeof useAreaData>['props'] }) {
-  const [sorting, setSorting] = useState<SortingState>([])
-  const table = useReactTable({ data, columns: cols, state: { sorting }, onSortingChange: setSorting, getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel() })
-  const rows = table.getRowModel().rows
+export function FindingsTable({ kind, rows, empty = 'Nothing matches.' }: { kind: Kind; rows: (Building | Asset | UnmappedBusiness)[]; empty?: string }) {
+  const cols = COLS[kind] as Col<Building | Asset | UnmappedBusiness>[]
+  const [sort, setSort] = useState<{ id: string; desc: boolean } | null>(null)
+  const sorted = useMemo(() => {
+    if (!sort) return rows
+    const c = cols.find((x) => x.id === sort.id)
+    if (!c?.sort) return rows
+    const v = (x: Building | Asset | UnmappedBusiness) => c.sort!(x)
+    return [...rows].sort((a, b) => { const A = v(a), B = v(b); const r = A < B ? -1 : A > B ? 1 : 0; return sort.desc ? -r : r })
+  }, [rows, sort, cols])
   const scroller = useRef<HTMLDivElement>(null)
-  const virt = useVirtualizer({ count: rows.length, getScrollElement: () => scroller.current, estimateSize: () => 50, overscan: 8 })
+  const virt = useVirtualizer({ count: sorted.length, getScrollElement: () => scroller.current, estimateSize: () => 46, overscan: 8 })
+  const { props } = useAreaData()
   const map = useMap('main')
   const select = useUi((s) => s.select)
   const selected = useUi((s) => s.selected)
   const selId = selected && 'id' in selected ? selected.id : null
-  const template = cols.map((c) => `${c.size ?? 120}px`).join(' ')
-  const width = cols.reduce((n, c) => n + (c.size ?? 120), 0)
-  const open = (x: T) => {
-    const p = propsFor(props, kind === 'asset' ? x.type! : kind, x.id)
+  const open = (x: Building | Asset | UnmappedBusiness) => {
+    const p = propsFor(props, kind === 'asset' ? (x as Asset).type : kind === 'unmapped' ? 'unmapped_business' : 'building', x.id)
     if (!p) return
     select(p)
-    if (map) flyTo(map, { center: { lat: x.lat, lng: x.lon }, zoom: Math.max(map.getZoom() ?? 18, 19), tilt: useUi.getState().flat ? 0 : 50 }, { instant: useUi.getState().flat })
+    if (map) flyTo(map, { center: { lat: x.lat, lng: x.lon }, zoom: Math.max(map.getZoom() ?? 18, 19), tilt: useUi.getState().flat ? 0 : OBJECT_TILT }, { instant: useUi.getState().flat })
   }
-  if (!data.length) return <p className="px-3.5 py-6 text-center text-[12.5px] text-muted">Nothing matches the current filters.</p>
+  // grid templates per container width (column priority 1 → 2 → 3)
+  const tpl = (maxP: number) => cols.filter((c) => c.p <= maxP).map((c) => c.w).join(' ')
+  const cls = `ft-${kind}`
+  if (!rows.length) return <p className="t-small ink3 px-5 py-6">{empty}</p>
   return (
-    <div ref={scroller} className="min-h-0 flex-1 overflow-auto" role="table" aria-rowcount={rows.length}>
-      <div style={{ width }} className="min-w-full">
-        <div role="row" className="sticky top-0 z-10 grid border-b border-glass-border bg-[var(--glass-strong)] backdrop-blur" style={{ gridTemplateColumns: template }}>
-          {table.getHeaderGroups()[0].headers.map((h) => (
-            <button key={h.id} role="columnheader" onClick={h.column.getToggleSortingHandler()}
-              className="flex cursor-pointer items-center gap-1 px-2 py-2 text-left text-[10.5px] font-semibold uppercase tracking-wider text-faint hover:text-fg">
-              {flexRender(h.column.columnDef.header, h.getContext())}
-              {h.column.getIsSorted() === 'asc' ? <ArrowUp className="size-3" /> : h.column.getIsSorted() === 'desc' ? <ArrowDown className="size-3" /> : null}
-            </button>
-          ))}
-        </div>
+    <div className={cn('flex min-h-0 flex-1 flex-col', cls)} style={{ containerType: 'inline-size' }}>
+      <style>{`
+        .${cls} .r { display: grid; grid-template-columns: ${tpl(1)}; column-gap: 12px; align-items: center; }
+        .${cls} .p2, .${cls} .p3 { display: none; }
+        @container (min-width: 440px) { .${cls} .r { grid-template-columns: ${tpl(2)}; } .${cls} .p2 { display: flex; } }
+        @container (min-width: 600px) { .${cls} .r { grid-template-columns: ${tpl(3)}; } .${cls} .p3 { display: flex; } }
+      `}</style>
+      <div role="row" className="r rule-b px-5 py-1.5">
+        {cols.map((c) => (
+          <button key={c.id} role="columnheader" className={cn('t-micro flex cursor-pointer items-center gap-1 text-left hover:text-ink2', c.p > 1 && `p${c.p}`)}
+            onClick={() => setSort((s) => (s?.id === c.id ? (s.desc ? null : { id: c.id, desc: true }) : { id: c.id, desc: false }))}
+            aria-sort={sort?.id === c.id ? (sort.desc ? 'descending' : 'ascending') : 'none'}>
+            {c.head}{sort?.id === c.id && (sort.desc ? <ArrowDown className="size-3" /> : <ArrowUp className="size-3" />)}
+          </button>
+        ))}
+      </div>
+      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden" role="table" aria-rowcount={sorted.length} aria-label="Findings">
         <div style={{ height: virt.getTotalSize(), position: 'relative' }}>
           {virt.getVirtualItems().map((vi) => {
-            const row = rows[vi.index]
+            const x = sorted[vi.index]
             return (
-              <div key={row.id} role="row" tabIndex={0} data-index={vi.index} ref={virt.measureElement}
-                onClick={() => open(row.original)} onKeyDown={(e) => { if (e.key === 'Enter') open(row.original) }}
-                className={cn('absolute left-0 grid w-full cursor-pointer items-center border-b border-glass-border/60 hover:bg-hover focus-visible:bg-hover',
-                  selId === row.original.id && 'bg-accent-soft')}
-                style={{ transform: `translateY(${vi.start}px)`, gridTemplateColumns: template }}>
-                {row.getVisibleCells().map((c) => <div key={c.id} role="cell" className="min-w-0 px-2 py-1.5">{flexRender(c.column.columnDef.cell, c.getContext())}</div>)}
+              <div key={x.id} role="row" tabIndex={0} data-index={vi.index} ref={virt.measureElement} title={tip(kind, x)}
+                onClick={() => open(x)} onKeyDown={(e) => { if (e.key === 'Enter') open(x) }}
+                className={cn('r rule-b absolute left-0 w-full cursor-pointer px-5 py-2 hover:bg-line focus-visible:bg-line', selId === x.id && 'bg-accent-soft')}
+                style={{ transform: `translateY(${vi.start}px)` }}>
+                {cols.map((c) => <div key={c.id} role="cell" className={cn('min-w-0', c.p > 1 && `p${c.p}`)}>{c.cell(x)}</div>)}
               </div>
             )
           })}
         </div>
       </div>
+      <div className="t-data ink3 rule-t px-5 py-1.5">{fmt.format(sorted.length)} {kind === 'building' ? 'buildings' : kind === 'asset' ? 'poles & streetlights' : 'businesses'}</div>
     </div>
   )
 }

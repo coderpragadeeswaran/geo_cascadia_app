@@ -3,18 +3,20 @@ import { Slot } from '@radix-ui/react-slot'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
+/** Night Survey buttons: quiet ink by default, sodium outline for the one primary action, solid sodium when committed. */
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] text-[13px] font-medium transition-colors ' +
+  'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--ns-r-control)] text-[15.5px] font-[520] transition-colors ' +
     'disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4 [&_svg]:shrink-0 cursor-pointer select-none',
   {
     variants: {
       variant: {
-        ghost: 'text-fg/80 hover:bg-hover hover:text-fg',
-        subtle: 'bg-hover text-fg hover:bg-[var(--glass-border)]',
-        accent: 'bg-accent text-white hover:brightness-110 shadow-[0_6px_20px_-8px_var(--accent)]',
-        outline: 'border border-glass-border text-fg hover:bg-hover',
+        ghost: 'text-ink2 hover:bg-line hover:text-ink',
+        subtle: 'text-ink shadow-[inset_0_0_0_1px_var(--ns-line-strong)] hover:bg-line',
+        accent: 'text-sodium shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--ns-sodium)_55%,transparent)] hover:bg-accent-soft',
+        solid: 'bg-sodium text-bg0 hover:bg-sodium-glow',
+        outline: 'text-ink shadow-[inset_0_0_0_1px_var(--ns-line-strong)] hover:bg-line',
       },
-      size: { sm: 'h-7 px-2.5', md: 'h-8 px-3', icon: 'size-8', 'icon-sm': 'size-7' },
+      size: { sm: 'h-7 px-2.5', md: 'h-[30px] px-3', icon: 'size-[30px]', 'icon-sm': 'size-7' },
     },
     defaultVariants: { variant: 'ghost', size: 'md' },
   },
@@ -34,7 +36,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <Comp
         ref={ref}
         data-active={active || undefined}
-        className={cn(buttonVariants({ variant, size }), 'data-[active]:bg-accent-soft data-[active]:text-accent', className)}
+        className={cn(buttonVariants({ variant, size }), 'data-[active]:bg-accent-soft data-[active]:text-sodium', className)}
         {...props}
       />
     )

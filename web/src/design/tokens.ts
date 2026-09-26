@@ -15,8 +15,9 @@ const palette = {
     lineStrong: 'rgba(160,175,220,0.28)',
     // ink: moonlit warm white
     ink: '#ebe6da',
-    ink2: '#a9b0c7',
-    ink3: '#6b7391',
+    // raised for readability (pass B review): ink2 ≥ 9.9:1, ink3 ≥ 6.0:1 on every surface (WCAG AA 4.5:1)
+    ink2: '#bec4d9',
+    ink3: '#9098b5',
     // signature accent: sodium-vapour street lamp
     sodium: '#ffa23a',
     sodiumGlow: '#ffc27a',
@@ -39,9 +40,10 @@ const palette = {
     line: 'rgba(27,31,42,0.12)',
     lineStrong: 'rgba(27,31,42,0.3)',
     ink: '#1b1f2a',
-    ink2: '#4c5366',
-    ink3: '#858a99',
-    sodium: '#b65c09',
+    // darkened for readability (pass B review): ink2 ≥ 8.6:1, ink3 ≥ 5.5:1, sodium ≥ 5.3:1 on paper (WCAG AA 4.5:1)
+    ink2: '#3d4356',
+    ink3: '#5b6070',
+    sodium: '#9c4e07',
     sodiumGlow: '#e08a2a',
     sodiumSoft: 'rgba(182,92,9,0.12)',
     matched: '#8e9dc4',    // pale slate: recedes on paper (2.4:1 → always drawn with an ink outline + in the table)
@@ -66,13 +68,13 @@ export const type = {
   mono: "'Martian Mono Variable', 'Martian Mono', ui-monospace, monospace",
   // size / line-height / weight / width (font-stretch)
   scale: {
-    display: { size: 30, lh: 1.0, weight: 640, stretch: 78 },   // area title, hero numbers' labels
-    title: { size: 18, lh: 1.15, weight: 600, stretch: 85 },
-    body: { size: 14, lh: 1.4, weight: 420, stretch: 100 },
-    small: { size: 12.5, lh: 1.35, weight: 430, stretch: 100 },
-    micro: { size: 10.5, lh: 1.2, weight: 600, stretch: 110, tracking: '0.12em', caps: true },   // labels, small caps
-    figure: { size: 24, lh: 1.0, weight: 300, stretch: 100, font: 'mono' },                        // KPI numbers
-    data: { size: 11.5, lh: 1.3, weight: 400, stretch: 90, font: 'mono' },                         // IDs, metres, coords
+    display: { size: 32, lh: 1.0, weight: 640, stretch: 78 },   // area title, hero numbers' labels
+    title: { size: 20, lh: 1.15, weight: 600, stretch: 85 },
+    body: { size: 17, lh: 1.45, weight: 420, stretch: 100 },
+    small: { size: 15, lh: 1.4, weight: 430, stretch: 100 },
+    micro: { size: 13, lh: 1.2, weight: 600, stretch: 105, tracking: '0.1em', caps: true },   // labels, small caps
+    figure: { size: 26, lh: 1.0, weight: 300, stretch: 100, font: 'mono' },                        // KPI numbers
+    data: { size: 14, lh: 1.3, weight: 400, stretch: 90, font: 'mono' },                         // IDs, metres, coords
   },
 } as const
 
@@ -116,11 +118,15 @@ export const mapBase = {
     background: '#070a14', land: '#0b1020', landCover: '#0a0f1f', urban: '#0e1429', water: '#050814',
     local: '#161d38', arterial: '#1b2445', highway: '#232d54', casing: '#0b1020', trail: '#131a33',
     label: '#6b7391', labelLocal: '#4f587a', labelWater: '#4f587a', halo: '#070a14', border: '#2a3561',
+    // parks, sports grounds, cemeteries, vegetation: muted to the land's own indigo (Google's green competed with sodium)
+    park: '#0d1524', vegetation: '#0b111f',
   },
   daylight: {
     background: '#f4f0e6', land: '#efe9dc', landCover: '#efe9dc', urban: '#e8e1d2', water: '#d3dbe3',
     local: '#fbf8f1', arterial: '#fbf8f1', highway: '#ffffff', casing: '#d6cdb9', trail: '#f1ebdf',
     label: '#6b6457', labelLocal: '#857d6e', labelWater: '#6b7a8a', halo: '#f4f0e6', border: '#c9bfa9',
+    // parks etc.: paper with a trace of olive instead of Google's green
+    park: '#e6e4d4', vegetation: '#ebe6d8',
   },
 } as const
 
@@ -138,6 +144,8 @@ const legacy = (b: (typeof mapBase)[Mode], night: boolean): MapStyleRule[] => [
   { featureType: 'administrative', elementType: 'geometry.stroke', stylers: [{ color: b.border }] },
   { featureType: 'landscape.man_made', elementType: 'geometry', stylers: [{ color: b.urban }] },
   { featureType: 'landscape.natural', elementType: 'geometry', stylers: [{ color: b.landCover }] },
+  { featureType: 'landscape.natural.landcover', elementType: 'geometry', stylers: [{ color: b.vegetation }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ visibility: 'on' }, { color: b.park }] },
   { featureType: 'road', elementType: night ? 'geometry' : 'geometry.fill', stylers: [{ color: b.local }] },
   { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: b.casing }] },
   { featureType: 'road.arterial', elementType: night ? 'geometry' : 'geometry.fill', stylers: [{ color: b.arterial }] },
@@ -147,14 +155,14 @@ const legacy = (b: (typeof mapBase)[Mode], night: boolean): MapStyleRule[] => [
 ]
 export const mapStyleJson: Record<Mode, MapStyleRule[]> = { night: legacy(mapBase.night, true), daylight: legacy(mapBase.daylight, false) }
 
-/** NEW cloud-based maps styling JSON (Google Cloud > Map Styles > Create style > JSON > Upload JSON File). Schema:
- *  developers.google.com/maps/documentation/javascript/cloud-customization/json-reference
- *  Only stylers the docs list for each feature are used (POIs: labels/pins only; roads: fill, stroke, labels; road
- *  shields and signs: labels only; buildings: fill/stroke/visibility; political: no stroke). Written to
- *  docs/map-styles/ by `npm run map-styles`. Building 3D vs Footprints is a Map Settings toggle (not in the JSON). */
+/** NEW cloud-based maps styling JSON (Google Cloud > Map Styles > Create style > JSON > Upload JSON File). Reference:
+ *  developers.google.com/maps/documentation/javascript/cloud-customization/json-reference. The stylers each feature
+ *  accepts come from Google's schema (developers.google.com/static/maps/cbms-json-schema.json); CLOUD_STYLERS below
+ *  copies that schema for every id used here and `npm run map-styles` refuses to write anything else.
+ *  Building 3D vs Footprints is a Map Settings toggle (not in the JSON). */
 export interface CloudStyleRule {
   id: string
-  geometry?: { visible?: boolean; fillColor?: string; strokeColor?: string; fillOpacity?: number; strokeOpacity?: number; strokeWeight?: number }
+  geometry?: { visible?: boolean; fillColor?: string; strokeColor?: string; fillOpacity?: number; strokeOpacity?: number; strokeWidth?: number }
   label?: { visible?: boolean; textFillColor?: string; textStrokeColor?: string; pinFillColor?: string; pinGlyphColor?: string; pinOutlineColor?: string }
 }
 export interface CloudStyle { variant: 'light' | 'dark'; backgroundColor: string; metadata: Record<string, string>; styles: CloudStyleRule[] }
@@ -177,6 +185,17 @@ export function cloudMapStyle(m: Mode): CloudStyle {
       // ground
       { id: 'natural.land', geometry: { fillColor: b.land } },
       { id: 'natural.land.landCover', geometry: { fillColor: b.landCover } },
+      // green areas muted (parks, sports grounds, nature reserves, cemeteries, vegetation): no green competing with sodium
+      { id: 'natural.land.landCover.forest', geometry: { fillColor: b.vegetation } },
+      { id: 'natural.land.landCover.shrub', geometry: { fillColor: b.vegetation } },
+      { id: 'natural.land.landCover.crops', geometry: { fillColor: b.vegetation } },
+      { id: 'natural.land.landCover.dryCrops', geometry: { fillColor: b.vegetation } },
+      { id: 'pointOfInterest.recreation', geometry: { fillColor: b.park } },
+      { id: 'pointOfInterest.recreation.park', geometry: { fillColor: b.park } },
+      { id: 'pointOfInterest.recreation.natureReserve', geometry: { fillColor: b.park } },
+      { id: 'pointOfInterest.recreation.sportsField', geometry: { fillColor: b.park } },
+      { id: 'pointOfInterest.recreation.golfCourse', geometry: { fillColor: b.park } },
+      { id: 'pointOfInterest.other.cemetery', geometry: { fillColor: b.park } },
       { id: 'infrastructure.urbanArea', geometry: { fillColor: b.urban } },
       { id: 'natural.water', geometry: { fillColor: b.water }, label: text(b.labelWater) },
       // roads: quiet, so our lit roads and dark stretches carry the meaning
@@ -190,9 +209,60 @@ export function cloudMapStyle(m: Mode): CloudStyle {
       { id: 'infrastructure.roadNetwork.parkingAisle', geometry: { visible: false } },
       { id: 'infrastructure.roadNetwork.roadShield', label: { visible: false } },
       { id: 'infrastructure.roadNetwork.roadSign', label: { visible: false } },
-      // place names stay for context, muted; land parcels off
+      // place names stay for context, muted; land parcel lines off (the schema allows geometry only for landParcel)
       { id: 'political', label: text(b.label) },
-      { id: 'political.landParcel', label: { visible: false } },
+      { id: 'political.landParcel', geometry: { visible: false } },
     ],
   }
+}
+
+const LABEL_TEXT = ['textFillColor', 'textFillOpacity', 'textStrokeColor', 'textStrokeOpacity', 'visible']
+const GEO_FILL = ['fillColor', 'fillOpacity', 'visible']
+const GEO_FULL = ['fillColor', 'fillOpacity', 'strokeColor', 'strokeOpacity', 'strokeWidth', 'visible']
+const POI_LABEL = ['pinFillColor', 'pinGlyphColor', 'pinOutlineColor', ...LABEL_TEXT]
+/** Stylers per feature id as Google's schema (cbms-json-schema.json) allows them, for every id used above. */
+export const CLOUD_STYLERS: Record<string, { geometry: string[]; label: string[] }> = {
+  pointOfInterest: { geometry: GEO_FILL, label: POI_LABEL },
+  'pointOfInterest.recreation': { geometry: GEO_FILL, label: POI_LABEL },
+  'pointOfInterest.recreation.park': { geometry: GEO_FILL, label: POI_LABEL },
+  'pointOfInterest.recreation.natureReserve': { geometry: GEO_FILL, label: LABEL_TEXT },
+  'pointOfInterest.recreation.sportsField': { geometry: GEO_FILL, label: POI_LABEL },
+  'pointOfInterest.recreation.golfCourse': { geometry: GEO_FILL, label: POI_LABEL },
+  'pointOfInterest.other.cemetery': { geometry: GEO_FILL, label: POI_LABEL },
+  'infrastructure.transitStation': { geometry: [], label: ['pinFillColor', ...LABEL_TEXT] },
+  'infrastructure.building': { geometry: GEO_FULL, label: LABEL_TEXT },
+  'infrastructure.building.commercial': { geometry: GEO_FULL, label: [] },
+  'infrastructure.businessCorridor': { geometry: GEO_FILL, label: [] },
+  'natural.land': { geometry: GEO_FILL, label: [] },
+  'natural.land.landCover': { geometry: GEO_FILL, label: [] },
+  'natural.land.landCover.forest': { geometry: GEO_FILL, label: [] },
+  'natural.land.landCover.shrub': { geometry: GEO_FILL, label: [] },
+  'natural.land.landCover.crops': { geometry: GEO_FILL, label: [] },
+  'natural.land.landCover.dryCrops': { geometry: GEO_FILL, label: [] },
+  'infrastructure.urbanArea': { geometry: GEO_FILL, label: [] },
+  'natural.water': { geometry: GEO_FILL, label: LABEL_TEXT },
+  'infrastructure.roadNetwork.road': { geometry: GEO_FULL, label: LABEL_TEXT },
+  'infrastructure.roadNetwork.road.local': { geometry: GEO_FULL, label: LABEL_TEXT },
+  'infrastructure.roadNetwork.road.noOutlet': { geometry: GEO_FULL, label: LABEL_TEXT },
+  'infrastructure.roadNetwork.road.arterial': { geometry: GEO_FULL, label: LABEL_TEXT },
+  'infrastructure.roadNetwork.road.highway': { geometry: GEO_FULL, label: LABEL_TEXT },
+  'infrastructure.roadNetwork.ramp': { geometry: GEO_FULL, label: LABEL_TEXT },
+  'infrastructure.roadNetwork.noTraffic': { geometry: GEO_FULL, label: LABEL_TEXT },
+  'infrastructure.roadNetwork.parkingAisle': { geometry: GEO_FULL, label: [] },
+  'infrastructure.roadNetwork.roadShield': { geometry: [], label: ['visible'] },
+  'infrastructure.roadNetwork.roadSign': { geometry: [], label: ['pinFillColor', 'textFillColor', 'textFillOpacity', 'visible'] },
+  political: { geometry: ['fillColor', 'visible'], label: ['pinFillColor', ...LABEL_TEXT] },
+  'political.landParcel': { geometry: ['strokeColor', 'strokeOpacity', 'strokeWidth', 'visible'], label: [] },
+}
+
+/** Problems of a cloud style against CLOUD_STYLERS (empty list = valid). */
+export function checkCloudStyle(st: CloudStyle): string[] {
+  const out: string[] = []
+  for (const r of st.styles) {
+    const ok = CLOUD_STYLERS[r.id]
+    if (!ok) { out.push(`${r.id}: id not in CLOUD_STYLERS (copy its stylers from Google's schema first)`); continue }
+    for (const k of Object.keys(r.geometry ?? {})) if (!ok.geometry.includes(k)) out.push(`${r.id}: geometry.${k} is not supported`)
+    for (const k of Object.keys(r.label ?? {})) if (!ok.label.includes(k)) out.push(`${r.id}: label.${k} is not supported`)
+  }
+  return out
 }

@@ -49,6 +49,66 @@
       }
     },
     {
+      "id": "natural.land.landCover.forest",
+      "geometry": {
+        "fillColor": "#ebe6d8"
+      }
+    },
+    {
+      "id": "natural.land.landCover.shrub",
+      "geometry": {
+        "fillColor": "#ebe6d8"
+      }
+    },
+    {
+      "id": "natural.land.landCover.crops",
+      "geometry": {
+        "fillColor": "#ebe6d8"
+      }
+    },
+    {
+      "id": "natural.land.landCover.dryCrops",
+      "geometry": {
+        "fillColor": "#ebe6d8"
+      }
+    },
+    {
+      "id": "pointOfInterest.recreation",
+      "geometry": {
+        "fillColor": "#e6e4d4"
+      }
+    },
+    {
+      "id": "pointOfInterest.recreation.park",
+      "geometry": {
+        "fillColor": "#e6e4d4"
+      }
+    },
+    {
+      "id": "pointOfInterest.recreation.natureReserve",
+      "geometry": {
+        "fillColor": "#e6e4d4"
+      }
+    },
+    {
+      "id": "pointOfInterest.recreation.sportsField",
+      "geometry": {
+        "fillColor": "#e6e4d4"
+      }
+    },
+    {
+      "id": "pointOfInterest.recreation.golfCourse",
+      "geometry": {
+        "fillColor": "#e6e4d4"
+      }
+    },
+    {
+      "id": "pointOfInterest.other.cemetery",
+      "geometry": {
+        "fillColor": "#e6e4d4"
+      }
+    },
+    {
       "id": "infrastructure.urbanArea",
       "geometry": {
         "fillColor": "#e8e1d2"
@@ -147,7 +207,7 @@
     },
     {
       "id": "political.landParcel",
-      "label": {
+      "geometry": {
         "visible": false
       }
     }

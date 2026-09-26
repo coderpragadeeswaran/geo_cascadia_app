@@ -31,13 +31,19 @@ def test_offline_mode_serves_json_read_only(offline):
     assert offline.get("/health").json()["offline"] is True
 
 
-def _strip(x):
-    """Drop values that legitimately differ between modes: DB review ids/timestamps, polygons (compared separately)."""
+LIVE_REVIEW = ("status", "reviewer", "note", "appeal_note", "appeal_photo_path")
+
+
+def _strip(x, parent=None):
+    """Drop values that legitimately differ between modes: DB review ids/timestamps, polygons (compared separately),
+    and live review decisions (D4: people's approvals live only in the DB; the JSON copy is the export's queue)."""
     if isinstance(x, dict):
-        return {k: _strip(v) for k, v in x.items() if k not in ("offline", "id", "updated_at", "polygon", "bbox")
-                or (k == "id" and isinstance(v, str))}
+        live = parent == "review" or "reviewer" in x
+        return {k: _strip(v, k) for k, v in x.items()
+                if (k not in ("offline", "id", "updated_at", "polygon", "bbox", "review_status") or (k == "id" and isinstance(v, str)))
+                and not (live and k in LIVE_REVIEW)}
     if isinstance(x, list):
-        return [_strip(v) for v in x]
+        return [_strip(v, parent) for v in x]
     return x
 
 

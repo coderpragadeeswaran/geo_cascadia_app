@@ -1,4 +1,4 @@
-/* NIGHT SURVEY — scoped to .ns (design preview only; the real pages are untouched until approved).
+/* NIGHT SURVEY base styles, scoped to .ns (the app puts .ns on <body>; /design-preview sets it on its own root).
    Fonts are self-hosted from node_modules (@fontsource-variable): no Google Fonts requests. */
 @import "@fontsource-variable/anek-tamil/standard.css";     /* Latin + Tamil, weight 100–800, width 75–125 % */
 @import "@fontsource-variable/martian-mono/standard.css";   /* weight 100–800, width 75–112.5 % */
@@ -7,21 +7,21 @@
   font-family: var(--ns-sans);
   background: var(--ns-bg0);
   color: var(--ns-ink);
-  font-size: 14px;
-  line-height: 1.4;
+  font-size: 17px;
+  line-height: 1.45;
   font-weight: 420;
   -webkit-font-smoothing: antialiased;
 }
 .ns ::selection { background: var(--ns-sodium-soft); }
 
 /* type scale (see tokens.ts) */
-.ns .t-display { font-size: 30px; line-height: 1; font-weight: 640; font-stretch: 78%; letter-spacing: -0.01em; }
-.ns .t-title   { font-size: 18px; line-height: 1.15; font-weight: 600; font-stretch: 85%; }
-.ns .t-body    { font-size: 14px; line-height: 1.4; }
-.ns .t-small   { font-size: 12.5px; line-height: 1.35; }
-.ns .t-micro   { font-size: 10.5px; line-height: 1.2; font-weight: 600; font-stretch: 110%; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ns-ink3); }
-.ns .t-figure  { font-family: var(--ns-mono); font-size: 24px; line-height: 1; font-weight: 300; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-.ns .t-data    { font-family: var(--ns-mono); font-size: 11.5px; line-height: 1.3; font-weight: 400; font-stretch: 90%; font-variant-numeric: tabular-nums; }
+.ns .t-display { font-size: 32px; line-height: 1; font-weight: 640; font-stretch: 78%; letter-spacing: -0.01em; }
+.ns .t-title   { font-size: 20px; line-height: 1.15; font-weight: 600; font-stretch: 85%; }
+.ns .t-body    { font-size: 17px; line-height: 1.45; }
+.ns .t-small   { font-size: 15px; line-height: 1.4; }
+.ns .t-micro   { font-size: 13px; line-height: 1.2; font-weight: 600; font-stretch: 105%; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ns-ink3); }
+.ns .t-figure  { font-family: var(--ns-mono); font-size: 26px; line-height: 1; font-weight: 300; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.ns .t-data    { font-family: var(--ns-mono); font-size: 14px; line-height: 1.3; font-weight: 400; font-stretch: 90%; font-variant-numeric: tabular-nums; }
 .ns .ink2 { color: var(--ns-ink2); }
 .ns .ink3 { color: var(--ns-ink3); }
 .ns .sodium { color: var(--ns-sodium); }
@@ -34,15 +34,33 @@
 .ns .sheet { background: var(--ns-bg2); border: 1px solid var(--ns-line); border-radius: var(--ns-r-sheet); box-shadow: 0 24px 60px -24px rgb(0 0 0 / 0.55); }
 
 /* controls */
-.ns .btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: var(--ns-r-control);
-  font-size: 13px; font-weight: 520; color: var(--ns-ink2); cursor: pointer; transition: color 120ms var(--ns-ease), background 120ms var(--ns-ease); }
+.ns .btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 11px; border-radius: var(--ns-r-control);
+  font-size: 15px; font-weight: 520; color: var(--ns-ink2); cursor: pointer; transition: color 120ms var(--ns-ease), background 120ms var(--ns-ease); }
 .ns .btn:hover { color: var(--ns-ink); background: var(--ns-line); }
 .ns .btn-sodium { color: var(--ns-sodium); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ns-sodium) 55%, transparent); }
 .ns .btn-sodium:hover { background: var(--ns-sodium-soft); color: var(--ns-sodium); }
 .ns .btn-solid { background: var(--ns-sodium); color: var(--ns-bg0); }
 .ns .btn-solid:hover { background: var(--ns-sodium-glow); color: var(--ns-bg0); }
+.ns .btn-line { box-shadow: inset 0 0 0 1px var(--ns-line-strong); }
+.ns .btn[aria-pressed="true"]:not(.btn-solid) { color: var(--ns-sodium); background: var(--ns-sodium-soft); }
+.ns .btn:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+.ns .btn-icon { width: 34px; padding: 0; justify-content: center; }
+.ns .btn svg { width: 17px; height: 17px; flex: none; }
 .ns :focus-visible { outline: 2px solid var(--ns-sodium); outline-offset: 2px; }
-.ns .tag { font-family: var(--ns-mono); font-size: 10px; font-stretch: 90%; padding: 1px 5px; border-radius: var(--ns-r-hair);
+.ns .kbd { font-family: var(--ns-mono); font-size: 12.5px; padding: 0 4px; border-radius: var(--ns-r-hair); border: 1px solid var(--ns-line-strong); color: var(--ns-ink3); }
+/* an editable filter chip: label + value + caret, obviously clickable */
+.ns .chip { display: inline-flex; align-items: center; height: 30px; border-radius: var(--ns-r-control); border: 1px solid var(--ns-line-strong);
+  background: var(--ns-bg2); font-size: 15px; overflow: hidden; }
+.ns .chip > button { display: inline-flex; align-items: center; gap: 5px; height: 100%; padding: 0 8px; cursor: pointer; }
+.ns .chip > button:hover { background: var(--ns-sodium-soft); }
+.ns .chip-add { border-style: dashed; color: var(--ns-sodium); background: transparent; }
+/* underline input (the ask bar) */
+.ns .field { border-bottom: 1px solid var(--ns-line-strong); transition: border-color 120ms var(--ns-ease); }
+.ns .field:focus-within { border-color: var(--ns-sodium); }
+.ns .field input:focus-visible { outline: none; }   /* the sodium underline is the focus mark */
+.ns .link { color: var(--ns-sodium); cursor: pointer; text-underline-offset: 3px; }
+.ns .link:hover { text-decoration: underline; }
+.ns .tag { font-family: var(--ns-mono); font-size: 12.5px; font-stretch: 90%; padding: 1px 5px; border-radius: var(--ns-r-hair);
   border: 1px solid var(--ns-line-strong); color: var(--ns-ink2); letter-spacing: 0.02em; white-space: nowrap; }
 .ns .dot { display: inline-block; width: 8px; height: 8px; border-radius: 999px; flex: none; }
 
@@ -51,8 +69,22 @@
 
 /* analyse mode "flashlight": everything outside a circle around the cursor is dimmed (coverage lines only near it) */
 .ns .flashlight { pointer-events: none; position: absolute; inset: 0;
-  background: radial-gradient(circle 150px at var(--fx, -999px) var(--fy, -999px), transparent 0 55%, rgb(2 4 10 / 0.9) 100%); }
+  background: radial-gradient(circle 150px at var(--fx, -999px) var(--fy, -999px), transparent 0 55%,
+    color-mix(in srgb, var(--ns-bg0) 88%, transparent) 100%); }
 
 @media (prefers-reduced-motion: reduce) {
   .ns *, .ns *::before, .ns *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }
+
+/* analyse: draggable end dots of the picked street (review fix 10) — above Google's panes, below our floating UI */
+.ns .trim-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.ns .trim-handle { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; pointer-events: auto;
+  background: var(--ns-sodium); border: 3px solid var(--ns-bg0); box-shadow: 0 0 0 2px var(--ns-sodium), 0 2px 8px rgb(0 0 0 / .45);
+  cursor: grab; touch-action: none; }
+.ns .trim-handle:active { cursor: grabbing; transform: scale(1.12); }
+.ns .trim-handle:focus-visible { outline: 3px solid var(--ns-ink); outline-offset: 3px; }
+
+/* every floating map card (hover card, notices): bounded width, text always wraps inside (walkthrough 2 fix 4) */
+.ns .map-card { width: max-content; min-width: 220px; max-width: min(300px, calc(100vw - 32px)); overflow-wrap: anywhere; }
+.ns .map-card * { white-space: normal; }
+.ns .map-card .kbd { white-space: nowrap; }

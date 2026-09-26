@@ -50,18 +50,19 @@ class Pool:
         try:
             conn = psycopg.connect(self.url, connect_timeout=self.connect_timeout)
         except psycopg.Error as e:
-            raise DbUnavailable(type(e).__name__) from None
+            raise DbUnavailable(type(e).__name__, reason(e, "connect")) from None
         _configure(conn)
         return conn
 
     @contextmanager
     def connection(self):
+        reused = True
         try:
             conn = self.idle.get_nowait()
             if conn.closed or conn.broken:
-                conn = self._new()
+                conn, reused = self._new(), False
         except queue.Empty:
-            conn = self._new()
+            conn, reused = self._new(), False
         ok = False
         try:
             yield conn
@@ -69,7 +70,7 @@ class Pool:
             ok = True
         except psycopg.OperationalError as e:
             conn.close()
-            raise DbUnavailable(type(e).__name__) from None
+            raise DbUnavailable(type(e).__name__, reason(e, "reused" if reused else "query"), stale=reused) from None
         finally:
             if not ok and not conn.closed:
                 conn.rollback()
@@ -80,9 +81,38 @@ class Pool:
                     conn.close()
 
     def close(self):
+        """Close every idle connection (also used to drop stale ones after the pooler cut an idle connection)."""
         while not self.idle.empty():
-            self.idle.get_nowait().close()
+            try:
+                self.idle.get_nowait().close()
+            except Exception:
+                pass
+
+
+def reason(err, phase):
+    """A short, secret-free cause for the log (libpq messages can echo host / user, so only keywords are kept)."""
+    m = str(err).lower()
+    if "timeout" in m or "timed out" in m:
+        cause = "network timeout"
+    elif "could not translate host" in m or "name or service not known" in m or "getaddrinfo" in m:
+        cause = "DNS lookup failed (no network?)"
+    elif "refused" in m or "unreachable" in m or "no route" in m:
+        cause = "network refused / unreachable"
+    elif "max client" in m or "too many" in m or "remaining connection slots" in m:
+        cause = "Supabase pooler connection limit"
+    elif "ssl" in m or "closed" in m or "terminat" in m or "eof" in m or "reset" in m:
+        cause = "the server closed the connection (Supabase pooler idle timeout)" if phase == "reused" \
+            else "the server closed the connection"
+    else:
+        cause = "unreachable"
+    where = {"connect": "while connecting", "reused": "on a reused idle connection", "query": "during a query"}[phase]
+    return f"{type(err).__name__} {where}: {cause}"
 
 
 class DbUnavailable(RuntimeError):
-    """The database cannot be reached (paused, offline, bad URL). Message = error class only, never the URL."""
+    """The database cannot be reached (paused, offline, bad URL). Message = error class only, never the URL.
+    `reason` = secret-free cause for the log; `stale` = it failed on a reused idle connection (worth one quiet retry)."""
+
+    def __init__(self, msg, reason_text=None, stale=False):
+        super().__init__(msg)
+        self.reason, self.stale = reason_text or msg, stale

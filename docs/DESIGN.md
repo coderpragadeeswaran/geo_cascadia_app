@@ -1,8 +1,9 @@
-# Night Survey — design system (proposal)
+# Night Survey — design system
 
-Status: **preview only** at `http://localhost:5173/design-preview`. The real pages are unchanged until approved.
-Single source of tokens: [`web/src/design/tokens.ts`](../web/src/design/tokens.ts) (CSS variables are generated from it;
-deck.gl reads the same values).
+Status: **approved and applied to the app** (design pass B, docs/DECISIONS.md D15–D20). The proposal stays at
+`http://localhost:5173/design-preview` as the reference route.
+Single source of tokens: [`web/src/design/tokens.ts`](../web/src/design/tokens.ts). `applyMode()` (`design/mode.ts`)
+writes the CSS variables onto `<html>`, the Tailwind colour names are aliases of them, and deck.gl reads the same values.
 
 ## Concept
 The city at night, lit by its own streetlights. The base is deep night indigo, never neutral grey. The one accent is
@@ -21,9 +22,9 @@ only when there is a question or a selection.
 | `bg0` | `#070a14` | `#f4f0e6` | page / map surround |
 | `bg1` | `#0b1020` | `#fbf8f1` | panels (flat) |
 | `bg2` | `#121936` | `#ffffff` | sheets, popovers |
-| `ink` / `ink2` / `ink3` | `#ebe6da` / `#a9b0c7` / `#6b7391` | `#1b1f2a` / `#4c5366` / `#858a99` | text hierarchy |
+| `ink` / `ink2` / `ink3` | `#ebe6da` / `#bec4d9` / `#9098b5` | `#1b1f2a` / `#3d4356` / `#5b6070` | text hierarchy; every step ≥ 4.5:1 (WCAG AA) on every surface |
 | `line` / `lineStrong` | 13 % / 28 % of `#a0afdc` | 12 % / 30 % of ink | rules |
-| `sodium` | `#ffa23a` | `#b65c09` | the only accent: lights, selection, primary action |
+| `sodium` | `#ffa23a` | `#9c4e07` | the only accent: lights, selection, primary action (daylight darkened for text contrast) |
 | `sodiumGlow` | `#ffc27a` | `#e08a2a` | lamp halos, lit roads |
 | `matched` | `#6a7fb0` dusk slate | `#8e9dc4` | nothing wrong, recedes |
 | `discrepancy` | `#7dcad6` glacier | `#00849f` | soft cool / deep teal |
@@ -62,13 +63,13 @@ with the sodium accent included because it shares the map with the statuses, che
 
 | style | family | size / line | weight | width |
 |---|---|---|---|---|
-| display | Anek Tamil | 30 / 1.0 | 640 | 78 % |
-| title | Anek Tamil | 18 / 1.15 | 600 | 85 % |
-| body | Anek Tamil | 14 / 1.4 | 420 | 100 % |
-| small | Anek Tamil | 12.5 / 1.35 | 430 | 100 % |
-| micro (caps, +0.12em) | Anek Tamil | 10.5 / 1.2 | 600 | 110 % |
-| figure (KPIs) | Martian Mono | 24 / 1.0 | 300 | 100 % |
-| data (IDs, metres) | Martian Mono | 11.5 / 1.3 | 400 | 90 % |
+| display | Anek Tamil | 32 / 1.0 | 640 | 78 % |
+| title | Anek Tamil | 20 / 1.15 | 600 | 85 % |
+| body | Anek Tamil | 17 / 1.45 | 420 | 100 % |
+| small | Anek Tamil | 15 / 1.4 | 430 | 100 % |
+| micro (caps, +0.1em) | Anek Tamil | 13 / 1.2 | 600 | 105 % |
+| figure (KPIs) | Martian Mono | 26 / 1.0 | 300 | 100 % |
+| data (IDs, metres) | Martian Mono | 14 / 1.3 | 400 | 90 % |
 
 ## Space, radii, motion
 - **Space:** 4-pt steps `2 4 8 12 16 24 32 48`.
@@ -84,9 +85,9 @@ with the sodium accent included because it shares the map with the statuses, che
 | **streetlight gap (60 m)** | **dark band** (`dark`) with a cold edge | heavy ink band |
 | gap to check (D13) | dark band + dotted chalk edge | same |
 | streetlight | glowing orb (additive halo), fades on | sodium dot |
-| pole without lamp | street level: small unlit dot · area level: barely visible | street level only (hidden at area level) |
-| building, area level | findings only (peony / glacier points); matched faint | findings only; matched hidden |
-| unmapped business, area level | hollow ring | hidden (shown from street level) |
+| pole without lamp | street level only: small unlit dot | street level only |
+| building, area level | findings only (peony / glacier points); matched from street level | same |
+| unmapped business | hollow ring, from street level | same |
 | building, street level | extruded by floors, status colour; no floors → flat + hatched | same |
 | unmapped business | hollow ring (approximate) | same |
 | selection | sodium outline | sodium outline |
@@ -106,12 +107,15 @@ with the sodium accent included because it shares the map with the statuses, che
 6. **Street View coverage lines only in Analyse mode**, and only near the cursor. The map dims like a flashlight
    outside a 150 px circle around the pointer (`.flashlight`).
 7. Status colour only where there is a status. Everything else is ink.
-8. **Area level: lit vs dark roads are the dominant read.** Poles are nearly invisible at night and hidden in daylight,
-   and matched buildings and unmapped rings are hidden in daylight. All of them return at street level.
+8. **Area level: lit vs dark roads are the dominant read.** Poles, matched buildings and unmapped-business rings appear
+   only from street level, in both modes (pass B; the preview still showed them faintly at night).
+9. **Two audiences** (D16): user screens speak plain language; technical detail is behind "How do we know?" and on the
+   verifier pages (Under the Hood, Trust).
 
 ## App structure
-- **The map is home.** Explore and Analyse are modes of the map, never separate pages. At most **one panel** is open:
-  a question's result, a selection's evidence, or a KPI's findings list.
+- **The map is home.** Explore, Analyse and Drive the street are modes of the map, never separate pages. At most **one
+  panel** is open: a selection's evidence, a drive, a question's result, a key number's list, a street, or "What stands
+  out" (`store/ui.ts` `panelOf`). It stops above Google's attribution.
 - **A 64 px left rail** (icon + label) reaches **Review · Under the Hood · Trust · Jobs**. The active item is marked
   with a sodium bar, and the rail holds no other chrome.
 - **Review:** queue (priority first) | the evidence view with its box | the decision column (A / R / E, J / K).
@@ -120,7 +124,8 @@ with the sodium accent included because it shares the map with the statuses, che
 - **Jobs:** pre-computed runs, plus analyses started from the app, with an honest empty state and worker status.
 
 ## Drive the street
-Select a street; a scrubber moves the camera **through the pipeline's real camera stops**.
+Select a street → **Drive this street**; a scrubber moves the camera **through the pipeline's real camera stops**, in
+driving order per branch (D20: stops ordered along the merged road line, strictly forward; forward = road tangent).
 - **Road strip:** the whole street at once. The road is sodium where lit and a dark band on each gap, with lamp ticks,
   buildings above (left side) and below (right side), and camera-stop ticks.
 - **Controls:** drag, click, ←/→ to step, or ▶ Drive to play one stop every 1.3 s (1.6 s with reduced motion).
@@ -132,9 +137,11 @@ Select a street; a scrubber moves the camera **through the pipeline's real camer
     lamp X m";
   - "Passing now": buildings, lamps and unmapped businesses within 20 m, animating in and out;
   - counts so far.
-- **Data:** `tools/export_drive_street.py` writes `web/src/design/data/ward29-sathy-drive.json` (Sathy Main Road main
-  line, 803 m, 39 stops, 2 gaps, 13 lamps, 43 buildings: all real). The real feature would read the camera stops
-  from an API endpoint instead of a bundled file.
+- **Data:** `GET /areas/{slug}/drive?street=` (backend/app/drive.py). The preview's bundled file
+  (`web/src/design/data/ward29-sathy-drive.json`, from `tools/export_drive_street.py`) keeps the old, flawed ordering
+  (39 stops interleaving the side piece) and is used by `/design-preview` only.
+- **In the app:** the map follows the camera with a direction arrow and a view wedge; Forward / Left / Right view; the
+  next stop's image is preloaded; the panel says each stop you stop at loads one billed Street View image.
 
 ## Under the Hood as a scroll story
 Seven chapters, each a big counted-up figure, one sentence and a kept-vs-dropped bar (kept = sodium, dropped =
@@ -164,7 +171,14 @@ confirms every ID, styler and colour against that list.
 | `docs/map-styles/daylight.json` | `light` | the Map ID's **light-mode** style | paper palette |
 
 Both files hide POI pins and labels, transit stations, 2D and 3D Google buildings (commercial included), business
-corridors, road shields and signs, parking aisles and land parcels.
+corridors, road shields and signs, parking aisles and land-parcel lines, and **mute the green** of parks, sports
+fields, golf courses, nature reserves, cemeteries and land cover (forest, shrub, crops) to the land's own tone, so no
+green competes with sodium. `npm run map-styles` checks every rule against Google's schema
+(`developers.google.com/static/maps/cbms-json-schema.json`, copied into `CLOUD_STYLERS`) and refuses invalid stylers.
+
+**Re-upload both files after design pass B:** the park muting is new, and the pass-A files had one rule the schema
+does not allow (`political.landParcel` with a label styler; now `geometry.visible: false`). In Map Styles open each
+style, replace its JSON with the new file (or create new styles and swap them on the Map ID), then Publish.
 
 A style's mode comes from `variant` and cannot be changed after creation. A Map ID takes exactly one light-mode and
 one dark-mode style, and the app picks one with `colorScheme` (DARK = night, LIGHT = daylight).
@@ -199,9 +213,11 @@ of the same colours, because the JS `styles` option only accepts that format.
 
 ## Files
 - `web/src/design/tokens.ts`: all tokens and **one** base-map palette (`mapBase`). It feeds `mapStyleJson`
-  (legacy array, preview raster map only) and `cloudMapStyle()` (new Cloud JSON). `npm run map-styles` writes
-  `docs/map-styles/{night,daylight}.json`.
-- `web/src/design/night-survey.css`: scoped `.ns` base styles and the font imports.
-- `web/src/design/nsLayers.ts`: the map layers above.
+  (legacy array, preview raster map only) and `cloudMapStyle()` (new Cloud JSON, checked by `CLOUD_STYLERS`).
+  `npm run map-styles` writes `docs/map-styles/{night,daylight}.json`. `design/mode.ts` applies a mode to `<html>`.
+- `web/src/design/night-survey.css`: `.ns` base styles (on `<body>` in the app) and the font imports;
+  `web/src/index.css` maps the Tailwind colour names onto the tokens.
+- `web/src/map/layers.ts`: the app's map layers in this language (the preview's `nsLayers.ts` is kept for
+  `/design-preview`).
 - `web/src/design/NsParts.tsx`, `NsShell.tsx`, `NsDrive.tsx`, `NsStory.tsx`, `DesignPreview.tsx`: the preview.
 - `tools/export_drive_street.py`: builds the drive data from `plan.json`, `streets.json` and `export.json`.

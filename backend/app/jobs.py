@@ -1,6 +1,7 @@
 """Jobs (analyse a new street) and the Colab worker protocol (CLAUDE.md §7-8).
 
-A street click is resolved on the laptop with geo_cascadia.picker.click_to_street (Overpass + geometry, light).
+A street click is resolved on the laptop by app/streetpick.py (a port of geo_cascadia.picker.click_to_street: analysed
+areas answer from their own streets.json, Overpass with a 15 s budget, a disk cache, display names, overlap check).
 The job stores the polygon (GeoJSON, lon/lat), OSM way ids and an output slug, so the worker can call run_area directly.
 Jobs need the database: in offline data mode, creating/claiming jobs returns 503.
 """
@@ -14,16 +15,15 @@ import subprocess
 import sys
 import time
 import uuid
-from types import SimpleNamespace
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
-from shapely.geometry import Point, mapping, shape
+from shapely.geometry import mapping, shape
 from shapely.ops import transform
 from shapely.validation import explain_validity
 
-from . import loader, views
+from . import loader, streetpick, views
 from .store import Data, OfflineError
 
 router = APIRouter()
@@ -77,24 +77,22 @@ def _area_km2(poly):
     return transform(lambda x, y, z=None: ((x - c.x) * kx, (y - c.y) * ky), poly).area
 
 
-def _existing_areas(D, lat, lon):
+def _bundles(D):
     try:
-        cards, _ = D.read(lambda s: [(b["slug"], b["polygon"]) for b in (s.bundle(x) for x in s.slugs()) if b])
+        res, _ = D.read(lambda s: [b for b in (s.bundle(x) for x in s.slugs()) if b])
+        return res
     except Exception:
         return []
-    p = Point(lon, lat)
-    return [slug for slug, poly in cards if poly and shape(poly).contains(p)]
 
 
-def pick_street(settings, lat, lon):
-    from geo_cascadia.picker import click_to_street
-    cfg = SimpleNamespace(data_dir=os.path.join(settings.data_dir, "cache"))
+def pick_street(settings, D, lat, lon):
+    """The street under a click (streetpick.pick): 422 when there is no road, 503 when OpenStreetMap is busy."""
     try:
-        poly, way_ids, info = click_to_street(lat, lon, cfg)
-    except RuntimeError as e:
-        msg = str(e)
-        raise HTTPException(503 if "Overpass" in msg else 422, msg) from None
-    return {**info, "way_ids": way_ids, "polygon": mapping(poly)}
+        return streetpick.pick(os.path.join(settings.data_dir, "cache", "streetpick"), _bundles(D), lat, lon)
+    except streetpick.NoRoad as e:
+        raise HTTPException(422, str(e)) from None
+    except streetpick.OverpassBusy as e:
+        raise HTTPException(503, str(e)) from None
 
 
 # ------------------------------------------------------------------------------------------------ jobs
@@ -108,18 +106,33 @@ class JobIn(BaseModel):
     lon: Optional[float] = Field(None, ge=-180, le=180)
     polygon: Optional[dict] = Field(None, description="GeoJSON Polygon (lon/lat)")
     name: Optional[str] = Field(None, max_length=120)
+    lines: Optional[dict] = Field(None, description="with {lat, lon}: the trimmed stretch of the clicked street (GeoJSON "
+                                  "LineString / MultiLineString, lon/lat); the job polygon is rebuilt from it")
+
+
+class EstimateIn(BaseModel):
+    length_m: float = Field(gt=0, le=20000, examples=[420])
 
 
 @router.post("/jobs/preview", tags=["jobs"])
 def job_preview(body: ClickIn, request: Request, D: Data = Depends(get_data)):
     """Resolve a map click to the street it lands on (no job created) — for the confirm sheet."""
-    res = pick_street(request.app.state.settings, body.lat, body.lon)
+    res = pick_street(request.app.state.settings, D, body.lat, body.lon)
+    return {"offline": not D.db_online, **res, "estimate": _estimate(request, D, res.get("length_m"))}
+
+
+def _estimate(request, D, length_m):
     try:
         ref, _ = D.read(lambda s: s.bundle("ward29"))
     except Exception:
         ref = None
-    est = views.job_estimate(res.get("length_m"), ref, request.app.state.model_card.get())
-    return {"offline": not D.db_online, **res, "estimate": est, "already_analysed_in": _existing_areas(D, body.lat, body.lon)}
+    return views.job_estimate(length_m, ref, request.app.state.model_card.get())
+
+
+@router.post("/jobs/estimate", tags=["jobs"])
+def job_estimate(body: EstimateIn, request: Request, D: Data = Depends(get_data)):
+    """Estimate for a stretch of this length (live while the end dots are dragged): same rule as the preview."""
+    return {"offline": not D.db_online, "length_m": round(body.length_m), "estimate": _estimate(request, D, body.length_m)}
 
 
 @router.post("/jobs", tags=["jobs"], status_code=201)
@@ -142,7 +155,12 @@ def job_create(body: JobIn, request: Request, D: Data = Depends(get_data)):
         name = body.name or "Drawn area"
         kind, inp = "polygon", {"polygon": mapping(poly), "name": name, "street": name, "area_km2": round(km2, 3)}
     elif body.lat is not None and body.lon is not None:
-        pick = pick_street(settings, body.lat, body.lon)
+        pick = pick_street(settings, D, body.lat, body.lon)
+        if body.lines is not None:
+            try:
+                pick = streetpick.trim(pick, body.lines)
+            except ValueError as e:
+                raise HTTPException(422, str(e)) from None
         kind, inp = "street_click", {"click": {"lat": body.lat, "lon": body.lon}, **pick,
                                      "name": body.name or pick["street"]}
     else:

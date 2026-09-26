@@ -13,7 +13,8 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response
   try {
     res = await fetch(`${API_URL}${path}`, init)
-  } catch {
+  } catch (e) {
+    if (init?.signal?.aborted) throw e                 // cancelled by the caller: not an outage
     useUi.getState().setApiReachable(false)
     throw new ApiError('API unreachable', 0)
   }

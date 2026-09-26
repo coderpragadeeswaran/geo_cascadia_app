@@ -53,7 +53,13 @@ def test_job_estimate_scales_ward29_by_length(online):
     e = views.job_estimate(1000, b, mc)
     ref_len = sum(s["length_m"] for s in b["streets"])
     assert e["street_view_images"] == round(1000 * 1154 / ref_len)
-    assert e["gpu_minutes"] == round(11.5 * 1000 / ref_len, 1) and e["cpu_minutes_full_ocr"] == 18 and e["is_estimate"]
+    assert e["gpu_minutes"] == round(11.5 * 1000 / ref_len, 1) and e["is_estimate"]
+    # design pass B §3: CPU minutes scale with length too (model_card: 18 min per street; a Ward 29 street averages ref/10)
+    per_street = ref_len / len(b["streets"])
+    assert e["cpu_minutes_full_ocr"] == round(18 * 1000 / per_street)
+    short, long_ = views.job_estimate(282, b, mc), views.job_estimate(1161, b, mc)
+    assert short["cpu_minutes_full_ocr"] < 18 < long_["cpu_minutes_full_ocr"]
+    assert short["cpu_minutes_fast_ocr"] == f"{round(3 * 282 / per_street)}–{round(5 * 282 / per_street)}"
     assert views.job_estimate(1000, None, mc) is None
 
 

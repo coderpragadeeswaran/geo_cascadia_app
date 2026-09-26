@@ -1,8 +1,8 @@
-/** Minimap without a second Google map (D3: one map instance): the area outline, streets and the current view. */
+/** Optional minimap (off by default, docs/DESIGN.md) without a second Google map (D3: one map instance): the area
+ *  outline, the analysed streets and the current view; in Street View it shows the panorama camera. */
 import { useMap } from '@vis.gl/react-google-maps'
 import { useMemo } from 'react'
 import { useAreaGeo, useAreas } from '@/api/queries'
-import { healthCss } from '@/map/colors'
 import { useUi } from '@/store/ui'
 
 const W = 184
@@ -38,8 +38,7 @@ export function Minimap() {
     const streets = geo.features.filter((f) => f.properties.kind === 'street').flatMap((f) => {
       const g = f.geometry as GeoJSON.MultiLineString | GeoJSON.LineString
       const lines = g.type === 'MultiLineString' ? g.coordinates : [g.coordinates]
-      const per = (f.properties as { issues_per_km: number | null }).issues_per_km
-      return lines.map((l) => ({ d: line(l), c: per == null ? 'var(--faint)' : healthCss(per) }))
+      return lines.map((l) => ({ d: line(l), c: 'var(--ns-sodium-glow)' }))
     })
     return { outline: rings.map((r) => line(r) + 'Z').join(''), streets }
   }, [proj, a, geo])
@@ -55,36 +54,36 @@ export function Minimap() {
   const eye = sv ? proj.to(sv.lng, sv.lat) : null
 
   return (
-    <div className="glass pointer-events-auto relative overflow-hidden p-0" style={{ width: W, height: H }}>
+    <div className="sheet pointer-events-auto relative overflow-hidden p-0" style={{ width: W, height: H, background: 'var(--ns-bg1)' }}>
       <svg width={W} height={H} className="block cursor-crosshair" role="img" aria-label="Minimap: click to move the map"
         onClick={(e) => {
           const r = (e.currentTarget as SVGSVGElement).getBoundingClientRect()
           map?.panTo(proj.from(e.clientX - r.left, e.clientY - r.top))
         }}>
         <defs>
-          <clipPath id="mm-clip"><rect width={W} height={H} rx="14" /></clipPath>
+          <clipPath id="mm-clip"><rect width={W} height={H} rx="10" /></clipPath>
         </defs>
         <g clipPath="url(#mm-clip)">
-          <path d={paths.outline} fill="var(--accent-soft)" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity=".7" />
+          <path d={paths.outline} fill="var(--ns-sodium-soft)" stroke="var(--ns-sodium)" strokeWidth="1" strokeOpacity=".6" />
           {paths.streets.map((s, i) => <path key={i} d={s.d} fill="none" stroke={s.c} strokeWidth="2" strokeLinecap="round" />)}
           {view && view.w < W * 3 && (
             <rect x={view.x} y={view.y} width={Math.max(view.w, 4)} height={Math.max(view.h, 4)} fill="rgb(255 255 255 / 0.07)"
-              stroke="var(--fg)" strokeOpacity=".75" strokeWidth="1.2" rx="2" />
+              stroke="var(--ns-ink)" strokeOpacity=".75" strokeWidth="1.2" rx="2" />
           )}
           {eye && (
             <g transform={`translate(${eye[0]},${eye[1]}) rotate(${sv?.heading ?? 0})`} aria-label="Street View camera">
-              <path d="M0 0 L-9 -16 A18 18 0 0 1 9 -16 Z" fill="var(--accent)" fillOpacity=".35" />
-              <circle r="4.5" fill="#f5c542" stroke="#000" strokeWidth="1.2" />
+              <path d="M0 0 L-9 -16 A18 18 0 0 1 9 -16 Z" fill="var(--ns-sodium)" fillOpacity=".35" />
+              <circle r="4.5" fill="var(--ns-sodium)" stroke="var(--ns-bg0)" strokeWidth="1.2" />
             </g>
           )}
           {me && (
             <g transform={`translate(${me[0]},${me[1]}) rotate(${cam?.heading ?? 0})`}>
-              <path d="M0 -9 L5 3 L0 0 L-5 3Z" fill="var(--accent)" stroke="white" strokeWidth="1" />
+              <path d="M0 -9 L5 3 L0 0 L-5 3Z" fill="var(--ns-sodium)" stroke="var(--ns-bg0)" strokeWidth="1" />
             </g>
           )}
         </g>
       </svg>
-      <div className="eyebrow pointer-events-none absolute left-2.5 top-2">Overview</div>
+      <div className="t-micro pointer-events-none absolute left-2.5 top-2">Overview</div>
     </div>
   )
 }

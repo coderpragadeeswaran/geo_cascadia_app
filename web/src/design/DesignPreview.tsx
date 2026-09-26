@@ -1,5 +1,5 @@
-/** /design-preview — NIGHT SURVEY design proposal on real Ward 29 data. Preview only: the real pages are unchanged.
- *  Two map frames (area + street level) exist only on this page; the app itself keeps one map instance (D3). */
+/** /design-preview — the approved NIGHT SURVEY proposal on real Ward 29 data, kept as a reference route (the app now
+ *  uses the same tokens). Several map frames exist only on this page; the app itself keeps one map instance (D3). */
 import { GoogleMapsOverlay } from '@deck.gl/google-maps'
 import { useQuery } from '@tanstack/react-query'
 import { APIProvider, Map, useMap } from '@vis.gl/react-google-maps'
@@ -11,26 +11,13 @@ import { useAreaData } from '@/lib/useAreaData'
 import { flyTo } from '@/map/camera'
 import { splitFeatures, type Split } from '@/map/layers'
 import { useUi } from '@/store/ui'
-import './night-survey.css'
+import './fonts'
 import { NsDrive } from './NsDrive'
 import { NsShell } from './NsShell'
 import { NsStory } from './NsStory'
 import { NsAltimeter, NsAnalyseSheet, NsChart, NsEvidence, NsFindingsTable, NsGapsPanel, NsKey, NsKpis, NsTopBar } from './NsParts'
 import { nsLayers } from './nsLayers'
 import { colors, cssVars, mapStyleJson, motion, statusV1Night, type Mode } from './tokens'
-
-// Self-hosted fonts only: stop the Maps JS API from injecting its Roboto stylesheet from fonts.googleapis.com
-// (we disable Google's default UI; attribution text falls back to our font stack).
-if (typeof document !== 'undefined' && !(window as unknown as { __nsNoRoboto?: boolean }).__nsNoRoboto) {
-  ;(window as unknown as { __nsNoRoboto?: boolean }).__nsNoRoboto = true
-  const head = document.head
-  const orig = head.insertBefore.bind(head)
-  head.insertBefore = function <T extends Node>(node: T, ref: Node | null): T {
-    const href = (node as unknown as HTMLLinkElement).href
-    if (typeof href === 'string' && href.includes('fonts.googleapis.com')) return node
-    return orig(node, ref) as T
-  }
-}
 
 const Q2 = 'Show streets where no streetlight is detected within 60 m'
 const BUILDING = 'w1252504515'
@@ -67,7 +54,7 @@ function Page({ mode, setMode, mapId }: { mode: Mode; setMode: (m: Mode) => void
     <div className="ns min-h-screen overflow-y-auto" style={{ ...cssVars(mode), height: '100vh' } as React.CSSProperties}>
       <header className="rule-b mx-auto flex max-w-[1400px] flex-wrap items-end justify-between gap-4 px-6 pb-5 pt-8">
         <div>
-          <div className="t-micro sodium">Design proposal · preview only</div>
+          <div className="t-micro sodium">Approved design · reference route</div>
           <h1 className="t-display mt-2" style={{ fontSize: 44 }}>Night Survey</h1>
           <p className="t-body ink2 mt-2 max-w-[680px]">The city at night, lit by its own streetlights. Roads the pipeline analysed glow sodium orange;
             every stretch with no lamp within 60 m stays dark. Real Ward 29 data. Tokens: <span className="t-data">web/src/design/tokens.ts</span>, rationale: <span className="t-data">docs/DESIGN.md</span>.</p>

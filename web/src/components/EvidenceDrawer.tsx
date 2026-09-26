@@ -1,27 +1,26 @@
-/** Evidence drawer (CLAUDE.md §9.4.1 / test 5): the exact Street View evidence view with its box, attributes with route
- *  badges (model_card notes), the SYNTHETIC register record, Google cross-check, reasons, cost and review actions.
- *  "Live 360°" dives the map into the panorama at the stored pano / heading / pitch. */
+/** Evidence for a selected object (§10 test 5), USER view first: the Street View photo with the object's box, what we
+ *  saw in plain words, what the (synthetic) register says, and review actions. The technical detail (model routes with
+ *  model_card accuracy, confidences, positions, register ids, costs) is behind "How do we know?" (D16). */
 import { useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeft, Check, CircleSlash, Flag, Map as MapIcon, Rotate3d, X } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
-import { api, ApiError } from '@/api/client'
+import { Check, CircleSlash, Flag, Loader2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ApiError } from '@/api/client'
 import { useObjectDetail } from '@/api/queries'
 import type { AnyProps, Asset, Building, GapProps, MissingProps, ReviewItem, UnmappedBusiness } from '@/api/types'
-import { Button } from '@/components/ui/button'
+import { assetRegLabel, ASSET_REG, diffLabel, floorsText, matchLabel, reviewLabel, reviewReasons, useLabel } from '@/lib/labels'
+import { RouteLine } from '@/lib/routes'
 import { useAreaData } from '@/lib/useAreaData'
-import { RouteBadge } from '@/lib/routes'
-import { cn, fmt, fmt1 } from '@/lib/utils'
+import { cn, fmt, fmt1, plural } from '@/lib/utils'
+import { DONE_LABEL, patchReviewCaches, saveDecision, undoDecision, type Decision } from '@/lib/review'
 import { useUi } from '@/store/ui'
-import { StatusChip } from './Inspect'
-import { StreetViewImage, type EvidenceView } from './StreetViewImage'
-
-const pretty = (s: string | null | undefined) => (s ? s.replace(/_/g, ' ') : '—')
+import { EvidenceViews } from './EvidenceViews'
+import { StatusDot } from './FindingsTable'
+import { GapHow } from './GapList'
+import { Fact, HowWeKnow } from './HowWeKnow'
+import { PanelHead } from './Panel'
 
 export function EvidenceDrawer({ sel }: { sel: AnyProps }) {
-  const select = useUi((s) => s.select)
-  const dive = useUi((s) => s.dive)
-  const setDive = useUi((s) => s.setDive)
   const { records } = useAreaData()
   const body = (() => {
     switch (sel.kind) {
@@ -34,137 +33,81 @@ export function EvidenceDrawer({ sel }: { sel: AnyProps }) {
     }
   })()
   return (
-    <motion.aside key={'id' in sel ? `${sel.kind}:${sel.id}` : 'x'} initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 24 }} transition={{ type: 'spring', stiffness: 360, damping: 34 }}
-      className="flex h-full min-h-0 flex-col" aria-label="Evidence">
-      <div className="flex items-center gap-1 border-b border-glass-border px-2 py-1.5">
-        <Button size="sm" onClick={() => select(null)} aria-label="Back to findings (Esc)"><ArrowLeft /> Findings</Button>
-        <div className="flex-1" />
-        {dive && <Button size="sm" variant="accent" onClick={() => setDive(null)}><MapIcon /> Back to map</Button>}
-        <Button size="icon-sm" onClick={() => select(null)} aria-label="Close"><X /></Button>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-3.5 pb-4 pt-3">{body}</div>
-    </motion.aside>
+    <motion.div key={'id' in sel ? `${sel.kind}:${sel.id}` : 'x'} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
+      className="flex min-h-0 flex-1 flex-col" aria-label="Evidence">
+      {body}
+    </motion.div>
   )
 }
 
-const Loading = () => <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-16 animate-pulse rounded-lg bg-hover" />)}</div>
-
-function Head({ eyebrow, title, right, sub }: { eyebrow: string; title: string; right?: React.ReactNode; sub?: React.ReactNode }) {
-  return (
-    <header className="mb-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="eyebrow truncate">{eyebrow}</div>
-          <h2 className="mt-0.5 text-[16px] font-semibold leading-tight">{title}</h2>
-        </div>
-        {right}
-      </div>
-      {sub && <div className="mt-1 text-[12px] text-muted">{sub}</div>}
-    </header>
-  )
-}
-
-function Section({ title, right, children }: { title: string; right?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <section className="mt-4">
-      <div className="mb-1.5 flex items-center justify-between gap-2"><h3 className="eyebrow">{title}</h3>{right}</div>
-      {children}
-    </section>
-  )
-}
-
-function Attr({ label, value, route, note }: { label: string; value: React.ReactNode; route?: string | null; note?: React.ReactNode }) {
-  return (
-    <div className="border-b border-glass-border py-2 last:border-0">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[12px] text-muted">{label}</span>
-        <RouteBadge route={route} />
-      </div>
-      <div className="mt-0.5 text-[13.5px] font-medium">{value}</div>
-      {note && <div className="mt-0.5 text-[11px] leading-snug text-faint">{note}</div>}
-    </div>
-  )
-}
-
-const KV = ({ k, v }: { k: string; v: React.ReactNode }) => (
-  <div className="flex items-baseline justify-between gap-4 py-[3px] text-[12px]"><span className="text-muted">{k}</span><span className="tnum text-right">{v ?? '—'}</span></div>
+const Loading = () => <div className="space-y-2 p-5">{[0, 1, 2].map((i) => <div key={i} className="h-16 animate-pulse rounded-[var(--ns-r-control)] bg-line" />)}</div>
+const Body = ({ children }: { children: React.ReactNode }) => <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6">{children}</div>
+const Synthetic = () => <span className="tag">synthetic register (demo)</span>
+const Row = ({ k, children }: { k: string; children: React.ReactNode }) => (
+  <div className="grid grid-cols-[96px_1fr] items-baseline gap-3 rule-t py-2"><span className="t-small ink3">{k}</span><span>{children}</span></div>
 )
-const Synthetic = () => <span className="rounded-md border border-dashed border-glass-border px-1.5 py-0.5 text-[10px] text-muted">synthetic register (demo)</span>
+const Section = ({ title, right, children }: { title: string; right?: React.ReactNode; children: React.ReactNode }) => (
+  <section className="mt-5"><div className="mb-1 flex items-center justify-between gap-2"><h3 className="t-micro">{title}</h3>{right}</div>{children}</section>
+)
 
-/** Street View evidence with view switcher + "Live 360°" dive */
-function Evidence({ views, at, crosshair }: { views: { key: string; label: string; view: EvidenceView; note?: React.ReactNode }[]; at: { lat: number; lng: number } | null; crosshair?: boolean }) {
-  const [i, setI] = useState(0)
-  const setDive = useUi((s) => s.setDive)
-  const dive = useUi((s) => s.dive)
-  useEffect(() => setI(0), [views])
-  if (!views.length) return <div className="rounded-xl border border-dashed border-glass-border p-4 text-center text-[12px] text-muted">No Street View evidence stored for this item.</div>
-  const v = views[Math.min(i, views.length - 1)]
-  return (
-    <div>
-      <StreetViewImage view={v.view} label={v.label} crosshair={crosshair} />
-      {v.note && <p className="mt-1.5 text-[11px] leading-snug text-faint">{v.note}</p>}
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        {views.length > 1 && views.map((x, k) => (
-          <button key={x.key} onClick={() => setI(k)} className={cn('h-7 cursor-pointer rounded-lg px-2 text-[11.5px]', k === i ? 'bg-accent-soft text-accent' : 'bg-hover text-muted hover:text-fg')}>{x.label}</button>
-        ))}
-        <div className="flex-1" />
-        <Button size="sm" variant={dive ? 'subtle' : 'accent'} onClick={() => setDive(dive ? null : { pano: v.view.pano_id, heading: v.view.heading, pitch: v.view.pitch ?? 0, fov: v.view.fov ?? 90, at })}>
-          <Rotate3d /> {dive ? 'Back to map' : 'Live 360°'}
-        </Button>
-      </div>
-    </div>
-  )
+/** pipeline reason strings → plain sentences (the data, reworded; nothing added) */
+export function plainReason(r: string): string {
+  let m
+  if (r === 'building has no record') return 'No register record for this building.'
+  if ((m = /^record (\d+) floor\(s\), imagery shows (\d+)$/.exec(r))) return `The register says ${plural(+m[1], 'floor')}; the photo shows ${m[2]}.`
+  if ((m = /^record says (\w+), imagery shows (\w+)$/.exec(r))) return `The register says ${m[1].replace(/_/g, ' ')}; the photo shows ${m[2] === 'commercial' ? 'a shop or business' : m[2] === 'residential' ? 'a home' : m[2]}.`
+  if ((m = /^record pin (\d+) m from the building$/.exec(r))) return `The register’s pin is ${m[1]} m away from the building.`
+  if ((m = /^record (\d+) m2 vs footprint (\d+) m2$/.exec(r))) return `The register says ${m[1]} m²; the building outline is ${m[2]} m².`
+  return r.charAt(0).toUpperCase() + r.slice(1)
 }
 
 function BuildingBody({ b }: { b: Building }) {
   const area = useUi((s) => s.area)
   const detail = useObjectDetail(area, 'building', b.id)
-  const at = b.attributes, reg = b.register, ev = b.evidence
-  const views = useMemo(() => {
-    const out: { key: string; label: string; view: EvidenceView; note?: React.ReactNode }[] = []
-    if (ev?.attribute_view) out.push({ key: 'attr', label: 'Attributes view', view: ev.attribute_view as EvidenceView })
-    if (ev?.sign_view) out.push({ key: 'sign', label: 'Sign view', view: { ...(ev.sign_view as EvidenceView) },
-      note: ev.sign_view.ocr_text ? <>OCR: “<span className="font-medium text-fg/85">{ev.sign_view.ocr_text}</span>”{ev.sign_view.ocr_conf != null && <> · conf {fmt1.format(ev.sign_view.ocr_conf)}</>}</> : undefined })
-    if (!out.length && ev?.views?.[0]) out.push({ key: 'v0', label: 'Camera view', view: { ...(ev.views[0] as EvidenceView), fov: 90 }, note: 'No detection box stored for this building; nearest camera view shown.' })
-    return out
-  }, [ev])
+  const at = b.attributes, reg = b.register
   const name = at?.name
+  const use = at?.use?.value
+  const title = name?.quality === 'good' && name.value ? name.value : `${useLabel(use) === 'Use not known' ? 'Building' : useLabel(use)} on ${b.street}`
   return (
     <>
-      <Head eyebrow={`Building · ${b.id}`} title={name?.value && name.quality === 'good' ? name.value : b.street ?? '—'}
-        right={<StatusChip s={b.match_status} />} sub={<>{b.street} · <span className="tnum">{b.lat.toFixed(5)}, {b.lon.toFixed(5)}</span></>} />
-      <Evidence views={views} at={{ lat: b.lat, lng: b.lon }} />
-      <Section title="Observed attributes">
-        <Attr label="Use" route={at?.use?.route} value={at?.use?.value ? pretty(at.use.value) : <span className="text-unclassified">not classified</span>}
-          note={!at?.use?.value ? 'No usable view for use classification (shown, never hidden).' : undefined} />
-        <Attr label="Floors" route={at?.floors?.route}
-          value={at?.floors?.value != null ? <>{at.floors.value} <span className="text-[12px] font-normal text-muted">({pretty(at.floors.status)})</span></> : <span className="text-unclassified">not measured</span>} />
-        <Attr label="Name / sign text" route={name?.route}
-          value={name?.value ? <>{name.value} <span className="text-[12px] font-normal text-muted">({pretty(name.quality)})</span></> : '—'}
-          note={ev?.sign_view?.ocr_text ? <>OCR read: “{ev.sign_view.ocr_text}”</> : undefined} />
-        {!!at?.property_identifiers?.length && <Attr label="Property identifiers (unverified)" value={at.property_identifiers.join(', ')} />}
-        {at?.shop_units != null && <Attr label="Shop units" value={String(at.shop_units)} />}
-        <p className="mt-1.5 text-[11px] text-faint">Condition: withheld (not validated, see Trust).</p>
-      </Section>
-      <Section title="Register record" right={<Synthetic />}>
-        <KV k="Property ID" v={reg?.property_id} />
-        <KV k="Recorded use · floors" v={`${pretty(reg?.record_use)} · ${reg?.record_floors ?? '—'}`} />
-        <KV k="Recorded area" v={reg?.record_area_m2 != null ? `${fmt.format(Math.round(reg.record_area_m2))} m²` : '—'} />
-        <KV k="Distance to record" v={reg?.record_dist_m != null ? `${fmt1.format(reg.record_dist_m)} m` : '—'} />
-        <KV k="Match" v={<StatusChip s={b.match_status} />} />
-        {!!b.discrepancies?.length && <KV k="Discrepancies" v={b.discrepancies.map(pretty).join(', ')} />}
-        {!!b.reasons?.length && <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[12px] text-fg/85">{b.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
-      </Section>
-      <Section title="Google cross-check">
-        <KV k="Sign name confirmed by Google" v={name?.google_confirmed ? <span className="text-matched">yes</span> : 'no'} />
-        {name?.google_place_id && <KV k="Google place" v={<PlaceName id={name.google_place_id} />} />}
-        {!!b.google_flags?.length && <KV k="Flags" v={b.google_flags.map(pretty).join(', ')} />}
-      </Section>
-      <Section title="Cost (this building)">
-        <KV k="VLM calls · cost" v={`${b.cost?.vlm_calls ?? 0} · $${(b.cost?.vlm_usd ?? 0).toFixed(4)}`} />
-      </Section>
-      <ReviewActions item={detail.data?.review_item ?? null} loading={detail.isPending} />
+      <PanelHead eyebrow="Building" title={title} sub={<StatusDot s={b.match_status} label={matchLabel(b.match_status, true)} />} />
+      <Body>
+        <EvidenceViews kind="building" id={b.id} at={{ lat: b.lat, lng: b.lon }} target="building" />
+        <Section title="What we saw">
+          <Row k="Use">{use ? <>{useLabel(use)}</> : <span className="ink3">Not known: no clear photo of the front</span>}</Row>
+          <Row k="Floors">{at?.floors?.value != null ? floorsText(at.floors.value, at.floors.status) : <span className="ink3">Not known</span>}</Row>
+          <Row k="Sign">{name?.value ? <>{name.value}{name.quality !== 'good' && <span className="ink3"> (hard to read, to double-check)</span>}</> : <span className="ink3">No sign read</span>}</Row>
+          {name?.google_confirmed && name.google_place_id && <Row k="Google Maps"><PlaceName id={name.google_place_id} /></Row>}
+          <HowWeKnow links={[{ page: 'trust', section: 'use', label: 'Use accuracy' }, { page: 'trust', section: 'floors', label: 'Floors accuracy' },
+            { page: 'trust', section: 'names', label: 'Names accuracy' }, { page: 'hood', section: 'buildings', label: 'How buildings are read' }]}>
+            <Fact k="Use"><RouteLine route={at?.use?.route} /></Fact>
+            <Fact k="Floors"><RouteLine route={at?.floors?.route} />{at?.floors?.status && <span className="ink3"> · status {at.floors.status.replace(/_/g, ' ')}</span>}</Fact>
+            <Fact k="Sign / name"><RouteLine route={name?.route} />{name?.quality && <span className="ink3"> · quality {name.quality.replace(/_/g, ' ')}</span>}</Fact>
+            {b.evidence?.sign_view?.ocr_text && <Fact k="OCR read">“{b.evidence.sign_view.ocr_text}”{b.evidence.sign_view.ocr_conf != null && <span className="ink3"> · confidence {fmt1.format(b.evidence.sign_view.ocr_conf)}</span>}</Fact>}
+            {!!at?.property_identifiers?.length && <Fact k="Door numbers">{at.property_identifiers.join(', ')} <span className="ink3">(unverified field)</span></Fact>}
+            <Fact k="Condition"><span className="ink3">withheld: not validated (see Trust)</span></Fact>
+            {!!b.google_flags?.length && <Fact k="Google check">{b.google_flags.map((f) => f.replace(/_/g, ' ')).join(' · ')}</Fact>}
+            <Fact k="Cost">{plural(b.cost?.vlm_calls ?? 0, 'VLM call')} · <span className="t-data">${(b.cost?.vlm_usd ?? 0).toFixed(4)}</span></Fact>
+            <Fact k="ID · position"><span className="t-data">{b.id} · {b.lat.toFixed(5)}, {b.lon.toFixed(5)}</span></Fact>
+          </HowWeKnow>
+        </Section>
+        <Section title="What the register says" right={<Synthetic />}>
+          {reg?.property_id ? (
+            <p className="t-body">{`${reg.record_use ? `A ${reg.record_use.replace(/_/g, ' ')}` : 'A property'}${reg.record_floors != null ? ` with ${plural(reg.record_floors, 'floor')}` : ''}.`}</p>
+          ) : <p className="t-body">No record for this building.</p>}
+          {!!b.reasons?.length && (
+            <ul className="mt-2 space-y-1">{b.reasons.map((r) => <li key={r} className="t-small flex gap-2"><span className="mt-[7px] size-1.5 shrink-0 rounded-full" style={{ background: 'var(--ns-sodium)' }} />{plainReason(r)}</li>)}</ul>
+          )}
+          <HowWeKnow links={[{ page: 'trust', section: 'matching', label: 'How matching was tested' }]}>
+            <Fact k="Property"><span className="t-data">{reg?.property_id ?? '—'}</span></Fact>
+            <Fact k="Recorded">{reg?.record_use?.replace(/_/g, ' ') ?? '—'} · {reg?.record_floors != null ? plural(reg.record_floors, 'floor') : '— floors'} · {reg?.record_area_m2 != null ? `${fmt.format(Math.round(reg.record_area_m2))} m²` : '—'}</Fact>
+            <Fact k="Record distance">{reg?.record_dist_m != null ? `${fmt1.format(reg.record_dist_m)} m from the footprint` : '—'}</Fact>
+            <Fact k="Match status">{b.match_status}{b.discrepancies?.length ? ` · ${b.discrepancies.map(diffLabel).join(', ')}` : ''}</Fact>
+            <Fact k="Register">SYNTHETIC with planted errors: no open municipal data exists</Fact>
+          </HowWeKnow>
+        </Section>
+        <ReviewActions item={detail.data?.review_item ?? null} loading={detail.isPending} finding={b.match_status} />
+      </Body>
     </>
   )
 }
@@ -172,44 +115,57 @@ function BuildingBody({ b }: { b: Building }) {
 function AssetBody({ a }: { a: Asset }) {
   const area = useUi((s) => s.area)
   const detail = useObjectDetail(area, 'asset', a.id)
-  const views = useMemo(() => (a.evidence?.views ?? []).map((v, k) => ({
-    key: `v${k}`, label: `Camera ${k + 1}${v.source === 'user' ? ' (user photo)' : ''}`, view: v as EvidenceView,
-    note: 'View aimed at the estimated position; the pipeline stores no detection box for assets.' })), [a])
   const reg = a.register
+  const pinned = a.method === 'triangulated'
   return (
     <>
-      <Head eyebrow={`${a.type === 'pole' ? 'Utility pole' : 'Streetlight'} · ${a.id}`} title={a.street ?? '—'}
-        right={<StatusChip s={reg?.status} />} sub={<span className="tnum">{a.lat.toFixed(6)}, {a.lon.toFixed(6)}</span>} />
-      <Evidence views={views} at={{ lat: a.lat, lng: a.lon }} crosshair />
-      <Section title="Detection & position">
-        <Attr label="Detected as" route={a.route} value={a.type} />
-        <Attr label="Position" value={a.method === 'triangulated' ? `triangulated from ${a.cameras_used} cameras` : 'approximate (single camera)'}
-          note={`± ${fmt1.format(a.uncertainty_m ?? 0)} m · ${a.uncertainty_basis ?? ''}`} />
-        <KV k="Confidence · detections" v={`${a.confidence ?? '—'} · ${a.n_detections ?? '—'}`} />
-      </Section>
-      <Section title="Register record" right={<Synthetic />}>
-        <KV k="Asset no." v={reg?.asset_no} />
-        <KV k="Recorded type" v={reg?.record_type} />
-        <KV k="Status" v={<StatusChip s={reg?.status} />} />
-        {!!reg?.flags?.length && <KV k="Flags" v={reg.flags.map(pretty).join(', ')} />}
-      </Section>
-      <ReviewActions item={detail.data?.review_item ?? null} loading={detail.isPending} />
+      <PanelHead eyebrow={a.type === 'streetlight' ? 'Streetlight' : 'Pole, no lamp seen'} title={a.street ?? '—'}
+        sub={<StatusDot s={ASSET_REG[reg?.status ?? '']?.status ?? null} label={assetRegLabel(reg?.status, true)} />} />
+      <Body>
+        <EvidenceViews kind="asset" id={a.id} at={{ lat: a.lat, lng: a.lon }} target={a.type === 'streetlight' ? 'lamp' : 'pole'} />
+        <Section title="What we saw">
+          <Row k="What">{a.type === 'streetlight' ? 'A streetlight (pole with a lamp)' : 'A pole with no lamp seen'}</Row>
+          <Row k="Position">{pinned ? `Pinpointed: seen from ${a.cameras_used} camera positions` : 'Approximate: seen from one camera position'}</Row>
+          <HowWeKnow links={[{ page: 'trust', section: 'detector', label: 'Detector accuracy' }, { page: 'trust', section: 'positions', label: 'Position checks' },
+            { page: 'hood', section: 'assets', label: 'How assets are located' }]}>
+            <Fact k="Detected by"><RouteLine route={a.route} /></Fact>
+            <Fact k="Method">{a.method === 'triangulated' ? `triangulated from ${plural(a.cameras_used ?? 0, 'camera')}` : `${a.method?.replace(/_/g, ' ')} (single camera)`}</Fact>
+            <Fact k="Uncertainty">± {fmt1.format(a.uncertainty_m ?? 0)} m · {a.uncertainty_basis}</Fact>
+            <Fact k="Detections">{a.n_detections ?? '—'} · confidence {a.confidence ?? '—'}</Fact>
+            <Fact k="ID · position"><span className="t-data">{a.id} · {a.lat.toFixed(6)}, {a.lon.toFixed(6)}</span></Fact>
+          </HowWeKnow>
+        </Section>
+        <Section title="What the register says" right={<Synthetic />}>
+          <p className="t-body">{reg?.status === 'matched' ? `Listed as ${reg.asset_no}.` : reg?.status === 'discrepancy' ? `Listed as ${reg.asset_no}, but it differs: ${(reg.flags ?? []).map(diffLabel).join(', ') || 'see details'}.`
+            : reg?.status === 'unrecorded_asset' ? 'Not listed in the register.' : 'Not listed; seen in one photo only, so it needs a second look before it counts as missing from the register.'}</p>
+          <HowWeKnow links={[{ page: 'trust', section: 'matching', label: 'How matching was tested' }]}>
+            <Fact k="Status">{reg?.status ?? '—'}{reg?.flags?.length ? ` · ${reg.flags.join(', ')}` : ''}</Fact>
+            <Fact k="Asset no.">{reg?.asset_no ?? '—'} · recorded type {reg?.record_type ?? '—'}</Fact>
+          </HowWeKnow>
+        </Section>
+        <ReviewActions item={detail.data?.review_item ?? null} loading={detail.isPending} />
+      </Body>
     </>
   )
 }
 
 function UnmappedBody({ u }: { u: UnmappedBusiness }) {
-  const views = useMemo(() => (u.evidence ? [{ key: 'e', label: 'Sign view', view: u.evidence as EvidenceView,
-    note: u.ocr_text ? <>OCR: “<span className="font-medium text-fg/85">{u.ocr_text}</span>”</> : undefined }] : []), [u])
   return (
     <>
-      <Head eyebrow={`Unmapped business · ${u.id}`} title={u.name ?? '—'} sub={u.street ?? undefined} />
-      <Evidence views={views} at={{ lat: u.lat, lng: u.lon }} />
-      <Section title="Why it is here">
-        <p className="text-[12px] leading-snug text-fg/85">A business sign read on frontage with no building outline in OpenStreetMap, so it has no register match.</p>
-        <KV k="Position" v={u.position ?? 'approximate'} />
-        <KV k="Sightings" v={u.sightings} />
-      </Section>
+      <PanelHead eyebrow="Business not on the map" title={u.name ?? '—'} sub={u.street ?? undefined} />
+      <Body>
+        <EvidenceViews kind="unmapped" id={u.id} at={{ lat: u.lat, lng: u.lon }} target="sign" />
+        <Section title="What we saw">
+          <p className="t-body">A shop sign was read here, but OpenStreetMap has no building outline at this spot, so it can’t be matched to the register.</p>
+          <Row k="Seen in">{u.sightings != null ? plural(u.sightings, 'photo') : '— photos'}</Row>
+          <Row k="Position">Approximate</Row>
+          <HowWeKnow links={[{ page: 'hood', section: 'signs', label: 'How signs are read' }]}>
+            <Fact k="OCR read">“{u.ocr_text}”</Fact>
+            <Fact k="Position">{u.position ?? 'approximate'} (from the camera, not a building outline)</Fact>
+            <Fact k="ID"><span className="t-data">{u.id}</span></Fact>
+          </HowWeKnow>
+        </Section>
+      </Body>
     </>
   )
 }
@@ -217,9 +173,15 @@ function UnmappedBody({ u }: { u: UnmappedBusiness }) {
 function MissingBody({ p }: { p: MissingProps }) {
   return (
     <>
-      <Head eyebrow="Register record, nothing seen" title={p.id} sub={p.street ?? undefined} right={<Synthetic />} />
-      <p className="text-[12.5px] leading-snug text-fg/85">{p.why}</p>
-      <p className="mt-2 text-[11px] text-faint">The synthetic asset register lists an asset here, but no pole or streetlight was detected within 25 m, so there is no Street View evidence to show.</p>
+      <PanelHead eyebrow="In the register, not seen" title={p.street ?? p.id} />
+      <Body>
+        <p className="t-body">The register lists a pole or light here (<span className="t-data">{p.id}</span>), but none was seen in the photos within 25 m.</p>
+        <p className="mt-2"><Synthetic /></p>
+        <HowWeKnow links={[{ page: 'trust', section: 'matching', label: 'How matching was tested' }]}>
+          <Fact k="Finding">{p.why}</Fact>
+          <Fact k="Register">SYNTHETIC: missing assets were planted to test the matcher</Fact>
+        </HowWeKnow>
+      </Body>
     </>
   )
 }
@@ -227,14 +189,12 @@ function MissingBody({ p }: { p: MissingProps }) {
 function GapBody({ p }: { p: GapProps }) {
   return (
     <>
-      <Head eyebrow="Streetlight gap · 60 m rule" title={p.street} />
-      <KV k="Length (recorded)" v={`${fmt.format(p.length_m)} m`} />
-      {p.display_mode === 'along_road' && p.along_road_m != null && p.length_differs && <KV k="Along the road" v={`≈ ${fmt.format(p.along_road_m)} m`} />}
-      <KV k="Finding" v={p.gap_type} />
-      <KV k="Poles inside" v={p.poles_inside} />
-      {p.display_mode === 'check'
-        ? <p className="mt-2 rounded-md bg-[rgb(245_165_36/0.12)] px-2.5 py-2 text-[12px] leading-snug text-discrepancy">Check: {p.note}</p>
-        : p.note && <p className="mt-2 text-[11px] leading-snug text-faint">{p.note}</p>}
+      <PanelHead eyebrow="Dark stretch" title={`${fmt.format(Math.round(p.length_m))} m of ${p.street} has no visible streetlight`} />
+      <Body>
+        <p className="t-body">{p.poles_inside ? `${plural(p.poles_inside, 'pole')} ${p.poles_inside === 1 ? 'stands' : 'stand'} here, but no lamp was seen on ${p.poles_inside === 1 ? 'it' : 'them'}.` : 'No pole or lamp was seen here.'}</p>
+        {p.display_mode === 'check' && <p className="t-small mt-2 border-l-2 pl-2 ink2" style={{ borderColor: 'var(--ns-sodium)' }}>Needs checking on the ground: the road bends here and some lights were seen part way along.</p>}
+        <GapHow g={{ ...p }} />
+      </Body>
     </>
   )
 }
@@ -255,65 +215,74 @@ function PlaceName({ id }: { id: string }) {
     })()
     return () => { off = true }
   }, [id])
-  if (err) return <span className="text-faint">lookup unavailable</span>
-  return name ? <span>{name} <span className="text-[10px] text-faint">· Google Maps</span></span> : <span className="text-faint">looking up…</span>
+  if (err) return <span className="ink3">lookup unavailable</span>
+  return name ? <span>{name} <span className="t-small ink3">· Google Maps</span></span> : <span className="ink3">looking up…</span>
 }
 
-function ReviewActions({ item, loading }: { item: ReviewItem | null; loading: boolean }) {
+function ReviewActions({ item, loading, finding }: { item: ReviewItem | null; loading: boolean; finding?: string | null }) {
   const offline = useUi((s) => s.offline)
   const qc = useQueryClient()
   const [mode, setMode] = useState<'idle' | 'appeal'>('idle')
   const [note, setNote] = useState('')
   const [photo, setPhoto] = useState<File | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState<Decision | 'undo' | null>(null)
+  const [last, setLast] = useState<{ id: number; eventId: number } | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
   if (loading) return null
-  if (!item) return <Section title="Review"><p className="text-[12px] text-muted">Not in the review queue.</p></Section>
-  const send = async (action: 'approve' | 'reject' | 'appeal') => {
-    if (!item.id) return
-    const fd = new FormData()
-    fd.set('action', action)
-    if (note.trim()) fd.set('note', note.trim())
-    if (photo) fd.set('photo', photo)
-    setBusy(true); setMsg(null)
+  if (!item) return <Section title="Review"><p className="t-small ink3">Not waiting for review.</p></Section>
+  const send = async (action: Decision) => {
+    if (!item.id || busy) return
+    setBusy(action); setMsg(null); setLast(null)
     try {
-      await api(`/review/${item.id}`, { method: 'PATCH', body: fd })
+      const row = await saveDecision(item.id, action, { note, photo })
+      patchReviewCaches(qc, row)
       setMode('idle'); setNote(''); setPhoto(null)
-      for (const k of ['detail', 'buildings', 'assets', 'review', 'geo']) qc.invalidateQueries({ queryKey: [k] })
-    } catch (e) { setMsg(e instanceof ApiError ? e.message : 'Could not save') } finally { setBusy(false) }
+      setLast({ id: item.id, eventId: row.event_id })               // Undo = exactly this item + this decision (D24)
+      setMsg(`${DONE_LABEL[action]} ✓`)
+    } catch (e) { setMsg(e instanceof ApiError ? (e.status === 503 ? 'Offline — read-only. Nothing was saved.' : e.message) : 'Could not save') } finally { setBusy(null) }
+  }
+  const undo = async () => {
+    if (!last || busy) return
+    setBusy('undo'); setMsg(null)
+    try {
+      patchReviewCaches(qc, await undoDecision(last.id, last.eventId))
+      setLast(null); setMsg('Undone: back to how it was.')
+    } catch (e) { setMsg(e instanceof ApiError ? e.message : 'Could not undo') } finally { setBusy(null) }
   }
   return (
-    <Section title="Review" right={<span className={cn('text-[11.5px] font-semibold', item.status === 'pending' ? 'text-review' : 'text-muted')}>{item.status}</span>}>
-      <ul className="mb-2 list-disc space-y-0.5 pl-4 text-[12px] text-fg/85">{item.reasons.map((r) => <li key={r}>{r}</li>)}</ul>
-      {item.note && <p className="mb-2 text-[11.5px] text-muted">Note: {item.note}</p>}
+    <Section title="Review" right={<span className={cn('t-small', item.status === 'pending' ? 'sodium' : 'ink3')}>{reviewLabel(item.status)}</span>}>
+      <p className="t-small ink2">A person should check this because: {reviewReasons(item.reasons, { match_status: finding, discrepancies: item.discrepancies }).map((r) => r.charAt(0).toLowerCase() + r.slice(1)).join('; ')}.</p>
+      {item.note && <p className="t-small ink3 mt-1">Note: {item.note}</p>}
       {offline || item.id == null ? (
-        <p className="text-[11.5px] text-discrepancy">Offline data mode: decisions are read-only.</p>
+        <p className="t-small mt-2" style={{ color: 'var(--ns-sodium)' }}>Offline — read-only. Decisions can’t be saved until the database is back.</p>
       ) : (
         <>
-          <div className="flex gap-1.5">
-            <Button size="sm" variant="subtle" disabled={busy} onClick={() => send('approve')}><Check /> Approve</Button>
-            <Button size="sm" variant="subtle" disabled={busy} onClick={() => send('reject')}><CircleSlash /> Reject</Button>
-            <Button size="sm" variant="subtle" disabled={busy} onClick={() => setMode(mode === 'appeal' ? 'idle' : 'appeal')}><Flag /> Appeal</Button>
+          <div className="mt-2 flex gap-1.5">
+            <button className="btn btn-line" disabled={!!busy} onClick={() => send('approve')}>{busy === 'approve' ? <Loader2 className="animate-spin" /> : <Check />} {busy === 'approve' ? 'Saving…' : 'Approve'}</button>
+            <button className="btn btn-line" disabled={!!busy} onClick={() => send('reject')}>{busy === 'reject' ? <Loader2 className="animate-spin" /> : <CircleSlash />} {busy === 'reject' ? 'Saving…' : 'Reject'}</button>
+            <button className="btn btn-line" disabled={!!busy} aria-pressed={mode === 'appeal'} onClick={() => setMode(mode === 'appeal' ? 'idle' : 'appeal')}><Flag /> Appeal</button>
           </div>
           <AnimatePresence>
             {mode === 'appeal' && (
               <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Appeal note (required)" rows={3}
-                  className="mt-2 w-full resize-none rounded-lg border border-glass-border bg-hover px-2.5 py-2 text-[12.5px] outline-none focus:border-accent" />
+                <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why? (required)" rows={3}
+                  className="t-small mt-2 w-full resize-none rounded-[var(--ns-r-control)] border border-line-strong bg-bg0 px-2.5 py-2 outline-none focus:border-sodium" />
                 <div className="mt-1.5 flex items-center gap-2">
-                  <label className="cursor-pointer text-[11.5px] text-muted hover:text-fg">
+                  <label className="link t-small cursor-pointer">
                     <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
                     {photo ? photo.name : '+ Photo (optional)'}
                   </label>
                   <div className="flex-1" />
-                  <Button size="sm" variant="accent" disabled={busy || !note.trim()} onClick={() => send('appeal')}>Send appeal</Button>
+                  <button className="btn btn-solid" disabled={!!busy || !note.trim()} onClick={() => send('appeal')}>{busy === 'appeal' ? 'Saving…' : 'Send appeal'}</button>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
         </>
       )}
-      {msg && <p className="mt-1.5 text-[11.5px] text-no-record">{msg}</p>}
+      {msg && <p className="t-small mt-1.5" role="status" style={{ color: msg.endsWith('✓') ? 'var(--ns-matched)' : 'var(--ns-no-record)' }}>
+        {msg}{msg.endsWith('✓') && last?.id === item.id && <> · <button className="link" onClick={undo}>Undo</button></>}</p>}
     </Section>
   )
 }
+

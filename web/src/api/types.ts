@@ -85,10 +85,30 @@ export interface ReviewItem {
   appeal_photo_path: string | null; updated_at: string | null
 }
 export type ReviewRow = ReviewItem & { area: string; object: Record<string, string | number | null> }
+/** How the rule-based parser read a question (docs/QUERY.md): what it understood, what it ignored, synonyms applied */
+export interface Understanding {
+  status: 'ok' | 'partial' | 'not_understood'
+  understood: { phrase: string; meaning: string }[]
+  ignored: string[]
+  synonyms: { from: string; to: string; street?: boolean }[]
+  /** the typed question named no street and was answered on the street the person had selected */
+  scoped_to?: string
+  suggestions: string[]
+  /** the text QueryEngine actually parsed (after synonyms) */
+  read_as: string
+}
 export interface QueryResponse {
   area: string; text: string; parsed_filters: QueryFilters; intent: QueryFilters['intent']
   rows: (Record<string, unknown> & { kind: string; id: string | number | null })[] | null
-  groups: { key: string; count: number }[] | null; total: number; why_empty: { step: string; count: number }[]
+  /** null = the answer could not be computed (e.g. a gap interval without the camera plan) — never shown as 0 */
+  groups: { key: string; count: number }[] | null; total: number | null; why_empty: { step: string; count: number }[]
+  understanding?: Understanding
+  /** dark-stretch questions: which interval, and whether the app computed it (only 60 m is stored by the pipeline) */
+  gaps?: { interval_m: number; computed: boolean; available: boolean; note: string }
+  /** a sentence that puts the count in context (e.g. businesses vs all named buildings not on Google) */
+  note?: string | null
+  /** client-side: the person accepted a partly understood question (or built it by clicking) */
+  accepted?: boolean
 }
 export interface AreaDetail extends AreaCard {
   meta: { area: string; run?: Record<string, unknown> }
@@ -102,9 +122,32 @@ export interface AreaDetail extends AreaCard {
   /** run_report.json as built by tools/build_run_report.py (pipeline-internal counts; timings are from resumed runs, D1) */
   run_report: Record<string, unknown> | null
 }
+/** POST /jobs/preview: the street under a click, resolved without creating a job (design pass B §3) */
 export interface JobPreview {
-  street: string; length_m: number; osm_ways: number; way_ids: number[]; polygon: Polygon; already_analysed_in: string[]
+  /** display name: street_names for streets of analysed areas, the OSM name outside them, never "(unnamed … #id)" */
+  street: string; name_source: 'street_names' | 'osm' | 'unnamed'; osm_name: string | null
+  length_m: number; osm_ways: number; way_ids: number[]; polygon: Polygon
+  /** the exact snapped street geometry (lon/lat) */
+  lines: import('geojson').MultiLineString
+  /** where the street geometry came from: an analysed area's streets.json, the Overpass cache, or a live Overpass call */
+  source: 'area' | 'cache' | 'overpass'
+  /** the clicked street overlaps a street already analysed (same OSM ways, or ≥ 30 % of its length within 15 m) */
+  already: { slug: string; area: string; street: string; by: 'way_ids' | 'geometry'; overlap: number }[]
+  already_analysed_in: string[]
+  /** set when OpenStreetMap was busy and the nearest already-analysed street is offered instead */
+  note?: string
   estimate: null | { street_view_images: number; street_view_usd: number | null; gpu_minutes: number | null
     cpu_minutes_full_ocr: number | null; cpu_minutes_fast_ocr: string | null; basis: string; is_estimate: true }
+}
+/** one evidence photo with every detection box on it (GET /areas/{slug}/evidence/{kind}/{id}) */
+export interface EvidenceBox {
+  cls: 'building' | 'pole' | 'lamp_head' | 'signboard'; conf: number; x1: number; y1: number; x2: number; y2: number
+  geom_ok: boolean; target: boolean; from_heading?: number
+}
+export interface EvidenceViewData {
+  key: string; label: string; pano_id: string; heading: number; pitch: number; fov: number
+  /** exact = the pipeline's own view; projected = an aimed asset view with boxes projected from the same panorama */
+  source: 'exact' | 'projected' | 'none'; projected_from?: number[]
+  boxes: EvidenceBox[]; target: 'box' | 'record_box' | 'crosshair' | 'none'; note: string | null; aim_offset_deg?: number
 }
 export interface JobFull extends Job { message: string | null; created_at: string | null; started_at: string | null; finished_at: string | null }
