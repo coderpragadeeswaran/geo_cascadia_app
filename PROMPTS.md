@@ -72,20 +72,42 @@ Jobs page.
 Verify acceptance test 7 and a review round-trip (approve an item, reload, it stays approved, map updates).
 Never print secrets. Run python tools/verify_setup.py (0 fail). Stop, list what I should check, and wait.
 ```
-
 ## P6 — worker + live analysis
 ```
-Do phase P6. Read docs/DECISIONS.md first.
-Write worker/colab_worker.py as ONE Colab cell I paste after my existing setup cells (S0, S1a, S1b, which define D, PKG, cfg, run_area).
-- Reads BACKEND_URL, WORKER_TOKEN and GOOGLE_MAPS_KEY (server key) via getpass; never prints them.
-- Heartbeat, claim jobs, run click_to_street / polygon → run_area with a progress callback posting to /worker/progress.
+Do phase P6. Read docs/DECISIONS.md first. Use the design system from the design pass for all new UI.
+
+GOAL: click any street in the app → a worker runs the real pipeline → results appear on the map like the 3 existing areas. I run the worker MANUALLY; you only write the code.
+
+WORKER (worker/colab_worker.py = ONE cell I paste after my existing setup cells S0, S1a, S1b, which define D, PKG, cfg, run_area):
+- Runs anywhere with the same code: Colab GPU, Kaggle GPU, or my laptop CPU. Auto-detect device; on CPU default to fast OCR mode and say so.
+- Account-agnostic: I switch between Google accounts when GPU time runs out. Model weights and the pipeline package load from a configurable path OR a shared download link (input at startup), so a fresh account works with no code changes. No Drive paths hard-coded.
+- At startup, ask via getpass/input for: BACKEND_URL (cloudflared tunnel URL, changes every restart), WORKER_TOKEN, AWS keys, GOOGLE_MAPS_KEY (server key). Never print or log them.
+- Heartbeat every ~15 s; claim one job at a time; run click_to_street / polygon → run_area with a progress callback posting stage + % to /worker/progress.
 - Upload export.json + all run .json files to /worker/result.
-- Map NO_STREET_VIEW / NO_STREETS / NO_CAMERAS and "AWS token expired" to job statuses per CLAUDE.md §8; loop.
-- Handles a changed tunnel URL (BACKEND_URL is a variable, re-enterable).
-Backend: /worker/result saves to data/areas/<slug>/, runs build_run_report, loads via the existing loader.
-UI: live progress animation along the street; "worker offline" state.
-Give me exact steps: start API, start cloudflared quick tunnel, add the tunnel URL to the Maps key website restrictions and CORS_ORIGINS, paste URL into the Colab cell, click a street.
-Never print secrets. Run python tools/verify_setup.py (0 fail). Stop, list what I should check, and wait.
+- Map NO_STREET_VIEW / NO_STREETS / NO_CAMERAS and "AWS token expired" to job statuses per CLAUDE.md §8. On AWS expiry: pause, ask for new keys in the cell, resume the same job without losing work.
+- If BACKEND_URL stops responding (tunnel restarted), let me re-enter it without restarting the cell.
+- Loop until stopped.
+
+BACKEND:
+- /worker/result saves to data/areas/<slug>/, runs build_run_report, loads via the existing loader, and applies the same street_names join, gap display rules and low-coverage banner logic as the existing areas.
+- If a worker's heartbeat stops mid-job (account switched / Colab died), the job returns to the queue as "interrupted, will resume" and another worker session can pick it up.
+- New runs are fresh, not resumed: their stage timings and Street View request counts are REAL, so show them on Under the Hood WITHOUT the "resumed run" badge. Keep the badge only for the 3 original areas.
+- Show the real cost of each new run (Street View requests × price from model_card, VLM calls/cost).
+- Cap: one street at a time, drawn areas ≤1.5 km² (as D11).
+
+UI:
+- "Worker connected / disconnected" indicator in the top bar, with device (GPU/CPU) and which run it's on. Switching accounts must just show disconnected → connected.
+- Live progress animation along the clicked street, stage by stage, with elapsed time and an honest ETA (GPU vs CPU).
+- Queue state when no worker: "queued, waiting for a worker", never a fake spinner.
+- When done, fly to the new area and show the same area card, coverage banner and layers.
+
+TESTING WITHOUT COLAB:
+- Add a fake worker script (worker/fake_worker.py) that claims a job and replays an existing area's files with fake progress, so the whole flow can be tested locally. pytest covers: claim, progress, interrupted → resume, result → load, AWS-expired status.
+- Also a short laptop-CPU dry run instruction for one short street.
+
+DOCS: worker/README.md with exact steps for (a) Colab, (b) Kaggle, (c) laptop CPU, and (d) switching account mid-session. Include: start API → start cloudflared quick tunnel → add the tunnel URL to CORS_ORIGINS and to the Maps browser key website restrictions → paste URL + token into the worker cell → click a street.
+
+Never print secrets. Run pytest and python tools/verify_setup.py (0 fail). Don't commit. Stop and give me the exact manual steps to do a real run, and what to check.
 ```
 
 ## P7 — polish
