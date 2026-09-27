@@ -15,6 +15,7 @@ import { useReviewRows } from '@/api/queries'
 import type { ReviewRow } from '@/api/types'
 import { EvidenceViews } from '@/components/EvidenceViews'
 import { GeoMini, type MiniPoint } from '@/components/GeoMini'
+import { ObjectMini } from '@/components/ObjectMini'
 import { ReviewerDialog } from '@/components/ReviewerName'
 import { assetRegLabel, matchLabel, reviewLabel, reviewReasons, useLabel } from '@/lib/labels'
 import { DONE_LABEL, patchReviewCaches, PHOTO_MAX_MB, PHOTO_TYPES, photoProblem, saveDecision, undoDecision, type Decision, type ReviewEvent } from '@/lib/review'
@@ -283,7 +284,10 @@ export default function Review() {
           {b && <p className="t-small">{useLabel(b.attributes?.use?.value)} · {b.attributes?.floors?.value != null ? plural(b.attributes.floors.value, 'floor') : 'floors not known'} · {matchLabel(b.match_status, true, !!b.attributes?.use?.value)} <span className="ink3">(synthetic register)</span></p>}
           {a && <p className="t-small">{a.method === 'triangulated' ? 'Pinpointed' : 'Approximate position'} · {assetRegLabel(a.register?.status, true)} <span className="ink3">(synthetic register)</span></p>}
           <div className="t-small ink3">Status: <span style={{ color: STATUS_COLOR[cur.status] }}>{reviewLabel(cur.status)}</span>{cur.status !== 'pending' && cur.reviewer ? ` by ${cur.reviewer}` : ''}{cur.status === 'appealed' && cur.note ? ` · note: ${cur.note}` : ''}</div>
-          <GeoMini streets={mini} points={miniPoints} fit="area" height={150} label="Where this item is; decisions made in this session flash here" key={flash?.key ?? 0} />
+          {(b || a) ? <ObjectMini key={`${cur.item_type}:${cur.ref_id}:${flash?.key ?? 0}`} area={area} kind={b ? 'building' : 'asset'} id={(b ?? a)!.id}
+            lat={b ? b.lat : a!.lat} lon={b ? b.lon : a!.lon} street={(b ?? a)!.street ?? null} streets={mini} buildings={records?.buildings ?? []}
+            extra={miniPoints.filter((p) => p.label !== 'now')} label="Where this item is: its street, the buildings around it, and the cameras that saw it" />
+            : <GeoMini streets={mini} points={miniPoints} fit="area" height={150} label="Where this item is; decisions made in this session flash here" key={flash?.key ?? 0} />}
 
           <div className="grid min-w-0 gap-1.5" aria-busy={busy}>
             {offline && <p className="t-small sodium">Offline — read-only</p>}

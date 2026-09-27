@@ -24,7 +24,7 @@ export function PositionMini({ b }: { b: Building }) {
   const span = Math.max(x1 - x0, y1 - y0, 12)
   const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2
   x0 = cx - span / 2; x1 = cx + span / 2; y0 = cy - span / 2; y1 = cy + span / 2
-  const k = Math.min((VW - 2 * PAD) / (x1 - x0), (VH - 2 * PAD) / (y1 - y0))
+  const k = Math.min((VW - 2 * PAD) / (x1 - x0), (VH - 2 * 32) / (y1 - y0))   // top/bottom 32 px: N and scale plates (D36)
   const sx = (x: number) => VW / 2 + (x - cx) * k, sy = (y: number) => VH / 2 - (y - cy) * k
   const bar = SCALES.find((m) => m * k >= 40) ?? SCALES[SCALES.length - 1]
   const dCentre = Math.hypot(pt[0], pt[1])

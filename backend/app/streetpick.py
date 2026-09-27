@@ -21,7 +21,7 @@ import time
 
 import requests
 from shapely.geometry import LineString, MultiLineString, Point, Polygon, mapping, shape
-from shapely.ops import transform, unary_union
+from shapely.ops import linemerge, transform, unary_union
 
 from geo_cascadia.geo import Frame
 from geo_cascadia.picker import ROADS            # same road classes as the pipeline
@@ -172,7 +172,7 @@ def pick_local(bundles, lat, lon, snap_m=LOCAL_SNAP_M):
 
 
 # ------------------------------------------------------------------ 2) Overpass (port of picker.click_to_street)
-def pick_overpass(cache_dir, lat, lon, deadline):
+def pick_overpass(cache_dir, lat, lon, deadline, google_key=None):
     """Returns (result, complete) — complete is False when the named-street extension could not be fetched."""
     F = Frame(lat, lon)
     q = f'[out:json][timeout:25];way["highway"~"{ROADS}"](around:{SEARCH_M + 8},{round(lat, 4)},{round(lon, 4)});out geom tags;'
@@ -197,12 +197,107 @@ def pick_overpass(cache_dir, lat, lon, deadline):
             complete = False                                      # keep the ways within the search circle
     line = unary_union([geom(w) for w in group])
     if name:
-        street, src = name, "osm"
+        street, src = tidy(name), "osm"
     else:
-        near = sorted((geom(w).distance(Point(0, 0)), w["tags"]["name"]) for w in ways if (w.get("tags") or {}).get("name"))
-        street = "Unnamed road" + (f" near {near[0][1]}" if near else "")
+        # the named roads at the unnamed road's two ends (they can lie outside the search circle): one small query
+        named = [w for w in ways if (w.get("tags") or {}).get("name")]
+        ends = end_points(line)
+        els3 = []
+        if ends:
+            pts = [F.ll(p.x, p.y) for p in ends]
+            # every road at the two ends: named ones name it; unnamed ones may have a name on Google Maps
+            q3 = ("[out:json][timeout:25];(" + "".join(f'way["highway"](around:{TOUCH_M},{la:.6f},{lo:.6f});' for la, lo in pts)
+                  + ");out geom tags;")
+            try:
+                els3, _ = overpass(q3, cache_dir, deadline)
+                named += [w for w in els3 if "geometry" in w and (w.get("tags") or {}).get("name")]
+            except OverpassBusy:
+                complete = False                                  # name from the roads within the search circle only
+        pairs = [(tidy(w["tags"]["name"]), geom(w)) for w in named]
+        if google_key:
+            pairs += google_names_at_ends(cache_dir, F, line, [geom(w) for w in ways + (els3 if ends else [])
+                                                               if "geometry" in w and w["id"] != hit["id"]
+                                                               and not (w.get("tags") or {}).get("name")], google_key)
+        street = unnamed_label(line, pairs, Point(0, 0))
         src = "unnamed"
     return _result(F, line, [w["id"] for w in group], street, src, name, source), complete
+
+
+TOUCH_M = 15                  # a named road this close to an end of an unnamed road is where it starts or ends
+GEO_URL = "https://maps.googleapis.com/maps/api/geocode/json"
+GOOGLE_TTL_S = 30 * 86400     # Google names are kept at most 30 days
+
+
+def google_names_at_ends(cache_dir, F, line, unnamed_osm, key):
+    """D36: where an end of the clicked road meets a road that has no name on OpenStreetMap, ask Google Maps for that
+    road's name (reverse geocoding, "route", 25 m along it from the junction; at most one look-up per end, cached).
+    Returns [(name, geometry)] for unnamed_label. Any failure (key not enabled for Geocoding, quota) returns nothing."""
+    out = []
+    for p in end_points(line):
+        near = [g for g in unnamed_osm if g.distance(p) <= TOUCH_M]
+        if not near:
+            continue
+        g = min(near, key=lambda x: x.distance(p))
+        s = g.project(p)
+        q = g.interpolate(s + 25 if s + 25 <= g.length else max(0.0, s - 25))
+        la, lo = F.ll(q.x, q.y)
+        path = os.path.join(cache_dir, "google_route", f"{la:.5f}_{lo:.5f}.json")
+        hit = _read_json(path)
+        if hit and time.time() - hit.get("t", 0) < GOOGLE_TTL_S:
+            name = hit.get("name")
+        else:
+            try:
+                j = requests.get(GEO_URL, params={"latlng": f"{la:.6f},{lo:.6f}", "result_type": "route", "key": key},
+                                 timeout=6).json()
+            except requests.RequestException:
+                continue
+            if j.get("status") not in ("OK", "ZERO_RESULTS"):
+                continue                                          # e.g. REQUEST_DENIED: Geocoding not enabled for the key
+            name = next((c["long_name"] for r in j.get("results", []) for c in r.get("address_components", [])
+                         if "route" in c.get("types", [])), None)
+            _write_json(path, {"t": time.time(), "name": name})
+        if name and name.lower() != "unnamed road":
+            out.append((tidy(name), g))
+    return out
+SMALL_WORDS = {"and", "of", "the", "to", "on", "in", "at", "by"}
+
+
+def tidy(name):
+    """A map name as written, only with each word capitalised when the map has it in lower case ("Union mill road" ->
+    "Union Mill Road"). Tamil or other scripts, and names already capitalised, are left exactly as they are."""
+    if not isinstance(name, str) or not name.isascii() or not any(w[:1].islower() for w in name.split()):
+        return name
+    return " ".join(w if (i and w.lower() in SMALL_WORDS) or not w[:1].islower() else w[:1].upper() + w[1:]
+                    for i, w in enumerate(name.split()))
+
+
+def end_points(line):
+    """the free ends of a (possibly multi-piece) road line"""
+    m = linemerge(line) if line.geom_type == "MultiLineString" else line
+    b = m.boundary
+    return list(b.geoms) if hasattr(b, "geoms") else ([] if b.is_empty else [b])
+
+
+def unnamed_label(line, named, click):
+    """D36: a name for a road the map has no name for, from real map names only (never invented):
+    connects two named roads -> "Unnamed road between A and B"; touches one -> "Unnamed road off A";
+    else -> "Unnamed road near <nearest named road>"; none known -> "Unnamed road".
+    `line` and the named geometries are in metres (same frame); `named` = [(name, geometry)], OpenStreetMap names first
+    (Google names for roads the map leaves unnamed after them)."""
+    named = [(n, g) for n, g in named if n and not str(n).startswith("(unnamed")]
+    if not named:
+        return "Unnamed road"
+    at_ends = []
+    for p in end_points(line):
+        d, _, n = min((round(g.distance(p), 1), i, n) for i, (n, g) in enumerate(named))   # a tie: the earlier (map) name
+        if d <= TOUCH_M and n not in at_ends:
+            at_ends.append(n)
+    if len(at_ends) >= 2:
+        return f"Unnamed road between {at_ends[0]} and {at_ends[1]}"
+    touching = at_ends or [n for d, n in sorted((g.distance(line), n) for n, g in named) if d <= 3][:1]
+    if touching:
+        return f"Unnamed road off {touching[0]}"
+    return f"Unnamed road near {min((g.distance(line), n) for n, g in named)[1]}"
 
 
 # ------------------------------------------------------------------ 3) display name + overlap with analysed streets
@@ -247,17 +342,18 @@ def plain_name(name):
     return UNNAMED_TYPED.sub("Unnamed road", name) if isinstance(name, str) else name
 
 
-def pick(cache_dir, bundles, lat, lon):
+def pick(cache_dir, bundles, lat, lon, google_key=None):
     """Resolve a click. Raises NoRoad (422) or OverpassBusy (503)."""
     res = pick_local(bundles, lat, lon)
     if res is None:
-        path = os.path.join(cache_dir, "picks", f"{round(lat, 4):.4f}_{round(lon, 4):.4f}.json")
+        # picks2: resolved clicks named by the D36 rule (the old folder holds "near" names)
+        path = os.path.join(cache_dir, "picks2", f"{round(lat, 4):.4f}_{round(lon, 4):.4f}.json")
         hit = _read_json(path)
         if hit and (hit.get("complete") or time.time() - hit.get("t", 0) < PARTIAL_TTL_S):
             res = {**hit["res"], "source": "cache"}
         else:
             try:
-                res, complete = pick_overpass(cache_dir, lat, lon, time.monotonic() + BUDGET_S)
+                res, complete = pick_overpass(cache_dir, lat, lon, time.monotonic() + BUDGET_S, google_key)
                 _write_json(path, {"complete": complete, "t": time.time(), "res": res})
             except OverpassBusy:
                 res = pick_local(bundles, lat, lon, SEARCH_M)          # busy: offer the nearest analysed street

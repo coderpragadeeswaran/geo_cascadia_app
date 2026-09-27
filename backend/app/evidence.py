@@ -127,6 +127,23 @@ class Detections:
             self._cache[slug] = idx
         return idx
 
+    def cameras(self, slug):
+        """pano_id -> {lat, lon} of the camera (panos.json), for the mini-map's camera and line of sight"""
+        path, stamp = self._read(slug, "panos.json")
+        if not path:
+            return {}
+        key = ("cams", slug)
+        with self._lock:
+            hit = self._cache.get(key)
+            if hit and hit[0] == stamp:
+                return hit[1]
+        with open(path, encoding="utf-8") as f:
+            cams = {p["pano_id"]: {"lat": p["camera_lat"], "lon": p["camera_lon"]} for p in json.load(f)
+                    if p.get("pano_id") and p.get("camera_lat") is not None}
+        with self._lock:
+            self._cache[key] = (stamp, cams)
+        return cams
+
     def bviews(self, slug):
         """building_views.json: the pipeline's own best box per footprint (the box whose sight line hits it), or {}"""
         path, stamp = self._read(slug, "building_views.json")
@@ -248,7 +265,17 @@ def _aimed_view(idx, v, label, asset_type):
 
 
 def evidence(D, bundle, kind, obj_id):
-    """All evidence views of one object, each with every detection box and the object's own box marked."""
+    """All evidence views of one object, each with every detection box and the object's own box marked, and where its
+    camera stood (`camera`: lat/lon from panos.json, null when unknown)."""
+    views = _evidence(D, bundle, kind, obj_id)
+    if views:
+        cams = D.cameras(bundle["slug"])
+        for v in views:
+            v["camera"] = cams.get(v.get("pano_id"))
+    return views
+
+
+def _evidence(D, bundle, kind, obj_id):
     idx = D.index(bundle["slug"])
     if kind == "building":
         b = next((x for x in bundle["buildings"] if x["id"] == obj_id), None)

@@ -22,6 +22,9 @@ class Settings:
     maps_browser_key: str = field(default_factory=lambda: _env("GOOGLE_MAPS_BROWSER_KEY"))
     map_id: str = field(default_factory=lambda: _env("GOOGLE_MAP_ID"))
     worker_token: str = field(default_factory=lambda: _env("WORKER_TOKEN"))
+    # server-side Google key (never sent to the browser). The street picker uses it only to name a road that has no name
+    # on OpenStreetMap where an unnamed road meets it (Geocoding API; D36). Missing / not enabled: the name is skipped.
+    google_server_key: str = field(default_factory=lambda: _env("GOOGLE_PLACES_SERVER_KEY"))
     cors_origins: list = field(default_factory=lambda: [o.strip() for o in _env("CORS_ORIGINS", "http://localhost:5173").split(",") if o.strip()])
     data_dir: str = field(default_factory=lambda: _env("GEO_DATA_DIR") or os.path.join(ROOT, "data"))
     offline_retry_s: float = 30.0      # after a DB failure, serve JSON for this long before trying the DB again

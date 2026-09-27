@@ -171,5 +171,7 @@ export interface EvidenceViewData {
   boxes: EvidenceBox[]; target: 'box' | 'record_box' | 'crosshair' | 'none'; note: string | null; aim_offset_deg?: number
   /** a plain sentence shown under the photo (e.g. why no box is marked as this building) */
   user_note?: string | null
+  /** D36: where the camera stood (from the run's panoramas), for the mini-map; null when unknown */
+  camera?: { lat: number; lon: number } | null
 }
 export interface JobFull extends Job { message: string | null; created_at: string | null; started_at: string | null; finished_at: string | null }

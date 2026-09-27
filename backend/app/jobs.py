@@ -155,7 +155,8 @@ def _bundles(D):
 def pick_street(settings, D, lat, lon):
     """The street under a click (streetpick.pick): 422 when there is no road, 503 when OpenStreetMap is busy."""
     try:
-        return streetpick.pick(os.path.join(settings.data_dir, "cache", "streetpick"), _bundles(D), lat, lon)
+        return streetpick.pick(os.path.join(settings.data_dir, "cache", "streetpick"), _bundles(D), lat, lon,
+                               google_key=settings.google_server_key)
     except streetpick.NoRoad as e:
         raise HTTPException(422, str(e)) from None
     except streetpick.OverpassBusy as e:
@@ -593,7 +594,7 @@ def worker_result(request: Request, job: str = Form(...), files: List[UploadFile
             for name, data in blobs.items():
                 with open(os.path.join(tmp, name), "wb") as fh:
                     fh.write(data)
-            fill_street_names(tmp)                  # F4: every street gets a plain display name
+            fill_street_names(tmp, j["input"])      # F4 / D36: every street gets a plain display name
             try:            # the worker's own note: did this run resume from files saved by an earlier attempt?
                 wr = json.loads(blobs["worker_run.json"]) if "worker_run.json" in blobs else {}
             except ValueError:
@@ -634,11 +635,12 @@ def is_deletable(slug):
 STREET_KEYS = ("buildings", "assets", "missing_asset_records", "streetlight_gaps", "unmapped_businesses", "review_queue")
 
 
-def fill_street_names(folder):
-    """D35 (F4): a street the pipeline could not name (no Google route name) keeps its raw OpenStreetMap label, e.g.
-    "(unnamed residential #907980850)". Give it a plain display name: "Unnamed road near <nearest named street>" (or
-    "Unnamed road"), add it to street_names.json and put it on the export's records, as the pipeline does for the names
-    it found. Display names only; no numbers change."""
+def fill_street_names(folder, job_input=None):
+    """D35/D36: a street the pipeline could not name (no Google route name) keeps its raw OpenStreetMap label, e.g.
+    "(unnamed residential #907980850)". Give it a plain display name from real map names only: the clicked street keeps
+    the name the picker gave it (it saw the roads at both ends); any other one gets streetpick.unnamed_label from the
+    run's own streets ("between A and B" / "off A" / "near A"). Added to street_names.json and put on the export's
+    records, as the pipeline does for the names it found. Display names only; no numbers change."""
     def rd(n, default):
         p = os.path.join(folder, n)
         if not os.path.isfile(p):
@@ -648,21 +650,31 @@ def fill_street_names(folder):
     streets, names, exp = rd("streets.json", []), rd("street_names.json", {}), rd("export.json", None)
     if not exp or not isinstance(streets, list):
         return
-    from shapely.geometry import LineString, MultiLineString
-    geo = {}
+    from shapely.geometry import LineString, MultiLineString, Point
+    from geo_cascadia.geo import Frame
+    geo, ways, Fr = {}, {}, None
     for st in streets:
         ls = st.get("lines_latlon")
         ls = json.loads(ls) if isinstance(ls, str) else ls
-        parts = [LineString([(p[1], p[0]) for p in l]) for l in (ls or []) if len(l) >= 2]
-        if parts:
-            geo[st["name"]] = MultiLineString(parts)
+        ls = [l for l in (ls or []) if len(l) >= 2]
+        if not ls:
+            continue
+        Fr = Fr or Frame(ls[0][0][0], ls[0][0][1])
+        geo[st["name"]] = MultiLineString([LineString([Fr.xy(p[0], p[1]) for p in l]) for l in ls])
+        w = st.get("way_ids")
+        ways[st["name"]] = set(json.loads(w) if isinstance(w, str) else (w or []))
     display = lambda raw: names.get(raw, raw)
+    ji = job_input or {}
+    job_ways, job_name = set(ji.get("way_ids") or []), ji.get("street")
     new, used = {}, set(names.values())
     for raw in geo:
         if not str(raw).startswith("(unnamed") or raw in names:
             continue
-        named = [(geo[raw].distance(g), display(n)) for n, g in geo.items() if not str(display(n)).startswith("(unnamed")]
-        base = "Unnamed road" + (f" near {min(named)[1]}" if named else "")
+        if job_name and ways.get(raw, set()) & job_ways:
+            base = job_name                                    # the clicked street: the picker's name
+        else:
+            named = [(streetpick.tidy(display(n)), g) for n, g in geo.items() if n != raw]
+            base = streetpick.unnamed_label(geo[raw], named, Point(0, 0))
         name, k = base, 2
         while name in used:
             name, k = f"{base} ({k})", k + 1

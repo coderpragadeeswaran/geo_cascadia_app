@@ -9,6 +9,7 @@ Both stores build the same per-area *bundle* (export.json shape + live review st
 import json
 import logging
 import os
+import re
 import threading
 import time
 
@@ -52,6 +53,14 @@ def review_item(**kw):
     return {k: kw.get(k) for k in REVIEW_KEYS}
 
 
+VERSION_TAG = re.compile(r"\s*\((?:v|version\s*)\d+(?:\.\d+)*\)\s*$", re.I)
+
+
+def display_area_name(name):
+    """D36: internal version tags are not part of a place's name ("Ward 29, Coimbatore (v2)" -> "Ward 29, Coimbatore")."""
+    return VERSION_TAG.sub("", name).strip() if isinstance(name, str) else name
+
+
 def assemble(slug, name, polygon_source, polygon, bbox, meta, dashboard, run_report, streets, buildings, assets, gaps,
              unmapped, missing, queue, gap_disp, source):
     """Common bundle. Applies live review state from `queue` onto the building/asset records."""
@@ -65,7 +74,7 @@ def assemble(slug, name, polygon_source, polygon, bbox, meta, dashboard, run_rep
                 rv["appeal_note"] = q["note"] if q and q["status"] == "appealed" else rv.get("appeal_note")
                 rv["appeal_photo_path"] = q["appeal_photo_path"] if q else rv.get("appeal_photo_path")
             r["review"] = rv
-    return {"slug": slug, "name": name, "polygon_source": polygon_source, "polygon": polygon, "bbox": bbox,
+    return {"slug": slug, "name": display_area_name(name), "polygon_source": polygon_source, "polygon": polygon, "bbox": bbox,
             "meta": meta, "dashboard_stored": dashboard, "run_report": run_report, "streets": streets,
             "buildings": buildings, "assets": assets, "streetlight_gaps": gaps, "unmapped_businesses": unmapped,
             "missing_asset_records": missing, "review_queue": queue, "gap_display": gap_disp or {}, "source": source}

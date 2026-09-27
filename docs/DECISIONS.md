@@ -1111,3 +1111,35 @@ its own cap if needed. The real worker always uses the clicked street's plan (`p
 
 **F13.** The mini-map scale bar and north arrow sit on small plates drawn last (`GeoMini` `ScalePlate` / `NorthPlate`,
 also used by `PositionMini`).
+
+### D36. Names for unnamed roads, object mini-maps, no version tags (after P6)
+**Unnamed roads** (`streetpick.unnamed_label`). Only real map names are used; a name is never invented.
+- A road that connects two named roads (a named road within 15 m of each end) is "Unnamed road between A and B".
+- A road that touches one named road (at an end, or crossing within 3 m) is "Unnamed road off A".
+- Otherwise it is "Unnamed road near <nearest named road>", or "Unnamed road" when none is known.
+
+How the picker applies it:
+- One extra Overpass query fetches every road at the two ends.
+- Where an end meets a road with no name on OpenStreetMap, Google's name for that road is looked up. This uses reverse
+  geocoding, "route", 25 m along it; at most one look-up per end, kept 30 days, using the server key
+  `GOOGLE_PLACES_SERVER_KEY`. On a tie, OpenStreetMap names win.
+  - The current key is **not enabled for the Geocoding API** (REQUEST_DENIED), so today these look-ups are skipped.
+    Enabling Geocoding on that key turns them on.
+- Names written in lower case on the map are capitalised word by word ("Union mill road" → "Union Mill Road"). Other
+  scripts are left as they are.
+- Resolved clicks are cached under `picks2/`; the old "near" answers are not reused.
+- New runs' streets use the same rule (`jobs.fill_street_names`). The clicked street keeps the picker's name.
+- Tiruppur check (way 954853615): the north end meets Uthukuli Road and the south end meets Union mill road (plus an
+  unnamed tertiary road). The name is therefore "Unnamed road between Uthukuli Road and Union Mill Road".
+  "KPN Colony Main Road" is not on OpenStreetMap within 3 km; it is probably Google's name for that tertiary road.
+
+**Mini-maps.**
+- Evidence views carry `camera` (lat/lon from panos.json).
+- Review's right column uses `ObjectMini`: the object, its street with the name written on it, building outlines within
+  70 m, the evidence cameras and a dashed line of sight from each, and a small key.
+- `GeoMini` fits everything into the middle band. The top and bottom 30 px are kept for the N and scale plates, so they
+  never cover the object; `PositionMini` does the same.
+- A highlighted street's name is placed where it is farthest from the object and the cameras.
+
+**Version tags.** Area names drop internal tags such as "(v2)" (`store.display_area_name`), so the map label,
+dropdown and Hood all read "Ward 29, Coimbatore". meta.area in export.json is unchanged.

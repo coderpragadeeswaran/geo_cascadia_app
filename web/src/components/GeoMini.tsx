@@ -21,12 +21,19 @@ const SCALES = [10, 20, 50, 100, 200, 500, 1000, 2000]
 const linesOf = (g: MiniStreet['geometry']): [number, number][][] =>
   !g ? [] : g.type === 'LineString' ? [g.coordinates as [number, number][]] : (g.coordinates as [number, number][][])   // [lon, lat]
 
-export function GeoMini({ streets, highlight, points = [], lines = [], polygons = [], rays = [], fit = 'items', height = 220, label, minSpanM = 160, className, lit }: {
+/** D36: the top and bottom bands hold the N and scale plates; nothing is fitted into them, so they never cover the object */
+const BAND = 30
+
+export function GeoMini({ streets, highlight, points = [], lines = [], polygons = [], rays = [], fit = 'items', height = 220, label, minSpanM = 160, className, lit, frame, streetLabel = true }: {
   streets: MiniStreet[]; highlight?: string | null; points?: MiniPoint[]; lines?: MiniLine[]; fit?: 'area' | 'items'
   polygons?: MiniPolygon[]; rays?: MiniRay[]
   height?: number; label: string; minSpanM?: number; className?: string
   /** draw every street as an analysed (lit) road */
   lit?: boolean
+  /** fit exactly these places (e.g. the object and its cameras) instead of every item */
+  frame?: { lat: number; lon: number }[]
+  /** write the highlighted street's name along it (default on) */
+  streetLabel?: boolean
 }) {
   const W = 480, H = height
   const geo = useMemo(() => {
@@ -35,7 +42,8 @@ export function GeoMini({ streets, highlight, points = [], lines = [], polygons 
     const items: [number, number][] = [...points.map((p) => [p.lon, p.lat] as [number, number]), ...lines.flatMap((l) => l.coords.map(([la, lo]) => [lo, la] as [number, number])), ...hl,
       ...rays.map((r) => [r.lon, r.lat] as [number, number]), ...rays.filter((r) => r.to).map((r) => [r.to!.lon, r.to!.lat] as [number, number]),
       ...polygons.filter((g) => g.hl).flatMap((g) => g.ring.map(([la, lo]) => [lo, la] as [number, number]))]
-    const basis = fit === 'items' && items.length ? items : all.length ? all : items
+    const framed = frame?.map((p) => [p.lon, p.lat] as [number, number]) ?? []
+    const basis = framed.length ? framed : fit === 'items' && items.length ? items : all.length ? all : items
     if (!basis.length) return null
     const lat0 = basis.reduce((a, p) => a + p[1], 0) / basis.length
     const kx = 111320 * Math.cos((lat0 * Math.PI) / 180), ky = 110540
@@ -43,16 +51,15 @@ export function GeoMini({ streets, highlight, points = [], lines = [], polygons 
     let x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys)
     const extra = fit === 'items' ? Math.max(0, ...points.map((p) => p.r_m ?? 0)) : 0
     x0 -= extra; x1 += extra; y0 -= extra; y1 += extra
-    const aspect = W / H
-    let w = Math.max(x1 - x0, minSpanM), h = Math.max(y1 - y0, minSpanM / aspect)
-    if (w / h > aspect) h = w / aspect; else w = h * aspect
-    w *= 1.18; h *= 1.18
+    // fit into the middle band only (the corners' plates sit in the top and bottom bands)
+    const iw = W - 24, ih = Math.max(40, H - 2 * BAND)
+    const w = Math.max(x1 - x0, minSpanM) * 1.15, h = Math.max(y1 - y0, (minSpanM * ih) / iw) * 1.15
     const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2
-    const k = W / w
+    const k = Math.min(iw / w, ih / h)
     const sx = (lon: number) => W / 2 + (lon * kx - cx) * k
     const sy = (lat: number) => H / 2 - (lat * ky - cy) * k
     return { sx, sy, k }
-  }, [streets, highlight, points, lines, polygons, rays, fit, H, minSpanM])
+  }, [streets, highlight, points, lines, polygons, rays, fit, H, minSpanM, frame])
   if (!geo) return <div className="t-small ink3 p-3">No geometry to draw.</div>
   const { sx, sy, k } = geo
   const path = (ls: [number, number][][]) => ls.map((l) => l.map(([lo, la], i) => `${i ? 'L' : 'M'}${sx(lo).toFixed(1)} ${sy(la).toFixed(1)}`).join('')).join('')
@@ -104,6 +111,8 @@ export function GeoMini({ streets, highlight, points = [], lines = [], polygons 
           </g>
         )
       })}
+      {streetLabel && highlight && <StreetName name={highlight} lines={streets.filter((s) => s.name === highlight).flatMap((s) => linesOf(s.geometry))}
+        sx={sx} sy={sy} W={W} H={H} avoid={[...points.map((p) => [sx(p.lon), sy(p.lat)]), ...rays.map((r) => [sx(r.lon), sy(r.lat)])] as [number, number][]} />}
       {/* F13: scale and north on their own plate, drawn last, so no label or line runs through them */}
       <ScalePlate x={8} y={H - 26} barPx={bar * k} label={bar >= 1000 ? `${bar / 1000} km` : `${bar} m`} />
       <NorthPlate x={W - 24} y={6} />
@@ -131,4 +140,25 @@ export function NorthPlate({ x, y }: { x: number; y: number }) {
       <path d={`M${x + 9} ${y + 16}v12`} stroke="var(--ns-ink2)" strokeWidth="1.5" />
     </g>
   )
+}
+
+/** D36: the street's name, written where it runs through the middle band and farthest from the object and cameras */
+function StreetName({ name, lines, sx, sy, W, H, avoid }: { name: string; lines: [number, number][][]; sx: (lon: number) => number
+  sy: (lat: number) => number; W: number; H: number; avoid: [number, number][] }) {
+  const tw = name.length * 6.6
+  let best: { x: number; y: number; score: number } | null = null
+  for (const l of lines) {
+    for (let i = 1; i < l.length; i++) {
+      for (let t = 0; t <= 1; t += 0.25) {
+        const x = sx(l[i - 1][0] + (l[i][0] - l[i - 1][0]) * t), y = sy(l[i - 1][1] + (l[i][1] - l[i - 1][1]) * t)
+        if (x < 10 || x + tw > W - 30 || y < BAND + 10 || y > H - BAND - 4) continue
+        const clear = Math.min(80, ...avoid.map(([ax, ay]) => Math.hypot(ax - (x + tw / 2), ay - y)))
+        const score = clear - Math.abs(x + tw / 2 - W / 2) * 0.05
+        if (!best || score > best.score) best = { x, y, score }
+      }
+    }
+  }
+  if (!best) return null
+  return <text x={best.x + 4} y={best.y - 7} fontSize="12" fill="var(--ns-ink)" fontFamily="var(--ns-sans)" paintOrder="stroke"
+    stroke="var(--ns-bg0)" strokeWidth="3.5" strokeLinejoin="round">{name}</text>
 }
