@@ -73,6 +73,9 @@ export interface Job {
   /** the worker's note for people, e.g. "Continuing from the saved progress" */
   note?: string | null
   approved?: boolean; device?: 'gpu' | 'cpu' | null
+  /** failed with an error (not cancelled, not "no Street View"): Retry queues the same job; the worker continues from
+   *  the progress it saved on Drive */
+  retryable?: boolean
   /** the worker's plan-time estimate when the job paused for approval (cost cap) */
   plan_estimate?: { photos?: number; usd?: number; cameras?: number; buildings?: number; cap_photos?: number; cap_usd?: number } | null
 }

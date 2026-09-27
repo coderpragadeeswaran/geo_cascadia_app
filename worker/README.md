@@ -63,6 +63,8 @@ No CORS or Maps-key change is needed: the worker talks to the API server-to-serv
 
 1. Runtime → Change runtime type → **T4 GPU**.
 2. Run your setup cells **S0** (install package), **S1a** (deps) and **S1b** (keys). They define `cfg` and `run_area`.
+   - S1a must pin transformers: `!pip install -q "transformers==4.57.6"`. The worker prints the installed version at
+     start and warns if it is not the tested one (D37).
 3. New cell: paste all of `worker/colab_worker.py`, then run it.
 4. Answer the questions:
    - *Pipeline + weights*: press **Enter** to use the setup cells, or paste the shared Drive folder link.
@@ -174,3 +176,10 @@ says it is a replay.
 - `--simulate needs-approval` computes the estimate exactly as the real worker does, from the **replayed run's own
   camera plan** (Tiruppur: 78 photos, about $0.55). That replay is under the 300-photo cap, so the fake lowers the cap for
   itself and prints that it did. A real worker uses the camera plan of the clicked street.
+
+## Retry after a failure (D37)
+
+A job that fails with an error keeps its progress: on Drive (`MyDrive/gc_worker_jobs/<job id>/`) and in the session.
+Press **Retry** on the job card or the Jobs page. The same job is queued again, and the worker continues from the
+saved stages without fetching Street View photos again. Progress is deleted when the job finishes, is cancelled or is
+removed from the list. On start, the worker asks the backend which saved folders are still needed.

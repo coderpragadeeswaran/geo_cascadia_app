@@ -31,10 +31,20 @@ STAGES = ["panoramas", "area", "plan", "detect", "geometry", "ocr", "vlm", "refe
 SUB = {"detect": "detect", "ocr": "ocr", "vlm_names": "vlm", "building_crops": "vlm", "vlm_buildings": "vlm", "places": "reference"}
 # Ward 29 reference (model card): cloud-AI spend per building with the local router, used only for the ESTIMATE
 VLM_USD_PER_BUILDING = 0.056 / 381
+# transformers versions this worker was checked with (the S1a pin). Others usually work (the pipeline handles both the
+# 4.x tensor and the 5.x output object from CLIP), but the worker says so.
+TESTED_TRANSFORMERS = ("4.57.6",)
 
 
-def ask(prompt, secret=False, default=None):
-    v = (getpass.getpass(prompt) if secret else input(prompt)).strip()
+def clean(v):
+    """A pasted URL, token or key: no spaces, tabs or line breaks anywhere, and no surrounding quotes."""
+    return "".join((v or "").split()).strip("'\"")
+
+
+def ask(prompt, secret=False, default=None, compact=True):
+    """compact: remove every space (URLs, tokens, keys). Folder paths keep inner spaces (compact=False)."""
+    v = getpass.getpass(prompt) if secret else input(prompt)
+    v = clean(v) if compact else v.strip().strip("'\"").strip()
     return v or default
 
 
@@ -63,6 +73,22 @@ def install_deps():
         os.system(f"{sys.executable} -m pip -q install " + " ".join(missing))
 
 
+def check_transformers():
+    """Print the transformers version at start; warn when it is not the tested one."""
+    try:
+        import transformers
+    except ImportError:
+        print("transformers is not installed: building use goes to the cloud model (no local router).")
+        return
+    v = transformers.__version__
+    if v in TESTED_TRANSFORMERS:
+        print(f"transformers {v} (tested).")
+    else:
+        print(f"⚠ transformers {v} is not a tested version (tested: {', '.join(TESTED_TRANSFORMERS)}). It should work, "
+              f"but to be safe put  !pip install -q \"transformers=={TESTED_TRANSFORMERS[-1]}\"  in S1a, restart the "
+              "runtime and re-run the setup cells.")
+
+
 def check_pipeline(run_area):
     """This worker needs the P6 version of the package (live progress + cost cap). An older copy on Drive lacks them."""
     params = inspect.signature(run_area).parameters
@@ -77,7 +103,9 @@ def load_pipeline():
     g = globals()
     have = "run_area" in g and "cfg" in g
     src = ask("Pipeline + weights: folder path or shared Drive folder link "
-              f"[Enter = {'use the setup cells' if have else 'required'}]: ")
+              f"[Enter = {'use the setup cells' if have else 'required'}]: ", compact=False)
+    if src and src.lower().startswith("http"):
+        src = clean(src)
     if not src and have:
         check_pipeline(g["run_area"])
         return g["cfg"], g["run_area"]
@@ -110,7 +138,8 @@ def load_pipeline():
 
 
 def keys(cfg, only_aws=False):
-    """AWS (cloud AI) and Google (Street View + Places) keys, asked without echo; kept in memory / env only."""
+    """AWS (cloud AI) and Google (Street View + Places) keys, asked without echo; kept in memory / env only. Keys from the
+    setup cells are cleaned too (a space pasted into S1b breaks signing just the same)."""
     os.environ["AWS_ACCESS_KEY_ID"] = ask("AWS access key id: ", secret=True) or os.environ.get("AWS_ACCESS_KEY_ID", "")
     os.environ["AWS_SECRET_ACCESS_KEY"] = ask("AWS secret access key: ", secret=True) or os.environ.get("AWS_SECRET_ACCESS_KEY", "")
     tok = ask("AWS session token (Enter if none): ", secret=True)
@@ -120,6 +149,10 @@ def keys(cfg, only_aws=False):
         g = ask("Google server key (Street View + Places) [Enter = keep the one from the setup cells]: ", secret=True)
         if g:
             cfg.maps_key = g
+    for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
+        if os.environ.get(k):
+            os.environ[k] = clean(os.environ[k])
+    cfg.maps_key = clean(cfg.maps_key)
     if not cfg.maps_key:
         raise SystemExit("A Google server key is needed for Street View.")
 
@@ -128,7 +161,7 @@ def keys(cfg, only_aws=False):
 class Backend:
     """Talks to the app's API through the tunnel. If the tunnel URL changed, the main loop asks for the new one."""
     def __init__(self):
-        self.url = ask("Backend URL (the https://…trycloudflare.com address): ").rstrip("/")
+        self.url = (ask("Backend URL (the https://…trycloudflare.com address): ") or "").rstrip("/")
         self.token = ask("Worker token: ", secret=True)
         self.lock = threading.Lock()
 
@@ -209,6 +242,10 @@ def sync(src, dst):
                 pass                                               # a file being written: the next sync takes it
 
 
+# files run_area saves as it goes and reuses on a resumed run (earliest first)
+STAGE_FILES = ("panos.json", "plan.json", "buildings.json", "_views_done.json", "detections.json")
+
+
 def forget(job, out):
     """The job finished or was cancelled: delete its saved progress (Drive) and its local files, photo crops included."""
     for d in (drive_dir(job), out):
@@ -224,9 +261,12 @@ def run_job(api, job, base_cfg, run_area, state):
     state["out"] = out
     saved = drive_dir(job)
     # continue from the progress saved on Drive by an earlier session of this Google account (no photo bought twice)
-    from_drive = bool(saved and os.path.isfile(os.path.join(saved, "panos.json")))
+    from_drive = bool(saved and any(os.path.isfile(os.path.join(saved, f)) for f in STAGE_FILES))
     if from_drive:
         sync(saved, out)
+    # ONE answer to "does this attempt continue?", for the printed line AND the job card's note: a stage file run_area
+    # resumes from is present
+    continuing = any(os.path.isfile(os.path.join(out, f)) for f in STAGE_FILES)
     cfg = dataclasses.replace(base_cfg)
     if cfg.device == "cpu":
         cfg.ocr_mode = CPU_OCR_MODE
@@ -243,8 +283,9 @@ def run_job(api, job, base_cfg, run_area, state):
     json.dump(note, open(note_p, "w"))
     # a note for the job card when this is not the first attempt
     people_note = None
-    if note["resumed_from_saved_files"]:
-        people_note = "Continuing from the saved progress: stages already finished are not repeated."
+    if continuing:
+        people_note = ("Continuing from the progress saved on Drive" if from_drive else "Continuing from the saved progress"
+                       ) + ": stages already finished are not repeated and photos already fetched are not bought again."
     elif job.get("resumed_claim"):
         people_note = ("Started again from the beginning: this worker has no saved progress for this street "
                        "(a different Google account, or Drive not connected).")
@@ -295,7 +336,8 @@ def run_job(api, job, base_cfg, run_area, state):
     print(f"\n▶ {name}: analysing on {cfg.device.upper()}"
           + (f" ({cfg.ocr_mode} sign reading on CPU)" if cfg.device == "cpu" else "")
           + (" - continuing from the progress saved on Drive" if from_drive else
-             " - resuming from the files saved by the last attempt" if note["resumed_from_saved_files"] else "")
+             " - resuming from the files saved by the last attempt" if continuing else
+             " - starting from the beginning (no saved progress)" if job.get("resumed_claim") else "")
           + (f"\n  progress is saved to Drive after each stage ({saved})" if saved else ""))
     post("panoramas", 0, None, force=True)
     exp, _ = run_area(poly, out, cfg, area_name=name, way_ids=inp.get("way_ids"), progress=progress,
@@ -315,6 +357,25 @@ def run_job(api, job, base_cfg, run_area, state):
             fh.close()
     forget(job, out)
     print(f"✓ {name}: done — it appears in the app's area list.")
+
+
+def prune_drive(api):
+    """Saved progress of jobs that can no longer continue (done, cancelled, removed from the list) is deleted; a failed
+    job's progress is kept for Retry. Best effort: on any trouble nothing is deleted."""
+    if not SAVE_TO_DRIVE or not os.path.isdir(DRIVE_JOBS_DIR):
+        return
+    ids = [d for d in os.listdir(DRIVE_JOBS_DIR) if os.path.isdir(os.path.join(DRIVE_JOBS_DIR, d))]
+    if not ids:
+        return
+    try:
+        keep = set(api.call("/worker/known", {"ids": ids})["keep"])
+    except Exception:
+        return
+    for d in ids:
+        if d not in keep:
+            shutil.rmtree(os.path.join(DRIVE_JOBS_DIR, d), ignore_errors=True)
+    if keep:
+        print(f"Saved progress kept on Drive for {len(keep)} unfinished or failed street(s) (Retry continues from it).")
 
 
 def plan_estimate(plan, price):
@@ -340,10 +401,12 @@ def classify(err):
 
 # ----------------------------------------------------------------------------------------------- 4. the loop
 def main():
+    check_transformers()
     cfg, run_area = load_pipeline()
     cfg = cfg.resolve() if hasattr(cfg, "resolve") else cfg
     keys(cfg)
     api = Backend()
+    prune_drive(api)
     state = {"id": f"{socket.gethostname()[:20]}-{uuid.uuid4().hex[:6]}", "job": None, "stage": None, "stop": False,
              "cancel": False, "busy": False}
     dev = cfg.device
@@ -408,8 +471,13 @@ def main():
                     print("Enter fresh AWS keys; the same job resumes from where it stopped.")
                     keys(cfg, only_aws=True)                        # the job is claimable again; its files are kept
                     resume = job["id"]
+                elif code == "FAILED":
+                    if state.get("out") and drive_dir(job):
+                        sync(state["out"], drive_dir(job))         # keep everything for Retry in the app
+                    print("  Its progress is kept" + (" on Drive" if drive_dir(job) else " in this session") +
+                          ": press Retry on the job in the app to continue from here (no photo is bought again).")
                 else:
-                    forget(job, state.get("out"))                  # finished (no Street View / failed): nothing to keep
+                    forget(job, state.get("out"))                  # no Street View on this street: nothing to keep
             finally:
                 state.update(job=None, stage=None, busy=False)
     except KeyboardInterrupt:

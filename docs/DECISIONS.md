@@ -1143,3 +1143,38 @@ How the picker applies it:
 
 **Version tags.** Area names drop internal tags such as "(v2)" (`store.display_area_name`), so the map label,
 dropdown and Hood all read "Ward 29, Coimbatore". meta.area in export.json is unchanged.
+
+### D37. transformers 5.x, Retry, honest resume note, pasted inputs (P6b, after the first real Colab run)
+**Failure.** The real Colab run stopped at the use router with `'BaseModelOutputWithPooling' object has no attribute
+'norm'`. S1a installs the latest transformers, and from 5.x `CLIPModel.get_image_features` / `get_text_features`
+return an output object instead of a tensor. The object's `pooler_output` holds the same projected features
+(`visual_projection` / `text_projection` applied; checked in the transformers source).
+
+**Pipeline fix (bug fix; logic unchanged).** The only call site is `localuse.clip_embed`, and it now goes through
+`localuse.feature_tensor`:
+- A tensor from 4.x is returned unchanged, so the embeddings are identical to before.
+- From an output object it takes `image_embeds` / `text_embeds` if present, otherwise `pooler_output`.
+- If the size is not the model's `projection_dim`, or there are no features at all, it raises instead of classifying
+  wrong features.
+
+S1a pins `transformers==4.57.6`, the last 4.x, which returns tensors like the version the router was trained with.
+The worker prints the installed version and warns when it is not in `TESTED_TRANSFORMERS`.
+
+**Retry.** `POST /jobs/{id}/retry` puts a failed job back in the queue. It must be a real error: not cancelled, not
+"no Street View", and no area. It keeps the same id and `started_at`, so the next claim is a `resumed_claim`.
+- Jobs carry `retryable`. The job card and the Jobs page show **Retry**.
+- It follows the one-street-at-a-time rule.
+- The worker no longer deletes a failed job's files. Before, `forget()` ran on every failure, so a retry would have
+  bought every photo again.
+- `POST /worker/known` tells the worker, at start, which Drive folders are still needed (unfinished or retryable
+  jobs). It deletes the rest. If the backend can't be reached, nothing is deleted.
+
+**Resume note.** The printed line looked for `panos.json` on Drive. The card note looked for `_views_done.json` /
+`detections.json`. A run that stopped before the first photo batch was saved had the first but not the second, so the
+card said "Started again from the beginning" while the worker continued. Both now use one value, `continuing`: any
+file `run_area` resumes from (`STAGE_FILES`: panos, plan, buildings, _views_done, detections).
+`resumed_from_saved_files` in `worker_run.json` stays photo-based, because it is what Hood's timing caveat means.
+
+**Pasted inputs.** URL, worker token, AWS keys and Google key have every whitespace character removed, and surrounding
+quotes too. Keys from the setup cells (env / `cfg.maps_key`) are cleaned as well. A folder path keeps its inner spaces.
+

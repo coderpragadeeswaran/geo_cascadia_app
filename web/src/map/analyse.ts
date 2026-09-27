@@ -35,6 +35,8 @@ interface AnalyseState {
   cancelJob: () => Promise<void>
   /** cost cap: a person accepts the estimate; the job goes back to the queue with the cap lifted for it */
   approveJob: () => Promise<void>
+  /** a failed job goes back to the queue; the worker continues from its saved progress (no photo bought twice) */
+  retryJob: () => Promise<void>
   reset: () => void
   poll: () => Promise<void>
 }
@@ -106,6 +108,14 @@ export const useAnalyse = create<AnalyseState>((set, get) => ({
       const r = await post<{ job: JobFull; worker_online: boolean }>(`/jobs/${j.id}/approve`, {})
       set({ job: r.job, workerOnline: r.worker_online, error: null })
     } catch (e) { set({ error: { kind: 'other', message: e instanceof ApiError ? e.message : 'Could not approve' } }) }
+  },
+  retryJob: async () => {
+    const j = get().job
+    if (!j) return
+    try {
+      const r = await post<{ job: JobFull; worker_online: boolean }>(`/jobs/${j.id}/retry`, {})
+      set({ job: r.job, workerOnline: r.worker_online, error: null })
+    } catch (e) { set({ error: { kind: 'other', message: e instanceof ApiError ? e.message : 'Could not retry' } }) }
   },
   reset: () => { ctrl?.abort('cancelled'); ctrl = null; set({ clickAt: null, preview: null, loading: false, startedAt: null, error: null, anyway: false, trim: null }) },
   poll: async () => {

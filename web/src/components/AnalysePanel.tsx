@@ -179,7 +179,7 @@ export function AnalysePanel() {
 }
 
 function JobCard() {
-  const { job, workerOnline, cancelJob, approveJob, error, estimate } = useAnalyse()
+  const { job, workerOnline, cancelJob, approveJob, retryJob, error, estimate } = useAnalyse()
   const [, tick] = useState(0)
   useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 1000); return () => clearInterval(t) }, [])
   if (!job) return null
@@ -194,7 +194,7 @@ function JobCard() {
     interrupted: 'Interrupted: the worker stopped responding. It continues from where it stopped when a worker connects again.',
     needs_approval: `This street needs about ${pe?.photos != null ? fmt.format(pe.photos) : 'more'} Street View photos${pe?.usd != null ? ` (about $${pe.usd.toFixed(2)})` : ''}, above the limit of ${pe?.cap_photos ?? '—'} photos or $${pe?.cap_usd ?? '—'} per street. Nothing has been bought yet.`,
     done: 'Done. Opening the new area…',
-    failed: `Failed: ${job.message ?? 'unknown error'}`,
+    failed: `Failed: ${job.message ?? 'unknown error'}${job.retryable ? '. Retry continues from the saved progress; photos already fetched are not bought again.' : ''}`,
     cancelled: 'Cancelled. Nothing was analysed.',
     no_street_view: `No usable Street View here${job.message ? `: ${job.message}` : ''}.`,
     expired_token: 'Paused: the cloud-AI keys expired. Enter new keys in the worker; it continues where it stopped.',
@@ -224,6 +224,7 @@ function JobCard() {
       {error && <p className="t-small mt-1.5" style={{ color: 'var(--ns-no-record)' }}>{error.message}</p>}
       <div className="mt-3 flex justify-end gap-2">
         {st.key === 'needs_approval' && <button className="btn btn-solid" onClick={() => approveJob()}>Approve and run</button>}
+        {st.key === 'failed' && job.retryable && <button className="btn btn-solid" onClick={() => retryJob()}>Retry</button>}
         {active && st.key !== 'cancelling' && <button className="btn btn-line" onClick={() => cancelJob()}>{st.key === 'needs_approval' ? 'Cancel' : 'Cancel job'}</button>}
         <button className="btn" onClick={close}>{active ? 'Hide' : 'Close'}</button>
       </div>

@@ -119,7 +119,8 @@ def _job(r):
             "stage": r[4], "done": r[5], "total": r[6], "message": r[7], "area_slug": r[8],
             "created_at": r[9].isoformat() if r[9] else None, "started_at": r[10].isoformat() if r[10] else None,
             "finished_at": r[11].isoformat() if r[11] else None, "heartbeat_at": r[12].isoformat() if r[12] else None,
-            "worker_id": r[13], "approved": bool(r[16]), "plan_estimate": r[17], "device": r[18]}
+            "worker_id": r[13], "approved": bool(r[16]), "plan_estimate": r[17], "device": r[18],
+            "retryable": r[3] == "failed" and r[7] != CANCELLED and not r[8]}
 
 
 def _get_job(c, job_id):
@@ -388,6 +389,30 @@ def job_approve(job_id: str, request: Request, D: Data = Depends(get_data)):
     return {"offline": False, "job": D.write(fn), "worker_online": worker_online(request.app)}
 
 
+@router.post("/jobs/{job_id}/retry", tags=["jobs"])
+def job_retry(job_id: str, request: Request, D: Data = Depends(get_data)):
+    """Retry a failed job: the SAME job is queued again. started_at is kept, so the worker that claims it is told it is a
+    resumed claim and continues from the progress it saved on Drive (photos already bought are not fetched again)."""
+    def fn(s):
+        with s.pool.connection() as c:
+            j = _get_job(c, job_id)
+            if not j["retryable"]:          # failed with an error: not cancelled, not "no Street View", no area
+                raise HTTPException(409, f"job is {j['display_status']}: only a failed job can be retried")
+            if not j["is_test"]:
+                busy = c.execute(f"""select j.input->>'street' from jobs j where not j.is_test and j.status in {ACTIVE_SQL}
+                                     and j.id <> %s order by j.created_at limit 1""", (job_id,)).fetchone()
+                if busy:
+                    raise HTTPException(409, f"“{busy[0] or 'Another street'}” is still being analysed. One street at a "
+                                             "time: wait for it to finish, or cancel it on the Jobs page.")
+            c.execute("""update jobs set status = 'queued', message = null, note = null, finished_at = null, stage = null,
+                         done = null, total = null, cancel_requested = false where id = %s""", (job_id,))
+            return _get_job(c, job_id)
+    job = D.write(fn)
+    online = worker_online(request.app)
+    return {"offline": False, "job": job, "worker_online": online,
+            "notice": None if online else "queued — analysis worker offline"}
+
+
 @router.get("/worker/status", tags=["worker"])
 def worker_status_public(request: Request):
     """For the app's top bar: is a worker connected, on which device, and which street it is analysing."""
@@ -434,6 +459,10 @@ class FailIn(BaseModel):
     message: Optional[str] = Field(None, max_length=2000)
     estimate: Optional[dict] = Field(None, description="NEEDS_APPROVAL: the plan-time estimate (photos, cost, minutes)")
     worker_id: Optional[str] = Field(None, max_length=80)
+
+
+class KnownIn(BaseModel):
+    ids: List[str] = Field(default_factory=list, max_length=500)
 
 
 def _seen(request, worker_id, device=None, job=None):
@@ -492,6 +521,26 @@ def worker_next(body: NextIn, request: Request, D: Data = Depends(get_data)):
     job = D.write(fn)
     _seen(request, body.worker_id, job=_job_brief(job) or "")
     return {"offline": False, "job": job}
+
+
+@router.post("/worker/known", tags=["worker"], dependencies=[Depends(worker_auth)])
+def worker_known(body: KnownIn, D: Data = Depends(get_data)):
+    """Of the job ids whose progress a worker keeps on Drive, the ones still worth keeping: not finished, or failed and
+    retryable. The worker deletes the saved progress of the rest (done, cancelled, removed from the list)."""
+    ids = []
+    for x in body.ids:
+        try:
+            ids.append(str(uuid.UUID(x)))
+        except ValueError:
+            pass
+
+    def fn(s):
+        with s.pool.connection() as c:
+            rows = c.execute(f"""select j.id from jobs j where j.id = any(%s::uuid[]) and (j.status in {ACTIVE_SQL}
+                                 or (j.status = 'failed' and j.message is distinct from %s and j.area_id is null))""",
+                             (ids, CANCELLED)).fetchall()
+            return sorted(str(r[0]) for r in rows)
+    return {"offline": False, "keep": D.write(fn) if ids else []}
 
 
 @router.post("/worker/heartbeat", tags=["worker"], dependencies=[Depends(worker_auth)])

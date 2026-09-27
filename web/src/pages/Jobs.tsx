@@ -5,7 +5,7 @@
  *  such), the worker's real stages with time so far and an honest time left, and for a finished street "Delete this
  *  analysed area" (never offered for the original areas). With no worker connected a queued job says so plainly. */
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowRight, Loader2, Trash2, X } from 'lucide-react'
+import { ArrowRight, Loader2, RotateCcw, Trash2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api, ApiError } from '@/api/client'
 import { useJob, useJobs, type JobP5 } from '@/api/p5'
@@ -119,6 +119,11 @@ function JobDetail({ id, online, onOpen, onDelete }: { id: string; online: boole
     try { await post(`/jobs/${j.id}/approve`, {}); await qc.invalidateQueries({ queryKey: ['jobs'] }); await qc.invalidateQueries({ queryKey: ['job', j.id] }) }
     catch (e) { setErr(e instanceof ApiError ? e.message : 'Could not approve') } finally { setBusy(false) }
   }
+  const retry = async () => {
+    setBusy(true); setErr(null)
+    try { await post(`/jobs/${j.id}/retry`, {}); await qc.invalidateQueries({ queryKey: ['jobs'] }); await qc.invalidateQueries({ queryKey: ['job', j.id] }) }
+    catch (e) { setErr(e instanceof ApiError ? e.message : 'Could not retry') } finally { setBusy(false) }
+  }
   const removable = ['cancelled', 'failed', 'no_street_view', 'done'].includes(st.key) && !j.area_slug
   const remove = async () => {
     setBusy(true); setErr(null)
@@ -136,7 +141,7 @@ function JobDetail({ id, online, onOpen, onDelete }: { id: string; online: boole
     interrupted: 'Interrupted: the worker stopped responding (the notebook closed or the account was switched). It will resume when a worker connects again.',
     needs_approval: `Needs your approval: about ${pe?.photos != null ? fmt.format(pe.photos) : 'more'} Street View photos${pe?.usd != null ? ` (about $${pe.usd.toFixed(2)})` : ''}${pe?.buildings != null ? ` for ${plural(pe.buildings, 'building')}` : ''}, above the limit of ${pe?.cap_photos ?? '—'} photos or $${pe?.cap_usd ?? '—'} per street. Nothing has been bought yet.`,
     done: j.area_slug ? 'Done. The new area is ready.' : j.message === 'area deleted' ? 'Done. Its area was deleted afterwards.' : 'Done.',
-    failed: `Failed: ${j.message ?? 'unknown error'}`,
+    failed: `Failed: ${j.message ?? 'unknown error'}${j.retryable ? '. Retry continues from the saved progress; photos already fetched are not bought again.' : ''}`,
     cancelled: 'Cancelled. Nothing was analysed.',
     no_street_view: `No usable Street View here${j.message ? `: ${j.message}` : ''}.`,
     expired_token: 'Paused: the cloud-AI keys expired. Enter new keys in the worker; it continues where it stopped, nothing is lost.',
@@ -194,6 +199,7 @@ function JobDetail({ id, online, onOpen, onDelete }: { id: string; online: boole
       {err && <p className="t-small mt-2" style={{ color: 'var(--ns-no-record)' }}>{err}</p>}
       <div className="mt-4 flex flex-wrap gap-1.5">
         {st.key === 'needs_approval' && !confirm && <button className="btn btn-solid" disabled={busy} onClick={approve}>{busy && <Loader2 className="animate-spin" />} Approve and run</button>}
+        {st.key === 'failed' && j.retryable && <button className="btn btn-solid" disabled={busy} onClick={retry}>{busy ? <Loader2 className="animate-spin" /> : <RotateCcw />} Retry</button>}
         {cancellable && st.key !== 'cancelling' && !confirm && <button className="btn btn-line" onClick={() => setConfirm(true)}>{st.key === 'needs_approval' ? 'Cancel' : 'Cancel job'}</button>}
         {removable && <button className="btn" disabled={busy} onClick={remove}>{busy ? <><Loader2 className="animate-spin" /> Removing…</> : <><Trash2 /> Remove from list</>}</button>}
         {confirm && <>
