@@ -23,6 +23,7 @@
  "method_counts": {
   "triangulated": 0,
   "wall_hit": 1,
+  "wall_centre": 0,
   "footprint_centre": 0,
   "triangulation_rejected": 1
  },
@@ -37,14 +38,14 @@
  },
  "official": {
   "vs OSM facade": {
-   "triangulated": {
+   "triangulated (cameras only)": {
     "n": 0,
     "median_m": null,
     "p90_m": null,
     "within_3_5_m_pct": null,
     "worst_5": []
    },
-   "wall_hit (uses map footprint)": {
+   "wall_hit (camera ray on the map wall; uses the map)": {
     "n": 1,
     "median_m": 0.0,
     "p90_m": 0.0,
@@ -56,7 +57,14 @@
      }
     ]
    },
-   "footprint_centre (fallback)": {
+   "wall_centre (front-wall centre from the map; uses the map)": {
+    "n": 0,
+    "median_m": null,
+    "p90_m": null,
+    "within_3_5_m_pct": null,
+    "worst_5": []
+   },
+   "footprint_centre (centroid; uses the map)": {
     "n": 0,
     "median_m": null,
     "p90_m": null,
@@ -76,22 +84,34 @@
     ]
    }
   },
-  "vs Google pin": {
-   "triangulated": {
+  "vs OSM front-wall centre": {
+   "triangulated (cameras only)": {
     "n": 0,
     "median_m": null,
     "p90_m": null,
     "within_3_5_m_pct": null,
     "worst_5": []
    },
-   "wall_hit (uses map footprint)": {
+   "wall_hit (camera ray on the map wall; uses the map)": {
+    "n": 1,
+    "median_m": 18.44,
+    "p90_m": 18.44,
+    "within_3_5_m_pct": 0.0,
+    "worst_5": [
+     {
+      "building_id": "w344655428",
+      "m": 18.4
+     }
+    ]
+   },
+   "wall_centre (front-wall centre from the map; uses the map)": {
     "n": 0,
     "median_m": null,
     "p90_m": null,
     "within_3_5_m_pct": null,
     "worst_5": []
    },
-   "footprint_centre (fallback)": {
+   "footprint_centre (centroid; uses the map)": {
     "n": 0,
     "median_m": null,
     "p90_m": null,
@@ -99,23 +119,40 @@
     "worst_5": []
    },
    "all buildings": {
-    "n": 0,
-    "median_m": null,
-    "p90_m": null,
-    "within_3_5_m_pct": null,
-    "worst_5": []
+    "n": 1,
+    "median_m": 18.44,
+    "p90_m": 18.44,
+    "within_3_5_m_pct": 0.0,
+    "worst_5": [
+     {
+      "building_id": "w344655428",
+      "m": 18.4
+     }
+    ]
    },
-   "match_rate": {
-    "buildings_with_sign_text": 1,
-    "place_found_within_50m": 0,
-    "used": 0
+   "camera-derived (triangulated + wall_hit)": {
+    "n": 1,
+    "median_m": 18.44,
+    "p90_m": 18.44,
+    "within_3_5_m_pct": 0.0,
+    "worst_5": [
+     {
+      "building_id": "w344655428",
+      "m": 18.4
+     }
+    ]
    },
-   "pin_vs_osm_wall": {
-    "n": 0,
-    "median_m": null,
-    "p90_m": null,
-    "within_3_5_m_pct": null,
-    "worst_5": []
+   "baseline: footprint centroid for every building (uses the map)": {
+    "n": 1,
+    "median_m": 61.64,
+    "p90_m": 61.64,
+    "within_3_5_m_pct": 0.0,
+    "worst_5": [
+     {
+      "building_id": "w344655428",
+      "m": 61.6
+     }
+    ]
    }
   }
  },
@@ -174,55 +211,7 @@
   }
  },
  "vs Google pin": {
-  "status": "run",
-  "match_rate": {
-   "buildings_with_sign_text": 1,
-   "place_found_within_50m": 0,
-   "used": 0
-  },
-  "api_calls": {
-   "search": 0,
-   "details": 0
-  },
-  "triangulated": {
-   "before": {
-    "n": 0,
-    "median_m": null,
-    "p90_m": null,
-    "within_3_5_m_pct": null,
-    "worst_5": []
-   },
-   "after": {
-    "n": 0,
-    "median_m": null,
-    "p90_m": null,
-    "within_3_5_m_pct": null,
-    "worst_5": []
-   }
-  },
-  "footprint centroid (baseline)": {
-   "before": {
-    "n": 0,
-    "median_m": null,
-    "p90_m": null,
-    "within_3_5_m_pct": null,
-    "worst_5": []
-   },
-   "after": {
-    "n": 0,
-    "median_m": null,
-    "p90_m": null,
-    "within_3_5_m_pct": null,
-    "worst_5": []
-   }
-  },
-  "reference_check_pin_vs_osm_facade": {
-   "n": 0,
-   "median_m": null,
-   "p90_m": null,
-   "within_3_5_m_pct": null,
-   "worst_5": []
-  }
+  "status": "not run: no server-side Places key (GOOGLE_PLACES_SERVER_KEY) in backend/.env"
  },
  "rows": [
   {
@@ -232,6 +221,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 18.44,
    "before_method": "triangulated",
    "before_uncertainty_m": 9.53,
    "before_facade_m": 30.48,
@@ -239,7 +229,7 @@
    "after_uncertainty_m": null,
    "after_facade_m": 26.61,
    "centroid_facade_m": 61.64,
-   "place_id": null
+   "centroid_front_m": 61.64
   }
  ]
 }

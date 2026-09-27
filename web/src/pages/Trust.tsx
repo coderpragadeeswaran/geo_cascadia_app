@@ -352,24 +352,54 @@ function plainField(f: string) {
  *  (written by tools/eval_gate1.py); nothing computed here. Same numbers as before P5. */
 const M = (v: unknown) => (typeof v === 'number' ? `${v} m` : '—')
 const P = (v: unknown) => (typeof v === 'number' ? `${v}%` : '—')
-const METHOD_ROWS: [string, string][] = [['triangulated', 'Triangulated'], ['wall_hit (uses map footprint)', 'Wall hit (uses map footprint: on the wall by construction)'],
-  ['footprint_centre (fallback)', 'Footprint centre (fallback)']]
+/** a method row of a Gate 1 table, in plain words, with whether the point comes from the map footprint itself (D33) */
+const PLAIN: [RegExp, string][] = [[/^triangulated/, 'Where camera views cross (cameras only)'], [/^wall_hit/, 'Camera line of sight on the map wall'],
+  [/^wall_centre/, 'Front-wall centre from the map (no camera line of sight)'], [/^footprint_centre/, 'Middle of the outline'],
+  [/^camera-derived/, 'All camera-derived positions (the two camera methods together)'], [/^all buildings/, 'All buildings'],
+  [/^baseline/, 'Baseline: the middle of the outline, for every building'], [/^footprint centroid/, 'Baseline: the middle of the outline']]
+function rowInfo(k: string) {
+  const label = PLAIN.find(([re]) => re.test(k))?.[1] ?? k
+  const map = /uses (the )?map|fallback|centroid|^wall_centre|^footprint_centre|^baseline/.test(k)
+  return { label, map, circular: /^wall_centre/.test(k), pooled: /^all buildings/.test(k) }
+}
+const statRows = (o: Any) => Object.entries(o ?? {}).filter(([, v]) => v && typeof v === 'object' && typeof (v as Any).n === 'number' && (v as Any).n > 0) as [string, Any][]
+function MethodTable({ data, slugs, nm, target, front }: { data: Any; slugs: string[]; nm: (s: string) => string; target: number; front?: boolean }) {
+  return (
+    <table className="w-full"><tbody>
+      <Tr head cells={['area · method', 'n', 'median', 'p90', `≤ ${target} m`]} />
+      {slugs.flatMap((s) => {
+        const a = data?.[s] ?? {}
+        const head = a.status ? [<tr key={s + 's'} className="rule-b"><td colSpan={5} className="t-small ink3 py-1.5">{nm(s)} · {a.status}</td></tr>] : []
+        return [...head, ...statRows(a).filter(([k]) => k !== 'pin_vs_osm_wall').map(([k, x]) => {
+          const r = rowInfo(k)
+          return <Tr key={s + k} cells={[<span key="l" className="t-small">{nm(s)} · {r.label}{r.map && <> <Badge>uses the map</Badge></>}
+            {front && r.circular && <span className="ink3"> — this is the reference point itself (0 m by construction)</span>}
+            {front && r.pooled && <span className="ink3"> — includes front-wall-centre points (0 m by construction)</span>}</span>,
+          fmt.format(x.n), M(x.median_m), M(x.p90_m), P(x.within_3_5_m_pct)]} />
+        })]
+      })}
+    </tbody></table>
+  )
+}
 
 function Gate1({ g, names }: { g: Any; names: Record<string, string> }) {
   const slugs = Object.keys(g.method_counts ?? {}).sort((a, b) => (g.method_counts[b].buildings ?? 0) - (g.method_counts[a].buildings ?? 0))
   const nm = (s: string) => names[s] ?? s
-  const wall = g['vs OSM wall'] ?? {}, pin = g['vs Google pin'] ?? {}
+  const wall = g['vs OSM wall'] ?? {}, pin = g['vs Google pin'] ?? {}, front = g['vs OSM front-wall centre']
   return (
     <Sec id="gate1" title={`Position accuracy — target ≤ ${g.target_m} m (FarmwiseAI Gate 1)`}
       lead={<>Where each building is, predicted from the camera rays; the building&apos;s map position stays its footprint centre.</>}>
+      {g.organiser_guidance && <p className="t-body mb-3" style={{ fontWeight: 560 }}>{g.organiser_guidance}</p>}
       <div className="flex flex-wrap items-start gap-3 rounded-[var(--ns-r-sheet)] px-4 py-3" style={{ boxShadow: 'inset 0 0 0 1px var(--ns-discrepancy)' }}>
         <Badge tone="ok">Status: {g.status === 'not verified' ? 'Not verified' : g.status}</Badge>
-        <span className="t-small ink2 min-w-0 flex-1">{g.status_note}</span>
+        <span className="t-small ink2 min-w-0 flex-1">{g.status_note} No surveyed reference exists.</span>
       </div>
       <ul className="t-small ink2 mt-3 space-y-0.5">
         <li><b className="text-ink">Triangulated:</b> {g.rule?.triangulated}</li>
         <li><b className="text-ink">Wall hit:</b> {g.rule?.wall_hit}</li>
-        <li><b className="text-ink">Footprint centre:</b> {g.rule?.footprint_centre}</li>
+        {g.rule?.wall_centre && <li><b className="text-ink">Front-wall centre:</b> {g.rule.wall_centre}</li>}
+        <li><b className="text-ink">Middle of the outline:</b> {g.rule?.footprint_centre}</li>
+        {g.rule?.wall_hit_aim && <li><b className="text-ink">Camera aim:</b> {g.rule.wall_hit_aim}</li>}
         <li><b className="text-ink">Uncertainty:</b> {g.rule?.uncertainty_m}</li>
         {g.rule?.plausibility && <li><b className="text-ink">Plausibility:</b> {g.rule.plausibility}</li>}
       </ul>
@@ -386,9 +416,10 @@ function Gate1({ g, names }: { g: Any; names: Record<string, string> }) {
                 <div className="flex h-3 gap-[2px] overflow-hidden" style={{ borderRadius: 3 }}>
                   <span title={`triangulated ${c.triangulated}`} style={{ width: `${(100 * c.triangulated) / tot}%`, background: 'var(--ns-sodium)' }} />
                   <span title={`wall hit ${c.wall_hit}`} style={{ width: `${(100 * c.wall_hit) / tot}%`, background: 'var(--ns-sodium-glow)' }} />
-                  <span title={`footprint centre ${c.footprint_centre}`} style={{ width: `${(100 * c.footprint_centre) / tot}%`, background: 'var(--ns-line-strong)' }} />
+                  <span title={`front-wall centre ${c.wall_centre ?? 0}`} style={{ width: `${(100 * (c.wall_centre ?? 0)) / tot}%`, background: 'var(--ns-line-strong)' }} />
+                  <span title={`middle of the outline ${c.footprint_centre}`} style={{ width: `${(100 * c.footprint_centre) / tot}%`, background: 'var(--ns-unclassified)' }} />
                 </div>
-                <div className="t-data ink2 mt-0.5 text-[13px]">triangulated {fmt.format(c.triangulated)} · wall hit {fmt.format(c.wall_hit)} · footprint centre {fmt.format(c.footprint_centre)} · triangulation rejected (&gt; 10 m off) {fmt.format(c.triangulation_rejected ?? 0)}</div>
+                <div className="t-data ink2 mt-0.5 text-[13px]">cameras cross {fmt.format(c.triangulated)} · line of sight on the wall {fmt.format(c.wall_hit)} · front-wall centre {fmt.format(c.wall_centre ?? 0)} · middle of the outline {fmt.format(c.footprint_centre)} · camera result rejected (&gt; 10 m off) {fmt.format(c.triangulation_rejected ?? 0)}</div>
               </div>
             </div>
           )
@@ -402,24 +433,19 @@ function Gate1({ g, names }: { g: Any; names: Record<string, string> }) {
         {slugs.map((s) => { const c = g.self_consistency?.[s] ?? {}; return <Tr key={s} cells={[nm(s), fmt.format(c.triangulated ?? 0), fmt.format(c.n ?? 0), M(c.median_m), M(c.p90_m), fmt.format(c.not_estimated ?? 0)]} /> })}
       </tbody></table>
 
-      <h3 className="t-micro mt-6 mb-1">vs OSM wall (distance to the road-facing footprint edge)</h3>
+      {front && <>
+        <h3 className="t-micro mt-6 mb-1">vs the centre of the OSM front wall (the organiser’s reference)</h3>
+        <p className="t-small ink2 mb-1">Distance from each predicted point to the midpoint of the building’s road-facing wall on OpenStreetMap. Methods marked “uses the map” take their point from the footprint itself; the front-wall-centre method is that point, so it scores 0 m by construction and is not evidence of accuracy. The camera-derived row is the fair measure.</p>
+        <MethodTable data={front} slugs={slugs} nm={nm} target={g.target_m} front />
+      </>}
+
+      <h3 className="t-micro mt-6 mb-1">vs the OSM wall line (distance to the road-facing wall anywhere along it)</h3>
       <p className="t-small ink2 mb-1">The pass rate rose mainly because implausible points (&gt;10 m from the wall) were rejected, and the check and the score use the same wall, so this is a comparison, not accuracy.</p>
-      <table className="w-full"><tbody>
-        <Tr head cells={['area · method', 'n', 'median', 'p90', `≤ ${g.target_m} m`]} />
-        {slugs.flatMap((s) => METHOD_ROWS.map(([k, label]) => { const x = wall[s]?.[k]; return x?.n ? <Tr key={s + k} cells={[`${nm(s)} · ${label}`, fmt.format(x.n), M(x.median_m), M(x.p90_m), P(x.within_3_5_m_pct)]} /> : null }))}
-      </tbody></table>
+      <MethodTable data={wall} slugs={slugs} nm={nm} target={g.target_m} />
 
       <h3 className="t-micro mt-6 mb-1">vs Google pin (Places, sign name within 50 m)</h3>
-      <table className="w-full"><tbody>
-        <Tr head cells={['area · method', 'n', 'median', 'p90', `≤ ${g.target_m} m`]} />
-        {slugs.flatMap((s) => {
-          const a = pin[s] ?? {}
-          if (a.status) return [<Tr key={s} cells={[`${nm(s)} · ${a.status}`, '—', '—', '—', '—']} />]
-          const mr = a.match_rate ?? {}
-          return [<Tr key={s + 'm'} cells={[`${nm(s)} · matched: ${plural(mr.buildings_with_sign_text ?? 0, 'building')} with sign text → ${fmt.format(mr.used ?? 0)} with a place`, '', '', '', '']} />,
-            ...METHOD_ROWS.map(([k, label]) => { const x = a[k]; return x?.n ? <Tr key={s + k} cells={[`${nm(s)} · ${label}`, fmt.format(x.n), M(x.median_m), M(x.p90_m), P(x.within_3_5_m_pct)]} /> : null })]
-        })}
-      </tbody></table>
+      <p className="t-small ink3 mb-1">Computed before the front-wall-centre change and not re-run (it needs new Google look-ups); the middle-of-the-outline rows there refer to the old fallback.</p>
+      <MethodTable data={pin} slugs={slugs} nm={nm} target={g.target_m} />
 
       <h3 className="t-micro mt-6 mb-1">How far the two references disagree (Google pin vs OSM wall, same buildings)</h3>
       <table className="w-full"><tbody>

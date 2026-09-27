@@ -75,7 +75,8 @@ function buildingSummary(b: Building) {
         : ' Its use comes from an AI image check of the clearest photo.'
   const pos = !p ? '' : p.method === 'triangulated' ? ` Its position is measured from where ${plural(p.n_cameras, 'camera view')} cross.`
     : p.method === 'wall_hit' ? ' Its position is where one camera’s line of sight meets its front wall on the map.'
-      : ' Its position is the middle of its outline on the map, because no camera view could measure it.'
+      : p.method === 'wall_centre' ? ' Its position is the centre of its front wall on the map, because no camera line of sight reached it.'
+        : ' Its position is the middle of its outline on the map, because no front wall could be found.'
   return seen + u + pos
 }
 function registerSummary(b: Building) {

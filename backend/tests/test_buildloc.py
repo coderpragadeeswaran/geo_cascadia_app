@@ -129,19 +129,31 @@ def test_rule_corners_clipped_in_all_views_is_a_wall_hit():
     assert p["method"] == "wall_hit"
 
 
-def test_rule_no_ray_is_the_footprint_centre():
+def test_rule_no_ray_is_the_front_wall_centre():
+    """D33: no camera line of sight -> the midpoint of the road-facing wall (the facade y = 10, x from -5 to 5)"""
+    a = _area()
+    p = predict_positions([], a, _register(a), STREETS, Config())["w1"]
+    assert p["method"] == "wall_centre" and p["uncertainty_m"] is None and p["n_cameras"] == 0
+    x, y = _point(a, p)
+    assert abs(x - 0) < 0.05 and abs(y - 10) < 0.05
+
+
+def test_rule_no_road_facing_wall_is_the_footprint_centre():
+    """no street line at all -> no road-facing wall can be determined -> the centroid"""
     a = _area()
     reg = _register(a)
-    p = predict_positions([], a, reg, STREETS, Config())["w1"]
-    assert p["method"] == "footprint_centre" and p["uncertainty_m"] is None and (p["lat"], p["lon"]) == (reg[0]["lat"], reg[0]["lon"])
+    p = predict_positions([], a, reg, {}, Config())["w1"]
+    assert p["method"] == "footprint_centre" and (p["lat"], p["lon"]) == (reg[0]["lat"], reg[0]["lon"])
 
 
 def test_ray_that_first_hits_a_side_wall_is_not_a_wall_hit():
     """the street runs along the building's side (x = -20): the road-facing wall is x = -5, which the cameras on y = 0
-    only see after the front wall -> no wall hit -> footprint centre"""
+    only see after the front wall -> no wall hit -> the centre of that road-facing wall (D33)"""
     a = _area()
     p = predict_positions([_det(a, 0)], a, _register(a), {"S": LineString([(-20, -60), (-20, 60)])}, Config())["w1"]
-    assert p["method"] == "footprint_centre"
+    assert p["method"] == "wall_centre"
+    x, _ = _point(a, p)
+    assert abs(x - (-5)) < 0.05
 
 
 def test_rule_rejects_an_implausible_triangulation_and_says_why():

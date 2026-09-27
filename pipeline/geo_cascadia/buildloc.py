@@ -278,10 +278,14 @@ def predict_positions(dets, area, buildings, street_lines, cfg, min_sep=MIN_SEP_
          single-pair estimates from the final point (self-consistency), None when no pair sees both corners;
       b) "wall_hit": the highest-confidence camera ray whose first hit on this footprint is its road-facing wall -> that
          hit point (uses the map footprint); uncertainty None ("not estimated");
-      c) "footprint_centre": the footprint centroid; uncertainty None.
+      c) "wall_centre" (D33, organiser guidance: a building's position is the centre of its front as seen from the
+         street): the midpoint of the footprint's road-facing wall (uses the map footprint); uncertainty None;
+      d) "footprint_centre": the footprint centroid, only when no road-facing wall can be determined.
+    The camera ray of b) is aimed at the horizontal centre of the building's box (detection "u" = (x1 + x2) / 2).
     Plausibility: a triangulated point > PLAUSIBLE_MAX_M from the building's ROAD-FACING WALL (the footprint edge it
-    should lie on) is rejected; the building falls back to b) then c) and "reason" says so ("triangulation rejected:
-    implausible (X m from road-facing wall)"). Without a street line to pick that wall, the footprint polygon is used.
+    should lie on) is rejected; the building falls back to b), c), d) and "reason" says so ("triangulation rejected:
+    implausible (X m from road-facing wall)"). Without a street line to pick that wall, the footprint polygon is used,
+    and the building falls back to b), c) and d) as above.
     min_cameras: camera positions a triangulation needs (production rule: 2 since D28; 3 was variant A). With
     exactly 2 cameras the one pair estimate IS the final point, so uncertainty is None (not estimated).
     `buildings` = the building register ({building_id, lat, lon, street, footprint_latlon}); `street_lines` = {street
@@ -345,7 +349,13 @@ def predict_positions(dets, area, buildings, street_lines, cfg, min_sep=MIN_SEP_
                     pos = {"lat": round(lat, 7), "lon": round(lon, 7), "method": "wall_hit", "n_cameras": 1,
                            "uncertainty_m": None, **base}
                     break
-        # c) the footprint centre
+        # c) the centre of the road-facing wall on the map (D33)
+        if pos is None and edge is not None:
+            mid = edge.interpolate(0.5, normalized=True)
+            lat, lon = area.frame.ll(mid.x, mid.y)
+            pos = {"lat": round(lat, 7), "lon": round(lon, 7), "method": "wall_centre", "n_cameras": 0,
+                   "uncertainty_m": None, **base}
+        # d) the footprint centre: no road-facing wall could be determined
         if pos is None:
             pos = {"lat": b["lat"], "lon": b["lon"], "method": "footprint_centre", "n_cameras": 0,
                    "uncertainty_m": None, **base}

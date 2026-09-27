@@ -57,6 +57,9 @@ export function makeModelCardSchemas(mode: SchemaMode) {
     // D26/D27: building position vs the Gate 1 target (tools/eval_gate1.py); per-area tables are keyed by area slug
     gate1_position: obj({
       _note: Text, generated: z.string(), target_m: z.number(), status: z.string(), status_note: Text,
+      // D33: organiser guidance and the front-wall-centre reference
+      organiser_guidance: Text.optional(), front_centre_note: Text.optional(),
+      'vs OSM front-wall centre': z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
       rule: z.record(z.string(), Text),
       method_counts: z.record(z.string(), z.record(z.string(), z.number())),
       self_consistency: z.record(z.string(), z.record(z.string(), z.number().nullable())),

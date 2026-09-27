@@ -44,6 +44,14 @@ GATE_M = 3.5
 PIN_RADIUS_M = 50.0
 REF_FACADE, REF_PIN = "vs OSM facade", "vs Google pin"
 REF_FACADE_OFFICIAL = "vs OSM wall"
+REF_FRONT = "vs OSM front-wall centre"      # D33: organiser guidance, the reference point is the middle of the front wall
+GUIDANCE = ("Organiser guidance: OpenStreetMap footprints are accepted as the reference; the position is the centre of the "
+            "building's front.")
+# official methods, how they are shown, and whether the point is derived from the map footprint itself
+OFFICIAL = (("triangulated", "triangulated (cameras only)", False),
+            ("wall_hit", "wall_hit (camera ray on the map wall; uses the map)", True),
+            ("wall_centre", "wall_centre (front-wall centre from the map; uses the map)", True),
+            ("footprint_centre", "footprint_centre (centroid; uses the map)", True))
 SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
 DETAILS_URL = "https://places.googleapis.com/v1/places/{}"
 
@@ -145,8 +153,10 @@ def evaluate(slug, cfg, places_key):
         row["official_method"] = po["method"] if po else "missing"
         row["official_uncertainty_m"] = po["uncertainty_m"] if po else None
         row["official_pairs"] = (bpos.get(bid) or {}).get("pair_estimates")
+        mid = edge.interpolate(0.5, normalized=True) if edge is not None else None
         if po and edge is not None:
             row["official_facade_m"] = round(edge.distance(Point(F.xy(po["lat"], po["lon"]))), 2)
+            row["official_front_m"] = round(mid.distance(Point(F.xy(po["lat"], po["lon"]))), 2)
         for tag, P in (("before", before), ("after", after)):
             p = P.get(bid)
             row[f"{tag}_method"] = p["method"] if p else "none"
@@ -156,6 +166,7 @@ def evaluate(slug, cfg, places_key):
             if p and p.get("fallback"):
                 row[f"{tag}_fallback"] = p["fallback"]
         row["centroid_facade_m"] = round(edge.distance(poly.centroid), 2) if edge is not None else None
+        row["centroid_front_m"] = round(mid.distance(poly.centroid), 2) if mid is not None else None
         name = sign_text(exp.get(bid, {}))
         if pl and name:
             pid, loc = pl.pin(bid, name, b["lat"], b["lon"])
@@ -189,12 +200,15 @@ def evaluate(slug, cfg, places_key):
         return out
 
     def official(ref_key):
-        """per official method (D27) for one reference ('facade' or 'pin'); wall_hit uses the map footprint."""
+        """per official method (D27, D33) for one reference ('facade', 'front' or 'pin'). Map-derived methods say so."""
         out = {}
-        for m, label in (("triangulated", "triangulated"), ("wall_hit", "wall_hit (uses map footprint)"),
-                         ("footprint_centre", "footprint_centre (fallback)")):
+        for m, label, _ in OFFICIAL:
             out[label] = stats([r for r in rows if r["official_method"] == m], f"official_{ref_key}_m")
         out["all buildings"] = stats(rows, f"official_{ref_key}_m")
+        if ref_key == "front":
+            cam = [r for r in rows if r["official_method"] in ("triangulated", "wall_hit")]
+            out["camera-derived (triangulated + wall_hit)"] = stats(cam, "official_front_m")
+            out["baseline: footprint centroid for every building (uses the map)"] = stats(rows, "centroid_front_m")
         return out
 
     tri = [r for r in rows if r["official_method"] == "triangulated"]
@@ -203,7 +217,7 @@ def evaluate(slug, cfg, places_key):
     self_consistency = {"triangulated": len(tri), "estimated": len(est), "not_estimated": len(tri) - len(est),
                         "n": sc["n"], "median_m": sc["median_m"], "p90_m": sc["p90_m"],
                         "pair_estimates": sum(r["official_pairs"] or 0 for r in tri)}
-    method_counts = {m: sum(r["official_method"] == m for r in rows) for m in ("triangulated", "wall_hit", "footprint_centre")}
+    method_counts = {m: sum(r["official_method"] == m for r in rows) for m, _, _ in OFFICIAL}
     method_counts["triangulation_rejected"] = sum(bool(((exp.get(r["id"]) or {}).get("predicted_position") or {}).get("reason"))
                                                   for r in rows)
 
@@ -215,7 +229,7 @@ def evaluate(slug, cfg, places_key):
     res = {"slug": slug, "buildings": len(blds), "coverage": cov, "after_fallbacks": fb,
            "after_uncertainty_not_estimated": unc_null,
            "method_counts": method_counts, "self_consistency": self_consistency,
-           "official": {REF_FACADE: official("facade")},
+           "official": {REF_FACADE: official("facade"), REF_FRONT: official("front")},
            REF_FACADE: table("facade"),
            REF_PIN: ({"status": "run",
                       "match_rate": {"buildings_with_sign_text": signs,
@@ -234,31 +248,48 @@ def evaluate(slug, cfg, places_key):
 
 
 def write_model_card(results):
-    """Append / replace "gate1_position" as the LAST key of model_card.json without reformatting the rest."""
+    """Append / replace "gate1_position" as the LAST key of model_card.json without reformatting the rest. When the
+    Google pins were not re-run (--no-places), the stored pin block is kept and labelled with when it was computed."""
     path = os.path.join(ROOT, "data", "model_card.json")
     text = open(path, encoding="utf-8").read().rstrip()
+    old_pin = (json.loads(text).get("gate1_position") or {}).get(REF_PIN) or {}
     cut = text.find(',\n "gate1_position":')
     body = text[:cut] if cut >= 0 else text[:text.rstrip().rfind("}")].rstrip()
     entry = {
         "_note": ("Automatic evaluation, NOT hand labels (tools/eval_gate1.py). Target: predicted building position "
                   "within 3.5 m (FarmwiseAI Gate 1). Official rule (D27, D28): triangulated wall-corner midpoint with >= 2 "
-                  "cameras, else wall_hit (best ray on the road-facing wall; uses the map footprint), else "
-                  "footprint_centre. Development runs (box centre vs wall corners, D26): data/areas/<slug>/gate1_eval.json."),
+                  "cameras, else wall_hit (best ray on the road-facing wall; uses the map footprint), else wall_centre "
+                  "(midpoint of the road-facing wall, D33), else footprint_centre (no road-facing wall). Development runs "
+                  "(box centre vs wall corners, D26): data/areas/<slug>/gate1_eval.json."),
+        "organiser_guidance": GUIDANCE,
+        "front_centre_note": ("vs OSM front-wall centre: distance to the midpoint of the road-facing footprint wall. wall_centre "
+                              "IS that point (0 m by construction, coordinate rounding only), so it and 'all buildings' "
+                              "flatter the result; 'camera-derived' pools the methods whose position along the wall comes "
+                              "from a camera (triangulated, wall_hit)."),
         "generated": datetime.date.today().isoformat(), "target_m": GATE_M,
         "status": "not verified",
         "status_note": ("No reference accurate to ~1 m is available, so a 3.5 m result can't be confirmed or ruled out. "
                         "Evaluation tool ready for surveyed points (tools/eval_gate1.py)."),
         "rule": {"triangulated": ">= 2 camera positions, pairs >= 30 deg apart: midpoint of the triangulated wall corners",
                  "wall_hit": "the best camera ray's hit on the road-facing footprint wall (uses the map footprint)",
-                 "footprint_centre": "the footprint centroid (fallback)",
+                 "wall_centre": "the midpoint of the road-facing footprint wall: the centre of the building's front on "
+                                "the map (no camera line of sight; uses the map footprint)",
+                 "footprint_centre": "the footprint centroid, only when no road-facing wall can be determined",
+                 "wall_hit_aim": "the camera ray points at the horizontal centre of the building's box ((x1 + x2) / 2)",
                  "uncertainty_m": "triangulated: median distance of single-pair estimates from the final point; "
                                   "2-camera results and others: null (not estimated)",
                  "plausibility": "a triangulated point more than 10 m from the road-facing wall is rejected; the "
-                                 "building falls back to wall_hit, then footprint_centre, with the reason stored"},
+                                 "building falls back to wall_hit, then wall_centre, then footprint_centre, with the "
+                                 "reason stored"},
         "method_counts": {r["slug"]: {"buildings": r["buildings"], **r["method_counts"]} for r in results},
         "self_consistency": {r["slug"]: r["self_consistency"] for r in results},
+        REF_FRONT: {r["slug"]: r["official"][REF_FRONT] for r in results},
         REF_FACADE_OFFICIAL: {r["slug"]: r["official"][REF_FACADE] for r in results},
-        REF_PIN: {r["slug"]: (r["official"].get(REF_PIN) or {"status": r[REF_PIN]["status"]}) for r in results},
+        REF_PIN: {r["slug"]: (r["official"].get(REF_PIN)
+                              or ({**old_pin[r["slug"]], "status": "computed before D33 (old fallback); not re-run"}
+                                  if r["slug"] in old_pin and "status" not in old_pin[r["slug"]] else
+                                  old_pin.get(r["slug"]) or {"status": r[REF_PIN]["status"]}))
+                  for r in results},
     }
     block = json.dumps(entry, ensure_ascii=False, indent=1).replace("\n", "\n ")
     with open(path, "w", encoding="utf-8") as f:
@@ -269,6 +300,9 @@ def write_model_card(results):
 if __name__ == "__main__":
     load_dotenv(os.path.join(ROOT, "backend", ".env"))
     key = os.environ.get("GOOGLE_PLACES_SERVER_KEY", "").strip() or None
+    if "--no-places" in sys.argv:                  # recompute from saved files only; stored pin results are kept
+        sys.argv.remove("--no-places")
+        key = None
     print("Google pin reference:", "server Places key found" if key else "no server Places key -> not run")
     cfg = Config()
     results = [evaluate(s, cfg, key) for s in (sys.argv[1:] or area_slugs())]

@@ -343,7 +343,7 @@ def test_predicted_positions_served_and_match_model_card(offline):
             assert set(p) == {"lat", "lon", "method", "n_cameras", "uncertainty_m", "reason"}
             assert p["reason"] is None or (p["reason"].startswith("triangulation rejected: implausible (")
                                            and p["method"] != "triangulated")
-            assert p["method"] in ("triangulated", "wall_hit", "footprint_centre")
+            assert p["method"] in ("triangulated", "wall_hit", "wall_centre", "footprint_centre")        # D33: wall_centre
             if p["method"] != "triangulated":
                 assert p["uncertainty_m"] is None
             else:

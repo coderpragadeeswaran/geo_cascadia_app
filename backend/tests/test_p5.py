@@ -429,3 +429,17 @@ def test_view_examples_carry_camera_direction(offline):
         for e in offline.get("/areas/ward29/hood/examples", params={"key": key}).json()["examples"]:
             assert e["kind"] == "photo" and len(e["rays"]) == 1 and e["points"]
             assert (e["rays"][0]["faces"] is None) == (key == "views.unmapped")
+
+
+def test_gate1_front_wall_centre_reference():
+    """D33: organiser guidance, the front-wall-centre table for every area, map-derived rows marked, camera-derived pooled"""
+    g = _mc()["gate1_position"]
+    assert g["organiser_guidance"].startswith("Organiser guidance: OpenStreetMap footprints are accepted as the reference")
+    for slug in AREAS:
+        t = g["vs OSM front-wall centre"][slug]
+        cnt = g["method_counts"][slug]
+        assert t["camera-derived (triangulated + wall_hit)"]["n"] == cnt["triangulated"] + cnt["wall_hit"]
+        assert t["all buildings"]["n"] == cnt["buildings"]
+        assert all("uses the map" in k for k in t if k.startswith(("wall_hit", "wall_centre", "footprint_centre", "baseline")))
+        wc = t["wall_centre (front-wall centre from the map; uses the map)"]
+        assert wc["n"] == cnt["wall_centre"] and (wc["n"] == 0 or wc["p90_m"] < 0.05)     # the reference point itself

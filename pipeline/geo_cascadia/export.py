@@ -63,7 +63,7 @@ def build_export(area_name, cfg, buildings, results, views, vlm_bld, ocr_res, as
                          "attribute_view": ({k: v[k] for k in ("pano_id", "heading", "pitch", "fov", "x1", "y1", "x2", "y2")} if v and vb else None),
                          "sign_view": ({**_crop_view(se["file"]), "ocr_text": se.get("best"), "ocr_conf": se.get("best_conf"),
                                         "tier": se["tier"]} if se else None)},
-            # D27: predicted position (triangulated / wall_hit / footprint_centre); lat/lon above remain the centroid
+            # D27/D33: predicted position (triangulated / wall_hit / wall_centre / footprint_centre); lat/lon stay the centroid
             **({"predicted_position": {k: positions[bid][k] for k in PREDICTED_KEYS} if bid in positions else None}
                if positions is not None else {}),
             "cost": {"vlm_calls": vcalls, "vlm_usd": round(price(vb.get("in"), vb.get("out")) * max(vcalls, 1) if vcalls else 0, 6)}})

@@ -964,3 +964,33 @@ dictionary would be needed.
 - **Trust:** a card "Building use from a shop sign": accuracy "not measured", source "a fixed rule in the analysis, not
   checked by hand yet". Known limits: adverts/posters can mislead (e.g. "FOOTBALL COACHING" on a wall, w1236978198);
   OCR garble can pass; a random spot-check is planned. The rule itself is unchanged.
+
+## 2026-09-27 — Gate 1 clarified by FarmwiseAI
+
+### D33. Building position = the centre of the building's front; OSM footprints accepted as reference
+**Organiser guidance:** OpenStreetMap footprints are accepted as the reference; a building's position is the centre of
+the building as seen from the street (≈ the midpoint of its front wall). `lat`/`lon` stay the footprint centroid.
+
+**Rule** (`buildloc.predict_positions`, same code for every area and live run):
+1. `triangulated` (unchanged);
+2. `wall_hit` (unchanged). Its camera ray is aimed at the horizontal centre of the building's box
+   (`detect.py` `u = (x1 + x2) / 2`), so the hit is the centre of the *visible* front. A box cut off at the photo edge
+   gives the centre of the visible part only.
+3. **new `wall_centre`**: the midpoint of the footprint's road-facing wall. Label "Front-wall centre from the map (no
+   camera line of sight)"; it uses the map footprint.
+4. `footprint_centre`: the centroid, only when no road-facing wall can be determined.
+
+**Re-applied from saved files** (`tools/building_positions.py`: cached OSM footprints, no image or model calls). Only
+`predicted_position` changed, and only for former `footprint_centre` buildings: Ward 29 121 → `wall_centre`, Trichy
+17, Tiruppur 0. Every former fallback had a road-facing wall, so `footprint_centre` is now 0 everywhere. The DB was
+reloaded, keeping review decisions.
+
+**Evaluation** (`tools/eval_gate1.py --no-places` → `model_card.gate1_position`):
+- A new reference, "vs OSM front-wall centre": the distance to the road-facing wall's midpoint, for every method.
+  Map-derived methods are marked "uses the map".
+- `wall_centre` IS the reference point (0 m by construction), so it and the pooled "all buildings" row flatter the
+  result. "Camera-derived (triangulated + wall_hit)" is the fair row. Ward 29: n=260, median 2.8 m, p90 7.52 m, 60.4%
+  ≤ 3.5 m. Trichy: n=49, 3.64 / 10.02 / 49.0%. Tiruppur: n=1, 18.44 m.
+- The Google-pin block was not re-run (it needs Places look-ups). It is kept, labelled "computed before D33 (old
+  fallback)".
+- Status stays "not verified": no surveyed reference exists.

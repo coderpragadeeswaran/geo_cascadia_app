@@ -23,7 +23,8 @@
  "method_counts": {
   "triangulated": 19,
   "wall_hit": 30,
-  "footprint_centre": 17,
+  "wall_centre": 17,
+  "footprint_centre": 0,
   "triangulation_rejected": 4
  },
  "self_consistency": {
@@ -37,7 +38,7 @@
  },
  "official": {
   "vs OSM facade": {
-   "triangulated": {
+   "triangulated (cameras only)": {
     "n": 19,
     "median_m": 4.04,
     "p90_m": 8.92,
@@ -65,7 +66,7 @@
      }
     ]
    },
-   "wall_hit (uses map footprint)": {
+   "wall_hit (camera ray on the map wall; uses the map)": {
     "n": 30,
     "median_m": 0.0,
     "p90_m": 0.0,
@@ -93,194 +94,243 @@
      }
     ]
    },
-   "footprint_centre (fallback)": {
+   "wall_centre (front-wall centre from the map; uses the map)": {
     "n": 17,
-    "median_m": 8.43,
-    "p90_m": 21.39,
-    "within_3_5_m_pct": 11.8,
+    "median_m": 0.0,
+    "p90_m": 0.01,
+    "within_3_5_m_pct": 100.0,
     "worst_5": [
      {
-      "building_id": "w1229049685",
-      "m": 50.6
-     },
-     {
-      "building_id": "w1229050340",
-      "m": 21.4
-     },
-     {
-      "building_id": "w1227735212",
-      "m": 21.1
-     },
-     {
-      "building_id": "w1229050480",
-      "m": 12.4
-     },
-     {
       "building_id": "w1231079639",
-      "m": 11.7
+      "m": 0.0
+     },
+     {
+      "building_id": "w1229050143",
+      "m": 0.0
+     },
+     {
+      "building_id": "w1227734885",
+      "m": 0.0
+     },
+     {
+      "building_id": "w1231079223",
+      "m": 0.0
+     },
+     {
+      "building_id": "w1229050646",
+      "m": 0.0
      }
     ]
    },
+   "footprint_centre (centroid; uses the map)": {
+    "n": 0,
+    "median_m": null,
+    "p90_m": null,
+    "within_3_5_m_pct": null,
+    "worst_5": []
+   },
    "all buildings": {
     "n": 66,
-    "median_m": 1.06,
-    "p90_m": 9.38,
-    "within_3_5_m_pct": 62.1,
+    "median_m": 0.0,
+    "p90_m": 8.32,
+    "within_3_5_m_pct": 84.8,
     "worst_5": [
      {
-      "building_id": "w1229049685",
-      "m": 50.6
+      "building_id": "w1229050318",
+      "m": 9.8
      },
      {
-      "building_id": "w1229050340",
-      "m": 21.4
+      "building_id": "w167036803",
+      "m": 8.9
      },
      {
-      "building_id": "w1227735212",
-      "m": 21.1
+      "building_id": "w1229050557",
+      "m": 8.9
      },
      {
-      "building_id": "w1229050480",
-      "m": 12.4
+      "building_id": "w1231077054",
+      "m": 8.9
      },
      {
-      "building_id": "w1231079639",
-      "m": 11.7
+      "building_id": "w1229050150",
+      "m": 8.6
      }
     ]
    }
   },
-  "vs Google pin": {
-   "triangulated": {
-    "n": 3,
-    "median_m": 20.75,
-    "p90_m": 31.67,
-    "within_3_5_m_pct": 0.0,
+  "vs OSM front-wall centre": {
+   "triangulated (cameras only)": {
+    "n": 19,
+    "median_m": 4.89,
+    "p90_m": 9.08,
+    "within_3_5_m_pct": 36.8,
     "worst_5": [
      {
       "building_id": "w1229050318",
-      "m": 31.7
-     },
-     {
-      "building_id": "w1229050520",
-      "m": 20.8
+      "m": 10.0
      },
      {
       "building_id": "w1231077054",
-      "m": 11.8
+      "m": 9.1
+     },
+     {
+      "building_id": "w167036803",
+      "m": 8.9
+     },
+     {
+      "building_id": "w1229050557",
+      "m": 8.9
+     },
+     {
+      "building_id": "w1229050150",
+      "m": 8.6
      }
     ]
    },
-   "wall_hit (uses map footprint)": {
-    "n": 8,
-    "median_m": 14.93,
-    "p90_m": 44.01,
-    "within_3_5_m_pct": 0.0,
+   "wall_hit (camera ray on the map wall; uses the map)": {
+    "n": 30,
+    "median_m": 3.01,
+    "p90_m": 12.69,
+    "within_3_5_m_pct": 56.7,
     "worst_5": [
+     {
+      "building_id": "w735111700",
+      "m": 28.2
+     },
+     {
+      "building_id": "w1229049694",
+      "m": 24.1
+     },
      {
       "building_id": "w1229050305",
-      "m": 44.0
+      "m": 17.0
      },
      {
-      "building_id": "w1231076803",
-      "m": 37.4
+      "building_id": "w1229050573",
+      "m": 12.7
      },
      {
-      "building_id": "w1229050192",
-      "m": 19.6
-     },
-     {
-      "building_id": "w1229049699",
-      "m": 18.6
-     },
-     {
-      "building_id": "w1229050636",
-      "m": 11.3
+      "building_id": "w1229050681",
+      "m": 9.5
      }
     ]
    },
-   "footprint_centre (fallback)": {
-    "n": 4,
-    "median_m": 16.41,
-    "p90_m": 20.89,
-    "within_3_5_m_pct": 0.0,
+   "wall_centre (front-wall centre from the map; uses the map)": {
+    "n": 17,
+    "median_m": 0.01,
+    "p90_m": 0.01,
+    "within_3_5_m_pct": 100.0,
     "worst_5": [
      {
-      "building_id": "w1229050487",
-      "m": 20.9
+      "building_id": "w1231079639",
+      "m": 0.0
      },
      {
-      "building_id": "w1227734885",
-      "m": 17.6
+      "building_id": "w1231079223",
+      "m": 0.0
+     },
+     {
+      "building_id": "w1229050487",
+      "m": 0.0
      },
      {
       "building_id": "w1229050480",
-      "m": 15.3
+      "m": 0.0
      },
      {
-      "building_id": "w1229050228",
-      "m": 9.3
+      "building_id": "w1229050340",
+      "m": 0.0
      }
     ]
+   },
+   "footprint_centre (centroid; uses the map)": {
+    "n": 0,
+    "median_m": null,
+    "p90_m": null,
+    "within_3_5_m_pct": null,
+    "worst_5": []
    },
    "all buildings": {
-    "n": 15,
-    "median_m": 17.55,
-    "p90_m": 37.36,
-    "within_3_5_m_pct": 0.0,
+    "n": 66,
+    "median_m": 2.73,
+    "p90_m": 9.08,
+    "within_3_5_m_pct": 62.1,
     "worst_5": [
      {
-      "building_id": "w1229050305",
-      "m": 44.0
+      "building_id": "w735111700",
+      "m": 28.2
      },
      {
-      "building_id": "w1231076803",
-      "m": 37.4
+      "building_id": "w1229049694",
+      "m": 24.1
+     },
+     {
+      "building_id": "w1229050305",
+      "m": 17.0
+     },
+     {
+      "building_id": "w1229050573",
+      "m": 12.7
      },
      {
       "building_id": "w1229050318",
-      "m": 31.7
-     },
-     {
-      "building_id": "w1229050487",
-      "m": 20.9
-     },
-     {
-      "building_id": "w1229050520",
-      "m": 20.8
+      "m": 10.0
      }
     ]
    },
-   "match_rate": {
-    "buildings_with_sign_text": 51,
-    "place_found_within_50m": 15,
-    "used": 15
-   },
-   "pin_vs_osm_wall": {
-    "n": 15,
-    "median_m": 7.08,
-    "p90_m": 34.09,
-    "within_3_5_m_pct": 26.7,
+   "camera-derived (triangulated + wall_hit)": {
+    "n": 49,
+    "median_m": 3.64,
+    "p90_m": 10.02,
+    "within_3_5_m_pct": 49.0,
     "worst_5": [
      {
+      "building_id": "w735111700",
+      "m": 28.2
+     },
+     {
+      "building_id": "w1229049694",
+      "m": 24.1
+     },
+     {
+      "building_id": "w1229050305",
+      "m": 17.0
+     },
+     {
+      "building_id": "w1229050573",
+      "m": 12.7
+     },
+     {
       "building_id": "w1229050318",
-      "m": 41.3
+      "m": 10.0
+     }
+    ]
+   },
+   "baseline: footprint centroid for every building (uses the map)": {
+    "n": 66,
+    "median_m": 9.89,
+    "p90_m": 23.18,
+    "within_3_5_m_pct": 4.5,
+    "worst_5": [
+     {
+      "building_id": "w1229050065",
+      "m": 55.5
      },
      {
-      "building_id": "w1231076803",
-      "m": 34.1
+      "building_id": "w167036803",
+      "m": 54.6
      },
      {
-      "building_id": "w1229050487",
-      "m": 27.4
+      "building_id": "w1229049685",
+      "m": 53.6
      },
      {
-      "building_id": "w1227734885",
-      "m": 19.4
+      "building_id": "w1229050662",
+      "m": 25.8
      },
      {
-      "building_id": "w1229050192",
-      "m": 19.0
+      "building_id": "w1229050275",
+      "m": 24.4
      }
     ]
    }
@@ -463,224 +513,23 @@
   }
  },
  "vs Google pin": {
-  "status": "run",
-  "match_rate": {
-   "buildings_with_sign_text": 51,
-   "place_found_within_50m": 15,
-   "used": 15
-  },
-  "api_calls": {
-   "search": 0,
-   "details": 15
-  },
-  "triangulated": {
-   "before": {
-    "n": 9,
-    "median_m": 26.09,
-    "p90_m": 39.96,
-    "within_3_5_m_pct": 11.1,
-    "worst_5": [
-     {
-      "building_id": "w1231076803",
-      "m": 40.0
-     },
-     {
-      "building_id": "w1229050318",
-      "m": 33.6
-     },
-     {
-      "building_id": "w1229049699",
-      "m": 31.5
-     },
-     {
-      "building_id": "w1229050305",
-      "m": 30.3
-     },
-     {
-      "building_id": "w1229050520",
-      "m": 26.1
-     }
-    ]
-   },
-   "after": {
-    "n": 4,
-    "median_m": 16.3,
-    "p90_m": 31.67,
-    "within_3_5_m_pct": 0.0,
-    "worst_5": [
-     {
-      "building_id": "w1229050318",
-      "m": 31.7
-     },
-     {
-      "building_id": "w1229050520",
-      "m": 20.8
-     },
-     {
-      "building_id": "w1231077054",
-      "m": 11.8
-     },
-     {
-      "building_id": "w1229050448",
-      "m": 9.3
-     }
-    ]
-   }
-  },
-  "single_ray (uses footprint)": {
-   "before": {
-    "n": 4,
-    "median_m": 14.87,
-    "p90_m": 23.15,
-    "within_3_5_m_pct": 0.0,
-    "worst_5": [
-     {
-      "building_id": "w1229050192",
-      "m": 23.1
-     },
-     {
-      "building_id": "w1227734885",
-      "m": 18.4
-     },
-     {
-      "building_id": "w1229050636",
-      "m": 11.3
-     },
-     {
-      "building_id": "w1229050228",
-      "m": 5.2
-     }
-    ]
-   },
-   "after": {
-    "n": 9,
-    "median_m": 11.29,
-    "p90_m": 44.01,
-    "within_3_5_m_pct": 0.0,
-    "worst_5": [
-     {
-      "building_id": "w1229050305",
-      "m": 44.0
-     },
-     {
-      "building_id": "w1231076803",
-      "m": 37.4
-     },
-     {
-      "building_id": "w1229050192",
-      "m": 23.1
-     },
-     {
-      "building_id": "w1227734885",
-      "m": 18.4
-     },
-     {
-      "building_id": "w1229050636",
-      "m": 11.3
-     }
-    ]
-   }
-  },
-  "footprint centroid (baseline)": {
-   "before": {
-    "n": 15,
-    "median_m": 19.19,
-    "p90_m": 31.23,
-    "within_3_5_m_pct": 0.0,
-    "worst_5": [
-     {
-      "building_id": "w1231076803",
-      "m": 47.8
-     },
-     {
-      "building_id": "w1229050192",
-      "m": 31.2
-     },
-     {
-      "building_id": "w1229050318",
-      "m": 27.0
-     },
-     {
-      "building_id": "w1231077054",
-      "m": 23.4
-     },
-     {
-      "building_id": "w1229050305",
-      "m": 22.9
-     }
-    ]
-   },
-   "after": {
-    "n": 15,
-    "median_m": 19.19,
-    "p90_m": 31.23,
-    "within_3_5_m_pct": 0.0,
-    "worst_5": [
-     {
-      "building_id": "w1231076803",
-      "m": 47.8
-     },
-     {
-      "building_id": "w1229050192",
-      "m": 31.2
-     },
-     {
-      "building_id": "w1229050318",
-      "m": 27.0
-     },
-     {
-      "building_id": "w1231077054",
-      "m": 23.4
-     },
-     {
-      "building_id": "w1229050305",
-      "m": 22.9
-     }
-    ]
-   }
-  },
-  "reference_check_pin_vs_osm_facade": {
-   "n": 15,
-   "median_m": 7.08,
-   "p90_m": 34.09,
-   "within_3_5_m_pct": 26.7,
-   "worst_5": [
-    {
-     "building_id": "w1229050318",
-     "m": 41.3
-    },
-    {
-     "building_id": "w1231076803",
-     "m": 34.1
-    },
-    {
-     "building_id": "w1229050487",
-     "m": 27.4
-    },
-    {
-     "building_id": "w1227734885",
-     "m": 19.4
-    },
-    {
-     "building_id": "w1229050192",
-     "m": 19.0
-    }
-   ]
-  }
+  "status": "not run: no server-side Places key (GOOGLE_PLACES_SERVER_KEY) in backend/.env"
  },
  "rows": [
   {
    "id": "w1229049685",
    "street": "Bharathidasan Salai",
-   "official_method": "footprint_centre",
+   "official_method": "wall_centre",
    "official_uncertainty_m": null,
    "official_pairs": 0,
-   "official_facade_m": 50.56,
+   "official_facade_m": 0.0,
+   "official_front_m": 0.01,
    "before_method": "none",
    "before_uncertainty_m": null,
    "after_method": "none",
    "after_uncertainty_m": null,
-   "centroid_facade_m": 50.56
+   "centroid_facade_m": 50.56,
+   "centroid_front_m": 53.62
   },
   {
    "id": "w167036803",
@@ -689,6 +538,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 8.92,
+   "official_front_m": 8.94,
    "before_method": "triangulated",
    "before_uncertainty_m": 0.92,
    "before_facade_m": 11.59,
@@ -696,7 +546,7 @@
    "after_uncertainty_m": null,
    "after_facade_m": 8.92,
    "centroid_facade_m": 54.24,
-   "place_id": null
+   "centroid_front_m": 54.64
   },
   {
    "id": "w1229049694",
@@ -705,6 +555,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 24.14,
    "before_method": "triangulated",
    "before_uncertainty_m": 24.64,
    "before_facade_m": 15.99,
@@ -712,7 +563,7 @@
    "after_uncertainty_m": 19.15,
    "after_facade_m": 12.29,
    "centroid_facade_m": 11.86,
-   "place_id": null
+   "centroid_front_m": 11.86
   },
   {
    "id": "w456124855",
@@ -721,13 +572,15 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.01,
+   "official_front_m": 3.06,
    "before_method": "triangulated",
    "before_uncertainty_m": null,
    "before_facade_m": 48.23,
    "after_method": "triangulated",
    "after_uncertainty_m": 17.65,
    "after_facade_m": 26.27,
-   "centroid_facade_m": 18.04
+   "centroid_facade_m": 18.04,
+   "centroid_front_m": 18.05
   },
   {
    "id": "w735111700",
@@ -736,6 +589,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 28.18,
    "before_method": "triangulated",
    "before_uncertainty_m": 13.68,
    "before_facade_m": 14.29,
@@ -744,7 +598,7 @@
    "after_facade_m": 0.0,
    "after_fallback": "corner_not_triangulable",
    "centroid_facade_m": 11.96,
-   "place_id": null
+   "centroid_front_m": 11.96
   },
   {
    "id": "w1231077054",
@@ -753,6 +607,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 8.86,
+   "official_front_m": 9.08,
    "before_method": "triangulated",
    "before_uncertainty_m": 3.01,
    "before_facade_m": 14.94,
@@ -760,12 +615,7 @@
    "after_uncertainty_m": 6.81,
    "after_facade_m": 8.86,
    "centroid_facade_m": 20.97,
-   "place_id": "ChIJQysFthH1qjsRD3cezV-UUM0",
-   "before_pin_m": 17.67,
-   "after_pin_m": 11.84,
-   "centroid_pin_m": 23.38,
-   "official_pin_m": 11.84,
-   "pin_to_facade_m": 2.27
+   "centroid_front_m": 21.51
   },
   {
    "id": "w1229050662",
@@ -774,6 +624,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.31,
+   "official_front_m": 2.43,
    "before_method": "triangulated",
    "before_uncertainty_m": 1.34,
    "before_facade_m": 8.11,
@@ -781,7 +632,7 @@
    "after_uncertainty_m": null,
    "after_facade_m": 0.31,
    "centroid_facade_m": 25.32,
-   "place_id": null
+   "centroid_front_m": 25.82
   },
   {
    "id": "w1229050275",
@@ -790,13 +641,15 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 1.59,
    "before_method": "single_ray",
    "before_uncertainty_m": 3.5,
    "before_facade_m": 0.0,
    "after_method": "single_ray",
    "after_uncertainty_m": 3.5,
    "after_facade_m": 0.0,
-   "centroid_facade_m": 24.32
+   "centroid_facade_m": 24.32,
+   "centroid_front_m": 24.4
   },
   {
    "id": "w1229050065",
@@ -805,6 +658,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 1.25,
    "before_method": "single_ray",
    "before_uncertainty_m": 3.5,
    "before_facade_m": 0.0,
@@ -813,21 +667,22 @@
    "after_facade_m": 0.0,
    "after_fallback": "corner_not_triangulable",
    "centroid_facade_m": 54.89,
-   "place_id": null
+   "centroid_front_m": 55.47
   },
   {
    "id": "w1229050646",
    "street": "Bharathidasan Salai",
-   "official_method": "footprint_centre",
+   "official_method": "wall_centre",
    "official_uncertainty_m": null,
    "official_pairs": 0,
-   "official_facade_m": 9.07,
+   "official_facade_m": 0.0,
+   "official_front_m": 0.0,
    "before_method": "none",
    "before_uncertainty_m": null,
    "after_method": "none",
    "after_uncertainty_m": null,
    "centroid_facade_m": 9.07,
-   "place_id": null
+   "centroid_front_m": 13.59
   },
   {
    "id": "w1229050520",
@@ -836,6 +691,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 8.46,
+   "official_front_m": 8.47,
    "before_method": "triangulated",
    "before_uncertainty_m": 3.31,
    "before_facade_m": 15.01,
@@ -843,12 +699,7 @@
    "after_uncertainty_m": 1.16,
    "after_facade_m": 8.46,
    "centroid_facade_m": 10.3,
-   "place_id": "ChIJAeoWXAD1qjsRzlR59sdIpks",
-   "before_pin_m": 26.09,
-   "after_pin_m": 20.75,
-   "centroid_pin_m": 20.96,
-   "official_pin_m": 20.75,
-   "pin_to_facade_m": 4.41
+   "centroid_front_m": 10.3
   },
   {
    "id": "w1229050557",
@@ -857,6 +708,7 @@
    "official_uncertainty_m": 3.99,
    "official_pairs": 3,
    "official_facade_m": 8.9,
+   "official_front_m": 8.91,
    "before_method": "triangulated",
    "before_uncertainty_m": 2.98,
    "before_facade_m": 11.99,
@@ -864,21 +716,22 @@
    "after_uncertainty_m": 4.94,
    "after_facade_m": 8.9,
    "centroid_facade_m": 14.19,
-   "place_id": null
+   "centroid_front_m": 14.2
   },
   {
    "id": "w1229050340",
    "street": "Bharathidasan Salai",
-   "official_method": "footprint_centre",
+   "official_method": "wall_centre",
    "official_uncertainty_m": null,
    "official_pairs": 0,
-   "official_facade_m": 21.39,
+   "official_facade_m": 0.0,
+   "official_front_m": 0.01,
    "before_method": "none",
    "before_uncertainty_m": null,
    "after_method": "none",
    "after_uncertainty_m": null,
    "centroid_facade_m": 21.39,
-   "place_id": null
+   "centroid_front_m": 22.75
   },
   {
    "id": "w1229050603",
@@ -887,6 +740,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 0.26,
    "before_method": "single_ray",
    "before_uncertainty_m": 3.5,
    "before_facade_m": 0.0,
@@ -895,7 +749,7 @@
    "after_facade_m": 0.0,
    "after_fallback": "corner_not_triangulable",
    "centroid_facade_m": 23.08,
-   "place_id": null
+   "centroid_front_m": 23.18
   },
   {
    "id": "w1229049682",
@@ -904,6 +758,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 6.15,
    "before_method": "triangulated",
    "before_uncertainty_m": 3.1,
    "before_facade_m": 14.35,
@@ -911,7 +766,7 @@
    "after_uncertainty_m": 3.19,
    "after_facade_m": 13.25,
    "centroid_facade_m": 23.34,
-   "place_id": null
+   "centroid_front_m": 23.39
   },
   {
    "id": "w1229050106",
@@ -920,6 +775,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 1.49,
    "before_method": "triangulated",
    "before_uncertainty_m": 1.99,
    "before_facade_m": 3.87,
@@ -928,7 +784,7 @@
    "after_facade_m": 0.0,
    "after_fallback": "corner_not_triangulable",
    "centroid_facade_m": 15.23,
-   "place_id": null
+   "centroid_front_m": 15.23
   },
   {
    "id": "w1229050305",
@@ -937,6 +793,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.01,
+   "official_front_m": 17.0,
    "before_method": "triangulated",
    "before_uncertainty_m": 13.05,
    "before_facade_m": 20.52,
@@ -945,20 +802,16 @@
    "after_facade_m": 0.01,
    "after_fallback": "corner_not_triangulable",
    "centroid_facade_m": 8.34,
-   "place_id": "ChIJtzrRQ5L1qjsRqPAI9v4HjdQ",
-   "before_pin_m": 30.29,
-   "after_pin_m": 44.01,
-   "centroid_pin_m": 22.88,
-   "official_pin_m": 44.01,
-   "pin_to_facade_m": 12.74
+   "centroid_front_m": 8.87
   },
   {
    "id": "w1231079639",
    "street": "Bharathidasan Salai",
-   "official_method": "footprint_centre",
+   "official_method": "wall_centre",
    "official_uncertainty_m": null,
    "official_pairs": 0,
-   "official_facade_m": 11.74,
+   "official_facade_m": 0.01,
+   "official_front_m": 0.01,
    "before_method": "triangulated",
    "before_uncertainty_m": 3.59,
    "before_facade_m": 14.42,
@@ -966,21 +819,23 @@
    "after_uncertainty_m": 3.5,
    "after_facade_m": 11.2,
    "after_fallback": "corner_not_triangulable",
-   "centroid_facade_m": 11.75
+   "centroid_facade_m": 11.75,
+   "centroid_front_m": 14.84
   },
   {
    "id": "w1227735400",
    "street": "Bharathidasan Salai",
-   "official_method": "footprint_centre",
+   "official_method": "wall_centre",
    "official_uncertainty_m": null,
    "official_pairs": 0,
-   "official_facade_m": 7.83,
+   "official_facade_m": 0.0,
+   "official_front_m": 0.01,
    "before_method": "none",
    "before_uncertainty_m": null,
    "after_method": "none",
    "after_uncertainty_m": null,
    "centroid_facade_m": 7.82,
-   "place_id": null
+   "centroid_front_m": 7.83
   },
   {
    "id": "w1229050448",
@@ -989,6 +844,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 0.1,
    "before_method": "triangulated",
    "before_uncertainty_m": 5.15,
    "before_facade_m": 15.17,
@@ -996,12 +852,7 @@
    "after_uncertainty_m": 6.14,
    "after_facade_m": 11.77,
    "centroid_facade_m": 13.39,
-   "place_id": "ChIJ3xp0lu_1qjsRSf9DdJP5nE0",
-   "before_pin_m": 12.75,
-   "after_pin_m": 9.29,
-   "centroid_pin_m": 11.03,
-   "official_pin_m": 4.12,
-   "pin_to_facade_m": 3.27
+   "centroid_front_m": 13.49
   },
   {
    "id": "w1229050150",
@@ -1010,6 +861,7 @@
    "official_uncertainty_m": 0.67,
    "official_pairs": 2,
    "official_facade_m": 8.61,
+   "official_front_m": 8.63,
    "before_method": "triangulated",
    "before_uncertainty_m": 0.89,
    "before_facade_m": 9.05,
@@ -1017,7 +869,7 @@
    "after_uncertainty_m": 0.7,
    "after_facade_m": 8.61,
    "centroid_facade_m": 17.74,
-   "place_id": null
+   "centroid_front_m": 17.87
   },
   {
    "id": "w1229050547",
@@ -1026,6 +878,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 3.36,
+   "official_front_m": 3.47,
    "before_method": "triangulated",
    "before_uncertainty_m": 0.5,
    "before_facade_m": 5.83,
@@ -1033,7 +886,7 @@
    "after_uncertainty_m": null,
    "after_facade_m": 3.36,
    "centroid_facade_m": 17.31,
-   "place_id": null
+   "centroid_front_m": 17.31
   },
   {
    "id": "w1229049699",
@@ -1042,6 +895,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 5.08,
    "before_method": "triangulated",
    "before_uncertainty_m": null,
    "before_facade_m": 25.51,
@@ -1050,25 +904,22 @@
    "after_facade_m": 7.36,
    "after_fallback": "corner_not_triangulable",
    "centroid_facade_m": 11.68,
-   "place_id": "ChIJO31hSpT1qjsRy7jLGeFx1u8",
-   "before_pin_m": 31.46,
-   "after_pin_m": 10.07,
-   "centroid_pin_m": 19.19,
-   "official_pin_m": 18.59,
-   "pin_to_facade_m": 4.09
+   "centroid_front_m": 11.68
   },
   {
    "id": "w1227735212",
    "street": "Bharathidasan Salai",
-   "official_method": "footprint_centre",
+   "official_method": "wall_centre",
    "official_uncertainty_m": null,
    "official_pairs": 0,
-   "official_facade_m": 21.07,
+   "official_facade_m": 0.0,
+   "official_front_m": 0.0,
    "before_method": "none",
    "before_uncertainty_m": null,
    "after_method": "none",
    "after_uncertainty_m": null,
-   "centroid_facade_m": 21.07
+   "centroid_facade_m": 21.07,
+   "centroid_front_m": 21.07
   },
   {
    "id": "w1229050318",
@@ -1077,6 +928,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 9.85,
+   "official_front_m": 10.02,
    "before_method": "triangulated",
    "before_uncertainty_m": 5.96,
    "before_facade_m": 7.81,
@@ -1084,12 +936,7 @@
    "after_uncertainty_m": null,
    "after_facade_m": 9.85,
    "centroid_facade_m": 14.39,
-   "place_id": "ChIJRa3BumD1qjsRFKPMzU09UgA",
-   "before_pin_m": 33.65,
-   "after_pin_m": 31.67,
-   "centroid_pin_m": 27.0,
-   "official_pin_m": 31.67,
-   "pin_to_facade_m": 41.31
+   "centroid_front_m": 14.6
   },
   {
    "id": "w1229050569",
@@ -1098,6 +945,7 @@
    "official_uncertainty_m": 1.69,
    "official_pairs": 1,
    "official_facade_m": 1.15,
+   "official_front_m": 1.17,
    "before_method": "triangulated",
    "before_uncertainty_m": 1.82,
    "before_facade_m": 3.6,
@@ -1105,15 +953,16 @@
    "after_uncertainty_m": null,
    "after_facade_m": 1.15,
    "centroid_facade_m": 12.98,
-   "place_id": null
+   "centroid_front_m": 12.98
   },
   {
    "id": "w1227734885",
    "street": "Bharathidasan Salai",
-   "official_method": "footprint_centre",
+   "official_method": "wall_centre",
    "official_uncertainty_m": null,
    "official_pairs": 0,
-   "official_facade_m": 9.38,
+   "official_facade_m": 0.01,
+   "official_front_m": 0.01,
    "before_method": "single_ray",
    "before_uncertainty_m": 3.5,
    "before_facade_m": 3.04,
@@ -1122,12 +971,7 @@
    "after_facade_m": 3.04,
    "after_fallback": "corner_not_triangulable",
    "centroid_facade_m": 9.38,
-   "place_id": "ChIJS4cs3BT1qjsRnpLrogbwBc8",
-   "before_pin_m": 18.45,
-   "after_pin_m": 18.45,
-   "centroid_pin_m": 17.55,
-   "official_pin_m": 17.55,
-   "pin_to_facade_m": 19.37
+   "centroid_front_m": 11.92
   },
   {
    "id": "w1229049698",
@@ -1136,6 +980,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 4.1,
    "before_method": "triangulated",
    "before_uncertainty_m": 7.75,
    "before_facade_m": 3.61,
@@ -1144,12 +989,7 @@
    "after_facade_m": 0.0,
    "after_fallback": "corner_not_triangulable",
    "centroid_facade_m": 6.57,
-   "place_id": "ChIJUyZH2XX1qjsR0bRumBODnvw",
-   "before_pin_m": 2.28,
-   "after_pin_m": 5.32,
-   "centroid_pin_m": 4.95,
-   "official_pin_m": 5.32,
-   "pin_to_facade_m": 1.72
+   "centroid_front_m": 6.57
   },
   {
    "id": "w1229050192",
@@ -1158,6 +998,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 6.64,
    "before_method": "single_ray",
    "before_uncertainty_m": 3.5,
    "before_facade_m": 4.19,
@@ -1166,12 +1007,7 @@
    "after_facade_m": 4.19,
    "after_fallback": "corner_not_triangulable",
    "centroid_facade_m": 9.92,
-   "place_id": "ChIJtSpoxI71qjsRlu2ViONozg4",
-   "before_pin_m": 23.15,
-   "after_pin_m": 23.15,
-   "centroid_pin_m": 31.23,
-   "official_pin_m": 19.65,
-   "pin_to_facade_m": 18.97
+   "centroid_front_m": 9.92
   },
   {
    "id": "w1231076803",
@@ -1180,6 +1016,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 2.62,
    "before_method": "triangulated",
    "before_uncertainty_m": 13.1,
    "before_facade_m": 1.82,
@@ -1188,12 +1025,7 @@
    "after_facade_m": 0.0,
    "after_fallback": "corner_not_triangulable",
    "centroid_facade_m": 10.08,
-   "place_id": "ChIJnSofljT1qjsRn32FXnyXxgI",
-   "before_pin_m": 39.96,
-   "after_pin_m": 37.36,
-   "centroid_pin_m": 47.77,
-   "official_pin_m": 37.36,
-   "pin_to_facade_m": 34.09
+   "centroid_front_m": 11.57
   },
   {
    "id": "w1229050539",
@@ -1202,6 +1034,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 5.79,
    "before_method": "triangulated",
    "before_uncertainty_m": null,
    "before_facade_m": 7.01,
@@ -1210,7 +1043,7 @@
    "after_facade_m": 0.0,
    "after_fallback": "corner_not_triangulable",
    "centroid_facade_m": 13.52,
-   "place_id": null
+   "centroid_front_m": 13.52
   },
   {
    "id": "w1229050573",
@@ -1219,6 +1052,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 12.69,
    "before_method": "triangulated",
    "before_uncertainty_m": 12.19,
    "before_facade_m": 2.71,
@@ -1227,7 +1061,7 @@
    "after_facade_m": 0.0,
    "after_fallback": "corner_not_triangulable",
    "centroid_facade_m": 6.05,
-   "place_id": null
+   "centroid_front_m": 6.05
   },
   {
    "id": "w1229050681",
@@ -1236,6 +1070,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.01,
+   "official_front_m": 9.5,
    "before_method": "triangulated",
    "before_uncertainty_m": 5.09,
    "before_facade_m": 8.6,
@@ -1243,7 +1078,8 @@
    "after_uncertainty_m": 3.5,
    "after_facade_m": 0.01,
    "after_fallback": "corner_not_triangulable",
-   "centroid_facade_m": 6.76
+   "centroid_facade_m": 6.76,
+   "centroid_front_m": 6.76
   },
   {
    "id": "w1229050490",
@@ -1252,6 +1088,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 0.01,
    "before_method": "single_ray",
    "before_uncertainty_m": 3.5,
    "before_facade_m": 5.33,
@@ -1260,7 +1097,7 @@
    "after_facade_m": 5.33,
    "after_fallback": "corner_not_triangulable",
    "centroid_facade_m": 14.83,
-   "place_id": null
+   "centroid_front_m": 14.93
   },
   {
    "id": "w1229050564",
@@ -1269,6 +1106,7 @@
    "official_uncertainty_m": 4.68,
    "official_pairs": 2,
    "official_facade_m": 4.75,
+   "official_front_m": 4.89,
    "before_method": "triangulated",
    "before_uncertainty_m": 4.35,
    "before_facade_m": 8.59,
@@ -1276,24 +1114,22 @@
    "after_uncertainty_m": 5.21,
    "after_facade_m": 4.75,
    "centroid_facade_m": 11.64,
-   "place_id": null
+   "centroid_front_m": 11.64
   },
   {
    "id": "w1229050487",
    "street": "Bharathidasan Salai",
-   "official_method": "footprint_centre",
+   "official_method": "wall_centre",
    "official_uncertainty_m": null,
    "official_pairs": 0,
-   "official_facade_m": 9.24,
+   "official_facade_m": 0.0,
+   "official_front_m": 0.01,
    "before_method": "none",
    "before_uncertainty_m": null,
    "after_method": "none",
    "after_uncertainty_m": null,
    "centroid_facade_m": 9.24,
-   "place_id": "ChIJJY_dRAD1qjsRsDpg5SsDc2o",
-   "centroid_pin_m": 20.89,
-   "official_pin_m": 20.89,
-   "pin_to_facade_m": 27.4
+   "centroid_front_m": 9.24
   },
   {
    "id": "w1229050678",
@@ -1302,13 +1138,15 @@
    "official_uncertainty_m": null,
    "official_pairs": 1,
    "official_facade_m": 2.95,
+   "official_front_m": 3.81,
    "before_method": "triangulated",
    "before_uncertainty_m": null,
    "before_facade_m": 3.11,
    "after_method": "triangulated",
    "after_uncertainty_m": null,
    "after_facade_m": 2.95,
-   "centroid_facade_m": 6.77
+   "centroid_facade_m": 6.77,
+   "centroid_front_m": 7.91
   },
   {
    "id": "w1229050549",
@@ -1317,6 +1155,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 2.96,
    "before_method": "triangulated",
    "before_uncertainty_m": null,
    "before_facade_m": 0.48,
@@ -1325,20 +1164,22 @@
    "after_facade_m": 0.0,
    "after_fallback": "corner_not_triangulable",
    "centroid_facade_m": 8.2,
-   "place_id": null
+   "centroid_front_m": 8.2
   },
   {
    "id": "w1227734827",
    "street": "Bharathidasan Salai",
-   "official_method": "footprint_centre",
+   "official_method": "wall_centre",
    "official_uncertainty_m": null,
    "official_pairs": 0,
-   "official_facade_m": 8.43,
+   "official_facade_m": 0.0,
+   "official_front_m": 0.01,
    "before_method": "none",
    "before_uncertainty_m": null,
    "after_method": "none",
    "after_uncertainty_m": null,
-   "centroid_facade_m": 8.43
+   "centroid_facade_m": 8.43,
+   "centroid_front_m": 8.43
   },
   {
    "id": "w1229050524",
@@ -1347,13 +1188,15 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 2.94,
    "before_method": "single_ray",
    "before_uncertainty_m": 3.5,
    "before_facade_m": 0.0,
    "after_method": "single_ray",
    "after_uncertainty_m": 3.5,
    "after_facade_m": 0.0,
-   "centroid_facade_m": 10.31
+   "centroid_facade_m": 10.31,
+   "centroid_front_m": 10.31
   },
   {
    "id": "w1229050693",
@@ -1362,6 +1205,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.97,
+   "official_front_m": 3.7,
    "before_method": "triangulated",
    "before_uncertainty_m": 2.84,
    "before_facade_m": 5.66,
@@ -1369,7 +1213,7 @@
    "after_uncertainty_m": null,
    "after_facade_m": 0.97,
    "centroid_facade_m": 8.34,
-   "place_id": null
+   "centroid_front_m": 8.61
   },
   {
    "id": "w1229050320",
@@ -1378,6 +1222,7 @@
    "official_uncertainty_m": 5.13,
    "official_pairs": 3,
    "official_facade_m": 3.18,
+   "official_front_m": 3.5,
    "before_method": "triangulated",
    "before_uncertainty_m": 5.09,
    "before_facade_m": 4.7,
@@ -1385,24 +1230,22 @@
    "after_uncertainty_m": 8.68,
    "after_facade_m": 3.18,
    "centroid_facade_m": 5.57,
-   "place_id": null
+   "centroid_front_m": 6.84
   },
   {
    "id": "w1229050480",
    "street": "Bharathidasan Salai",
-   "official_method": "footprint_centre",
+   "official_method": "wall_centre",
    "official_uncertainty_m": null,
    "official_pairs": 0,
-   "official_facade_m": 12.42,
+   "official_facade_m": 0.0,
+   "official_front_m": 0.01,
    "before_method": "none",
    "before_uncertainty_m": null,
    "after_method": "none",
    "after_uncertainty_m": null,
    "centroid_facade_m": 12.42,
-   "place_id": "ChIJWR51ewD1qjsRV-KvIOmBsrk",
-   "centroid_pin_m": 15.28,
-   "official_pin_m": 15.28,
-   "pin_to_facade_m": 2.73
+   "centroid_front_m": 12.5
   },
   {
    "id": "w1231076852",
@@ -1411,6 +1254,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 4.64,
    "before_method": "single_ray",
    "before_uncertainty_m": 3.5,
    "before_facade_m": 0.0,
@@ -1418,7 +1262,7 @@
    "after_uncertainty_m": 3.5,
    "after_facade_m": 0.0,
    "centroid_facade_m": 8.33,
-   "place_id": null
+   "centroid_front_m": 8.33
   },
   {
    "id": "w1229050636",
@@ -1427,6 +1271,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 3.64,
    "before_method": "single_ray",
    "before_uncertainty_m": 3.5,
    "before_facade_m": 0.08,
@@ -1435,25 +1280,22 @@
    "after_facade_m": 0.08,
    "after_fallback": "corner_not_triangulable",
    "centroid_facade_m": 8.25,
-   "place_id": "ChIJWR51ewD1qjsRV-KvIOmBsrk",
-   "before_pin_m": 11.29,
-   "after_pin_m": 11.29,
-   "centroid_pin_m": 5.08,
-   "official_pin_m": 11.27,
-   "pin_to_facade_m": 11.29
+   "centroid_front_m": 8.26
   },
   {
    "id": "w1229050143",
    "street": "Bharathidasan Salai",
-   "official_method": "footprint_centre",
+   "official_method": "wall_centre",
    "official_uncertainty_m": null,
    "official_pairs": 0,
-   "official_facade_m": 4.53,
+   "official_facade_m": 0.01,
+   "official_front_m": 0.01,
    "before_method": "none",
    "before_uncertainty_m": null,
    "after_method": "none",
    "after_uncertainty_m": null,
-   "centroid_facade_m": 4.53
+   "centroid_facade_m": 4.53,
+   "centroid_front_m": 4.53
   },
   {
    "id": "w1231076953",
@@ -1462,21 +1304,24 @@
    "official_uncertainty_m": 3.14,
    "official_pairs": 1,
    "official_facade_m": 0.48,
+   "official_front_m": 2.42,
    "before_method": "triangulated",
    "before_uncertainty_m": 4.67,
    "before_facade_m": 2.44,
    "after_method": "triangulated",
    "after_uncertainty_m": 3.75,
    "after_facade_m": 0.48,
-   "centroid_facade_m": 6.14
+   "centroid_facade_m": 6.14,
+   "centroid_front_m": 6.53
   },
   {
    "id": "w1229050228",
    "street": "Bharathidasan Salai",
-   "official_method": "footprint_centre",
+   "official_method": "wall_centre",
    "official_uncertainty_m": null,
    "official_pairs": 0,
-   "official_facade_m": 6.04,
+   "official_facade_m": 0.0,
+   "official_front_m": 0.01,
    "before_method": "single_ray",
    "before_uncertainty_m": 3.5,
    "before_facade_m": 8.2,
@@ -1484,12 +1329,7 @@
    "after_uncertainty_m": 3.5,
    "after_facade_m": 8.2,
    "centroid_facade_m": 6.05,
-   "place_id": "ChIJ8RM8vxH1qjsRnDfC8RxJbzk",
-   "before_pin_m": 5.24,
-   "after_pin_m": 5.24,
-   "centroid_pin_m": 9.32,
-   "official_pin_m": 9.32,
-   "pin_to_facade_m": 5.15
+   "centroid_front_m": 6.05
   },
   {
    "id": "w1229050512",
@@ -1498,13 +1338,15 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 2.83,
    "before_method": "single_ray",
    "before_uncertainty_m": 3.5,
    "before_facade_m": 0.0,
    "after_method": "single_ray",
    "after_uncertainty_m": 3.5,
    "after_facade_m": 0.0,
-   "centroid_facade_m": 4.9
+   "centroid_facade_m": 4.9,
+   "centroid_front_m": 5.74
   },
   {
    "id": "w1229050289",
@@ -1513,6 +1355,7 @@
    "official_uncertainty_m": 5.45,
    "official_pairs": 4,
    "official_facade_m": 1.32,
+   "official_front_m": 1.57,
    "before_method": "triangulated",
    "before_uncertainty_m": 3.57,
    "before_facade_m": 2.14,
@@ -1520,22 +1363,24 @@
    "after_uncertainty_m": 6.13,
    "after_facade_m": 1.32,
    "centroid_facade_m": 11.3,
-   "place_id": null
+   "centroid_front_m": 11.46
   },
   {
    "id": "w1229050308",
    "street": "Bharathidasan Salai",
-   "official_method": "footprint_centre",
+   "official_method": "wall_centre",
    "official_uncertainty_m": null,
    "official_pairs": 0,
-   "official_facade_m": 8.41,
+   "official_facade_m": 0.0,
+   "official_front_m": 0.01,
    "before_method": "single_ray",
    "before_uncertainty_m": 3.5,
    "before_facade_m": 2.95,
    "after_method": "single_ray",
    "after_uncertainty_m": 3.5,
    "after_facade_m": 2.95,
-   "centroid_facade_m": 8.42
+   "centroid_facade_m": 8.42,
+   "centroid_front_m": 8.42
   },
   {
    "id": "w1229050329",
@@ -1544,6 +1389,7 @@
    "official_uncertainty_m": 1.4,
    "official_pairs": 1,
    "official_facade_m": 5.7,
+   "official_front_m": 6.47,
    "before_method": "triangulated",
    "before_uncertainty_m": 1.82,
    "before_facade_m": 8.26,
@@ -1551,7 +1397,7 @@
    "after_uncertainty_m": 0.78,
    "after_facade_m": 5.7,
    "centroid_facade_m": 9.69,
-   "place_id": null
+   "centroid_front_m": 9.86
   },
   {
    "id": "w1229050507",
@@ -1560,6 +1406,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 0.51,
    "before_method": "single_ray",
    "before_uncertainty_m": 3.5,
    "before_facade_m": 0.0,
@@ -1567,7 +1414,7 @@
    "after_uncertainty_m": 3.5,
    "after_facade_m": 0.0,
    "centroid_facade_m": 6.04,
-   "place_id": null
+   "centroid_front_m": 6.04
   },
   {
    "id": "w1231088366",
@@ -1576,13 +1423,15 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 1.06,
    "before_method": "single_ray",
    "before_uncertainty_m": 3.5,
    "before_facade_m": 0.0,
    "after_method": "single_ray",
    "after_uncertainty_m": 3.5,
    "after_facade_m": 0.0,
-   "centroid_facade_m": 7.89
+   "centroid_facade_m": 7.89,
+   "centroid_front_m": 7.89
   },
   {
    "id": "w1229050687",
@@ -1591,6 +1440,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 8.32,
+   "official_front_m": 8.52,
    "before_method": "triangulated",
    "before_uncertainty_m": 2.48,
    "before_facade_m": 5.43,
@@ -1598,7 +1448,7 @@
    "after_uncertainty_m": null,
    "after_facade_m": 8.32,
    "centroid_facade_m": 3.67,
-   "place_id": null
+   "centroid_front_m": 3.74
   },
   {
    "id": "w1229050085",
@@ -1607,6 +1457,7 @@
    "official_uncertainty_m": 2.92,
    "official_pairs": 1,
    "official_facade_m": 1.67,
+   "official_front_m": 3.02,
    "before_method": "triangulated",
    "before_uncertainty_m": 1.33,
    "before_facade_m": 2.74,
@@ -1614,7 +1465,7 @@
    "after_uncertainty_m": null,
    "after_facade_m": 1.67,
    "centroid_facade_m": 4.49,
-   "place_id": null
+   "centroid_front_m": 4.49
   },
   {
    "id": "w1229050357",
@@ -1623,6 +1474,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 4.93,
    "before_method": "triangulated",
    "before_uncertainty_m": null,
    "before_facade_m": 12.24,
@@ -1631,12 +1483,7 @@
    "after_facade_m": 0.0,
    "after_fallback": "corner_not_triangulable",
    "centroid_facade_m": 2.69,
-   "place_id": "ChIJEegLxUP1qjsRcYbll1Pz-bw",
-   "before_pin_m": 6.51,
-   "after_pin_m": 7.11,
-   "centroid_pin_m": 6.23,
-   "official_pin_m": 7.11,
-   "pin_to_facade_m": 7.08
+   "centroid_front_m": 2.69
   },
   {
    "id": "w1231076940",
@@ -1645,6 +1492,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 1,
    "official_facade_m": 4.04,
+   "official_front_m": 5.17,
    "before_method": "triangulated",
    "before_uncertainty_m": null,
    "before_facade_m": 3.6,
@@ -1652,20 +1500,22 @@
    "after_uncertainty_m": null,
    "after_facade_m": 4.04,
    "centroid_facade_m": 5.21,
-   "place_id": null
+   "centroid_front_m": 5.21
   },
   {
    "id": "w1227734756",
    "street": "Bharathidasan Salai",
-   "official_method": "footprint_centre",
+   "official_method": "wall_centre",
    "official_uncertainty_m": null,
    "official_pairs": 0,
-   "official_facade_m": 3.13,
+   "official_facade_m": 0.0,
+   "official_front_m": 0.0,
    "before_method": "none",
    "before_uncertainty_m": null,
    "after_method": "none",
    "after_uncertainty_m": null,
-   "centroid_facade_m": 3.13
+   "centroid_facade_m": 3.13,
+   "centroid_front_m": 3.13
   },
   {
    "id": "w1229050222",
@@ -1674,6 +1524,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 2.24,
    "before_method": "triangulated",
    "before_uncertainty_m": 0.5,
    "before_facade_m": 0.05,
@@ -1682,7 +1533,7 @@
    "after_facade_m": 0.0,
    "after_fallback": "corner_not_triangulable",
    "centroid_facade_m": 4.47,
-   "place_id": null
+   "centroid_front_m": 4.47
   },
   {
    "id": "w1229050583",
@@ -1691,6 +1542,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 3.32,
    "before_method": "single_ray",
    "before_uncertainty_m": 3.5,
    "before_facade_m": 0.0,
@@ -1699,21 +1551,22 @@
    "after_facade_m": 0.0,
    "after_fallback": "corner_not_triangulable",
    "centroid_facade_m": 2.84,
-   "place_id": null
+   "centroid_front_m": 3.95
   },
   {
    "id": "w1231079223",
    "street": "Bharathidasan Salai",
-   "official_method": "footprint_centre",
+   "official_method": "wall_centre",
    "official_uncertainty_m": null,
    "official_pairs": 0,
-   "official_facade_m": 5.12,
+   "official_facade_m": 0.0,
+   "official_front_m": 0.01,
    "before_method": "none",
    "before_uncertainty_m": null,
    "after_method": "none",
    "after_uncertainty_m": null,
    "centroid_facade_m": 5.11,
-   "place_id": null
+   "centroid_front_m": 5.11
   },
   {
    "id": "w1229050367",
@@ -1722,6 +1575,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 1.1,
    "before_method": "triangulated",
    "before_uncertainty_m": null,
    "before_facade_m": 0.56,
@@ -1730,21 +1584,22 @@
    "after_facade_m": 0.0,
    "after_fallback": "corner_not_triangulable",
    "centroid_facade_m": 4.03,
-   "place_id": null
+   "centroid_front_m": 4.03
   },
   {
    "id": "w1229050200",
    "street": "Bharathidasan Salai",
-   "official_method": "footprint_centre",
+   "official_method": "wall_centre",
    "official_uncertainty_m": null,
    "official_pairs": 0,
-   "official_facade_m": 4.05,
+   "official_facade_m": 0.0,
+   "official_front_m": 0.0,
    "before_method": "none",
    "before_uncertainty_m": null,
    "after_method": "none",
    "after_uncertainty_m": null,
    "centroid_facade_m": 4.05,
-   "place_id": null
+   "centroid_front_m": 4.05
   },
   {
    "id": "w1231076904",
@@ -1753,6 +1608,7 @@
    "official_uncertainty_m": null,
    "official_pairs": 0,
    "official_facade_m": 0.0,
+   "official_front_m": 0.63,
    "before_method": "triangulated",
    "before_uncertainty_m": null,
    "before_facade_m": 7.44,
@@ -1761,21 +1617,22 @@
    "after_facade_m": 0.0,
    "after_fallback": "corner_not_triangulable",
    "centroid_facade_m": 3.67,
-   "place_id": null
+   "centroid_front_m": 3.67
   },
   {
    "id": "w1229050417",
    "street": "Bharathidasan Salai",
-   "official_method": "footprint_centre",
+   "official_method": "wall_centre",
    "official_uncertainty_m": null,
    "official_pairs": 0,
-   "official_facade_m": 2.26,
+   "official_facade_m": 0.0,
+   "official_front_m": 0.0,
    "before_method": "none",
    "before_uncertainty_m": null,
    "after_method": "none",
    "after_uncertainty_m": null,
    "centroid_facade_m": 2.25,
-   "place_id": null
+   "centroid_front_m": 2.25
   }
  ]
 }

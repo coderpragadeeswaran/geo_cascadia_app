@@ -164,8 +164,8 @@ function Story({ h, pick }: { h: HoodData; pick: Pick }) {
         </div>),
       examples: [] },
     { id: 'positions', alias: 'assets', title: 'Positions', figure: n.assets_triangulated, figure2: n.assets_approximate, unit: 'pinpointed / approximate',
-      plain: `A pole or lamp seen from two or more camera positions is pinpointed where the sight lines cross (${fmt.format(n.assets_triangulated)}). Seen from one position only, its place is an estimate (${fmt.format(n.assets_approximate)}) and it goes to a person. Buildings: ${fmt.format(n.pos_triangulated)} located from their front-wall corners, ${fmt.format(n.pos_wall_hit)} where a sight line meets the front wall on the map, ${fmt.format(n.pos_footprint_centre)} use the middle of the outline. ${plural(n.pos_rejected, 'camera result')} ${n.pos_rejected === 1 ? 'was' : 'were'} rejected as implausible.`,
-      tech: `assets[].method triangulated ${n.assets_triangulated} (streetlights ${n.streetlight_triangulated}, poles ${n.pole_triangulated}); other ${n.assets_approximate}; cameras_used ≥ 2: ${n.assets_2plus_cameras} (not all could be triangulated). predicted_position.method (rule B, D28): triangulated ${n.pos_triangulated}, wall_hit ${n.pos_wall_hit}, footprint_centre ${n.pos_footprint_centre}; reason set (> 10 m from the road-facing wall) ${n.pos_rejected}.`,
+      plain: `A pole or lamp seen from two or more camera positions is pinpointed where the sight lines cross (${fmt.format(n.assets_triangulated)}). Seen from one position only, its place is an estimate (${fmt.format(n.assets_approximate)}) and it goes to a person. Buildings: ${fmt.format(n.pos_triangulated)} located from their front-wall corners, ${fmt.format(n.pos_wall_hit)} where a sight line meets the front wall on the map, ${fmt.format(n.pos_wall_centre)} use the centre of their front wall on the map (no camera line of sight)${n.pos_footprint_centre ? `, ${fmt.format(n.pos_footprint_centre)} the middle of the outline` : ''}. ${plural(n.pos_rejected, 'camera result')} ${n.pos_rejected === 1 ? 'was' : 'were'} rejected as implausible.`,
+      tech: `assets[].method triangulated ${n.assets_triangulated} (streetlights ${n.streetlight_triangulated}, poles ${n.pole_triangulated}); other ${n.assets_approximate}; cameras_used ≥ 2: ${n.assets_2plus_cameras} (not all could be triangulated). predicted_position.method (rule B, D28): triangulated ${n.pos_triangulated}, wall_hit ${n.pos_wall_hit}, wall_centre ${n.pos_wall_centre}, footprint_centre ${n.pos_footprint_centre}; reason set (> 10 m from the road-facing wall) ${n.pos_rejected}.`,
       visual: (run) => (
         <div className="space-y-4">
           <SegBar run={run} onPick={pick} unit="poles and streetlights" segs={[
@@ -174,6 +174,7 @@ function Story({ h, pick }: { h: HoodData; pick: Pick }) {
           <SegBar run={run} onPick={pick} unit="buildings" segs={[
             { key: 't', label: 'front-wall corners', value: n.pos_triangulated, kind: 'kept', examples: n.pos_triangulated ? 'pos.triangulated' : null },
             { key: 'w', label: 'sight line meets the wall', value: n.pos_wall_hit, kind: 'alt', examples: n.pos_wall_hit ? 'pos.wall_hit' : null },
+            { key: 'f', label: 'front-wall centre from the map', value: n.pos_wall_centre, kind: 'idle', examples: n.pos_wall_centre ? 'pos.wall_centre' : null },
             { key: 'c', label: 'middle of the outline', value: n.pos_footprint_centre, kind: 'idle', examples: n.pos_footprint_centre ? 'pos.footprint_centre' : null }]} />
         </div>),
       examples: n.pos_rejected ? [exBtn('pos.rejected', 'Camera results rejected')] : [] },

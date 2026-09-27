@@ -109,26 +109,26 @@ def cards(mc):
     g = "gate1_position"
     if g in mc:
         gm = mc[g]
-        wall = (gm.get("vs OSM wall") or {}).get("ward29") or {}
-        tri = "gate1_position.vs OSM wall.ward29.triangulated"
+        front = (gm.get("vs OSM front-wall centre") or {}).get("ward29") or {}
+        cam = "gate1_position.vs OSM front-wall centre.ward29.camera-derived (triangulated + wall_hit)"
+        base = "gate1_position.vs OSM front-wall centre.ward29.baseline: footprint centroid for every building (uses the map)"
         card = {"id": "position", "title": "Building position", "measured": f"predicted point vs target ≤ {gm.get('target_m')} m (FarmwiseAI Gate 1)",
                 "method": get(mc, "gate1_position.rule.triangulated"),
                 "result": _num(mc, "gate1_position.status", "status"),
                 "baseline": None, "more": [],
                 "verdict": get(mc, "gate1_position.status_note"),
-                "caveat": "Wall-hit points sit on the wall by construction, so no pooled 'all buildings' figure is given.",
+                "caveat": ("Organiser guidance: OpenStreetMap footprints are accepted as the reference; the position is the "
+                           "centre of the building's front. The front-wall-centre method is that point by construction, so only "
+                           "camera-derived positions are scored here. No surveyed reference exists."),
                 "section": "gate1"}
-        if "triangulated" in wall:
-            card["result"] = _num(mc, f"{tri}.median_m", "triangulated: median distance to the OSM front wall", kind="m",
-                                  n_src=f"{tri}.n")
-            card["more"].append(_num(mc, f"{tri}.within_3_5_m_pct", "triangulated within 3.5 m of the OSM wall (%)", kind="pctn",
-                                     n_src=f"{tri}.n"))
+        if "camera-derived (triangulated + wall_hit)" in front:
+            card["result"] = _num(mc, f"{cam}.median_m", "camera-derived: median distance to the centre of the OSM front wall",
+                                  kind="m", n_src=f"{cam}.n")
+            card["more"].append(_num(mc, f"{cam}.within_3_5_m_pct", "camera-derived within 3.5 m of the front-wall centre (%)",
+                                     kind="pctn", n_src=f"{cam}.n"))
             card["more"].append(_num(mc, "gate1_position.status", "status"))
-        fc = "gate1_position.vs OSM wall.ward29.footprint_centre (fallback)"
-        try:
-            card["baseline"] = _num(mc, f"{fc}.median_m", "footprint centre: median distance to the OSM wall", kind="m", n_src=f"{fc}.n")
-        except KeyError:
-            pass
+            card["baseline"] = _num(mc, f"{base}.median_m", "the footprint centroid: median distance to the front-wall centre",
+                                    kind="m", n_src=f"{base}.n")
         out.append(card)
     return out
 

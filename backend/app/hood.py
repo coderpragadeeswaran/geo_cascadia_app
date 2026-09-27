@@ -27,7 +27,7 @@ TIER_LABEL = {"skipped": "skipped (CPU fast-mode cap)", "watermark": "Google wat
 GATE = (("full_frame", "box fills the whole photo"), ("top_cut", "roof cut off at the top"),
         ("bottom_cut", "base cut off at the bottom"), ("sliver", "thin sliver at the photo edge"))
 GATE_OTHER = "implausibly tall box"
-POS_METHODS = ("triangulated", "wall_hit", "footprint_centre")
+POS_METHODS = ("triangulated", "wall_hit", "wall_centre", "footprint_centre")
 
 
 def gate_reason(q):
@@ -459,7 +459,7 @@ EXAMPLE_KEYS = ("streets", "cameras.kept", "cameras.inside", "panos.not_selected
                 "names.ocr", "names.vlm_gate", "names.vlm_only",
                 "floors.measured", "floors.low_confidence", "floors.not_measured",
                 "bld.usable", "bld.rejected", "bld.no_box", "assets.triangulated", "assets.approximate",
-                "pos.triangulated", "pos.wall_hit", "pos.footprint_centre", "pos.rejected",
+                "pos.triangulated", "pos.wall_hit", "pos.wall_centre", "pos.footprint_centre", "pos.rejected",
                 "match.matched", "match.discrepancy", "match.no_record", "gaps", "unmapped.kept")
 
 
@@ -634,7 +634,8 @@ def examples(bundle, F, key):
             return [_ref("building", b, (b["predicted_position"]["reason"])) for b in _spread(xs)]
         why = {"triangulated": "the front wall's two corners were located from 2+ camera positions",
                "wall_hit": "the best camera's line of sight meets the street-facing wall on the map",
-               "footprint_centre": "no line of sight reached the front wall: the middle of the outline is used"}[grp]
+               "wall_centre": "no camera line of sight reached the front wall: the centre of the front wall on the map is used",
+               "footprint_centre": "no road-facing wall could be found on the map: the middle of the outline is used"}[grp]
         return [_ref("building", b, why) for b in _spread([b for b in B if (b.get("predicted_position") or {}).get("method") == grp])]
     if head == "match":
         why = {"matched": "a register entry is within 15 m and agrees", "discrepancy": "the register entry differs (synthetic register)",

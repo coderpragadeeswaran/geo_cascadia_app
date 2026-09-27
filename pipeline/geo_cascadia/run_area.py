@@ -88,7 +88,7 @@ def run_area(polygon, out_dir, cfg=None, area_name="area", street_filter=None, p
     views = building_views(dets, area)
     save("assets", assets); save("building_views", views)
     # predicted building position by the fixed rule (D27, D28): triangulated (>= 2 cameras, plausible) / wall_hit /
-    # footprint_centre.
+    # wall_centre (road-facing wall midpoint, D33) / footprint_centre.
     # lat/lon stay the footprint centroid. Same code for every area and every live street.
     brays = building_rays(dets, area, ("building", "signboard"))
     bpos = predict_positions(dets, area, buildings, {r["name"]: r["geom"] for r in area.streets}, cfg,

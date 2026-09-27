@@ -103,16 +103,19 @@ export function reviewReasons(reasons: string[], finding: { match_status?: strin
 export function positionMethodLabel(p: { method: string; n_cameras: number }) {
   if (p.method === 'triangulated') return `Where ${plural(p.n_cameras, 'camera view')} cross`
   if (p.method === 'wall_hit') return 'Where the camera’s line of sight meets the front wall on the map'
+  if (p.method === 'wall_centre') return 'Front-wall centre from the map (no camera line of sight)'
   return 'Middle of the building outline on the map (fallback)'
 }
 /** the technical name of the method, for the small grey hint */
 export const positionMethodTerm = (method: string) =>
-  method === 'triangulated' ? 'triangulated' : method === 'wall_hit' ? 'wall hit, uses the map footprint' : 'footprint centre'
+  method === 'triangulated' ? 'triangulated' : method === 'wall_hit' ? 'wall hit, uses the map footprint'
+    : method === 'wall_centre' ? 'front-wall centre, uses the map footprint' : 'footprint centre'
 /** the badge's tooltip: how the point was found (and why the camera views were not used, when they were rejected) */
 export function positionMethodWhy(p: { method: string; reason?: string | null }) {
   const base = p.method === 'triangulated' ? 'The two ends of the front wall were located from 2 or more camera positions; the point is halfway between them.'
     : p.method === 'wall_hit' ? 'Where the best camera’s line of sight meets the building’s street-facing wall on the map (so it depends on the map outline).'
-      : 'No camera’s line of sight reached the street-facing wall, so the middle of the building outline is used.'
+      : p.method === 'wall_centre' ? 'No camera’s line of sight reached the street-facing wall, so the centre of that wall on the map is used: the centre of the building as seen from the street.'
+        : 'No street-facing wall could be found on the map, so the middle of the building outline is used.'
   const m = p.reason ? /\(([\d.]+) m from ([^)]+)\)/.exec(p.reason) : null
   const why = p.reason ? (m ? ` The camera views were not used: they put the building ${m[1]} m from the ${m[2]}, which is not plausible (the limit is 10 m).` : ` ${p.reason}.`) : ''
   return base + why
