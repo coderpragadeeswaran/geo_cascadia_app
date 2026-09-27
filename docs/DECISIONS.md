@@ -1178,3 +1178,56 @@ file `run_area` resumes from (`STAGE_FILES`: panos, plan, buildings, _views_done
 **Pasted inputs.** URL, worker token, AWS keys and Google key have every whitespace character removed, and surrounding
 quotes too. Keys from the setup cells (env / `cfg.maps_key`) are cleaned as well. A folder path keeps its inner spaces.
 
+### D38. Sign reading in its own process; memory lines; OCR self-test (P6c)
+**Failure.** Twice on a free Colab T4 the whole session restarted, with no Python traceback, while the OCR stage was
+loading its Paddle models ("Creating model: PP-OCRv6_medium_det … Using cached files"). This was after detect and
+geometry had resumed from Drive. The likely causes are running out of RAM, or Paddle and torch (CUDA) clashing in one
+process. Neither is proven. The new memory lines are there to show which.
+
+**Pipeline hook (plumbing only).** `run_area(..., ocr_runner=None)`. When it is given, it is called instead of
+`run_ocr` with the same arguments and must return the same `(results, names, stats)`. With None, `run_ocr` runs
+exactly as before. OCR logic, prompts and thresholds are unchanged. The worker's `check_pipeline` now requires this
+hook, so an older zip is refused with the copy-the-package message.
+
+**Worker.**
+- Before OCR:
+  - YOLO is no longer referenced once detection returns. The worker runs `gc.collect()`, then
+    `torch.cuda.empty_cache()` and `ipc_collect()`.
+- OCR runs in its own Python process (`OCR_CHILD`).
+  - It imports the package's own `ocr.run_ocr` and runs it unchanged. It reports `@@ LOADED`, `@@ PROGRESS n total` and
+    the result through stdout, and its log lines are printed with "│".
+  - The spec file holds no key: `maps_key` is left out, and keys stay in the environment.
+  - In the child, tuple settings are turned back into tuples, so it rebuilds exactly the same `Config`.
+- A crash is reported with its cause: killed (usually out of RAM), a segmentation fault, an abort, or the exit code
+  with the last line.
+  - After the first crash the worker tries once more the same way. After a second crash on the GPU it continues on
+    the CPU in quick mode, with `CUDA_VISIBLE_DEVICES=""`.
+  - The job card says so each time. `ocr.json` is saved every 25 crops, so each try keeps the signs already read.
+  - `meta.run.ocr_mode` comes from the stats of the try that finished, so an export made after the fallback says
+    "fast".
+  - The tries are recorded in `worker_run.json` (`ocr_tries`).
+  - After a third crash (the second on a CPU worker) the job fails as retryable ("Press Retry").
+  - A cancel or stop kills the child process.
+- A memory line is printed at worker start, at each stage boundary ("detect done → geometry starts"), before and after
+  OCR, when the OCR models are loaded, and after a crash. It shows RAM used/total with the worker's own share (psutil,
+  or /proc/meminfo), and GPU used/total for all processes (nvidia-smi, so the OCR child is included; it never starts
+  CUDA itself).
+- OCR self-test at start (`OCR_SELF_TEST = "ask"`):
+  - It runs in the same child process: it loads the models, reads a drawn "HOTEL" image, and the process exits, which
+    frees its memory.
+  - It tests the jobs' own setting first, then the CPU quick fallback.
+  - If both fail, it asks before claiming any job.
+
+
+**Tests must never claim a real job (found while running P6c).** Three tests called `/worker/next` without a job id:
+`test_p4_api::test_cancel_job`, `test_writes::test_job_queue_and_worker_protocol` and
+`test_p6::test_claim_one_job…`. With a real job queued or interrupted, they claimed it. Two of them then "gave it
+back" as queued with `started_at` / `worker_id` / `heartbeat_at` cleared, and the third left it running under
+worker "pytest".
+- This hit the real Sanganur Road job (086d1442…). It stayed claimable and its Drive progress was not affected, but
+  its original start time was lost.
+- The job was restored to the state it had before the last run.
+- `test_cancel_job` now claims the cancelled job by its id. The other two claim without an id only when
+  `conftest.real_claimable()` is 0.
+- `test_p5::test_clear_test_jobs…` skips while a real analysis is active, like `test_p6`. `test_trimmed_job…` uses a
+  test job.

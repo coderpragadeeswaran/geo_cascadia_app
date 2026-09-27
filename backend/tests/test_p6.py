@@ -13,6 +13,7 @@ import time
 import pytest
 
 from app.settings import ROOT
+from conftest import real_claimable
 
 POLY = {"type": "Polygon", "coordinates": [[[77.3425, 11.1080], [77.3440, 11.1080], [77.3440, 11.1092], [77.3425, 11.1080]]]}
 BIG = {"type": "Polygon", "coordinates": [[[77.30, 11.10], [77.32, 11.10], [77.32, 11.12], [77.30, 11.12], [77.30, 11.10]]]}
@@ -67,11 +68,11 @@ def test_worker_endpoints_need_the_token(online, W):
 
 def test_claim_one_job_and_never_a_test_job_without_its_id(online, W, jobs):
     j = jobs()
-    r = online.post("/worker/next", headers=W, json={"worker_id": "pytest-w1", "device": "cpu"}).json()["job"]
-    assert r is None or (r["id"] != j["id"] and not r["is_test"])
-    if r:                                   # a real queued job was claimed by the line above: give it back untouched
-        with online.app.state.data.pool.connection() as c:
-            c.execute("update jobs set status = 'queued', worker_id = null, started_at = null, heartbeat_at = null where id = %s", (r["id"],))
+    with online.app.state.data.pool.connection() as c:
+        free = not real_claimable(c)
+    if free:                                # only when no real job could be taken by a claim without id
+        r = online.post("/worker/next", headers=W, json={"worker_id": "pytest-w1", "device": "cpu"}).json()["job"]
+        assert r is None
     c = claim(online, W, j["id"], device="cpu")
     assert c["id"] == j["id"] and c["status"] == "running" and c["worker_id"] == "pytest-w1" and c["device"] == "cpu"
     assert claim(online, W, j["id"], worker="pytest-w2") is None          # held by a live worker: not claimable

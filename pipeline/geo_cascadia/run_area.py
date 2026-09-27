@@ -25,12 +25,14 @@ def _print_progress(stage, done, total):
 
 
 def run_area(polygon, out_dir, cfg=None, area_name="area", street_filter=None, progress=None, resume=True, panos=None,
-             way_ids=None, ms_fill=True, on_stage=None, plan_check=None):
+             way_ids=None, ms_fill=True, on_stage=None, plan_check=None, ocr_runner=None):
     """polygon: shapely (lon/lat) or GeoJSON geometry. street_filter: OSM street names to restrict to.
     panos: optional pre-discovered panorama list (skips discovery).
     on_stage(name, seconds): called when a stage finishes (P6 worker: live progress).
     plan_check(plan): called after the capture plan, BEFORE any Street View photo is fetched; it may raise to stop
-    the run (P6 worker: cost cap -> "needs approval"). The plan is saved first, so a resumed run reuses it."""
+    the run (P6 worker: cost cap -> "needs approval"). The plan is saved first, so a resumed run reuses it.
+    ocr_runner(dets, cfg, out_dir, progress): runs the OCR stage instead of run_ocr and returns the same
+    (results, names, stats) (P6c worker: OCR in its own process). None = run_ocr here, unchanged."""
     cfg = (cfg or Config()).resolve()
     progress = progress or _print_progress
     os.makedirs(out_dir, exist_ok=True)
@@ -102,7 +104,7 @@ def run_area(polygon, out_dir, cfg=None, area_name="area", street_filter=None, p
     save("building_positions", {"by_building": bpos, "no_footprint": bfree, "no_footprint_stats": bfree_stats})
     stage("geometry")
     # 6. OCR
-    ocr_res, ocr_names, ocr_stats = run_ocr(dets, cfg, out_dir, progress)
+    ocr_res, ocr_names, ocr_stats = (ocr_runner or run_ocr)(dets, cfg, out_dir, progress)
     stage("ocr")
     # 7. VLM
     vlm = VLM(cfg)

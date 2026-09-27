@@ -65,3 +65,10 @@ def review_area(online):
     with D.pool.connection() as c:
         c.execute("delete from areas where slug = %s", (TEST_AREA,))
     D.db.invalidate()
+
+
+def real_claimable(c):
+    """real (non-test) jobs a worker asking without an id would claim: queued, waiting for keys, or interrupted.
+    Tests must never claim those: resetting one loses its start time and stage (it happened to a real Colab job)."""
+    return c.execute("""select count(*) from jobs where not is_test and not cancel_requested and (status in ('queued', 'expired_token')
+                        or (status = 'running' and (heartbeat_at is null or heartbeat_at < now() - interval '2 minutes')))""").fetchone()[0]

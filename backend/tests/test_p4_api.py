@@ -70,8 +70,10 @@ def test_cancel_job(online):
         c = online.post(f"/jobs/{j['id']}/cancel").json()["job"]
         assert c["status"] == "failed" and c["message"] == "cancelled by user"
         assert online.post(f"/jobs/{j['id']}/cancel").status_code == 409
-        nxt = online.post("/worker/next", json={"worker_id": "pytest"}, headers={"X-Worker-Token": Settings().worker_token}).json()
-        assert not nxt["job"] or nxt["job"]["id"] != j["id"]
+        # asked for by its id, so a real queued job is never taken by this test
+        nxt = online.post("/worker/next", json={"worker_id": "pytest", "job": j["id"]},
+                          headers={"X-Worker-Token": Settings().worker_token}).json()
+        assert nxt["job"] is None
     finally:
         online.app.state.workers.pop("pytest", None)          # don't leave a "worker online" for later tests
         with online.app.state.data.pool.connection() as c:

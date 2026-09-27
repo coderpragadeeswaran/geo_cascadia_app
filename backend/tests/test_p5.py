@@ -321,6 +321,11 @@ def _mkjob(online, test=True, name="pytest job"):
 
 
 def test_clear_test_jobs_removes_only_test_jobs(online):
+    with online.app.state.data.pool.connection() as c:
+        busy = c.execute("select count(*) from jobs where not is_test and status in "
+                         "('queued', 'running', 'expired_token', 'needs_approval')").fetchone()[0]
+    if busy:
+        pytest.skip("a real analysis is active; this test needs to queue a real job (one street at a time)")
     t = _mkjob(online, True, "pytest test job")                       # a test job that failed
     real = _mkjob(online, False, "pytest real queued job")            # a real request, still queued
     done = []

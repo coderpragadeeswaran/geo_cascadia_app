@@ -16,8 +16,10 @@ WORK_DIR = None                 # where job files are kept (None: /content/gc_jo
 CPU_OCR_MODE = "fast"           # on a CPU, sign reading uses the fast mode (a few crops per building); "full" = all crops
 SAVE_TO_DRIVE = True            # with Drive mounted, each street's progress is saved there after every stage, so a restarted
 DRIVE_JOBS_DIR = "/content/drive/MyDrive/gc_worker_jobs"   # worker on the same account continues (no photo bought twice)
+OCR_SELF_TEST = "ask"           # at start: load the sign reader once, read one test image, free it. "ask" | True | False
 
-import _thread, dataclasses, getpass, glob, inspect, json, os, platform, shutil, socket, sys, threading, time, traceback, uuid
+import _thread, collections, dataclasses, gc, getpass, glob, inspect, json, os, platform, shutil, socket, subprocess, sys, \
+    threading, time, traceback, uuid
 
 try:
     import requests
@@ -92,7 +94,7 @@ def check_transformers():
 def check_pipeline(run_area):
     """This worker needs the P6 version of the package (live progress + cost cap). An older copy on Drive lacks them."""
     params = inspect.signature(run_area).parameters
-    if "plan_check" not in params or "on_stage" not in params:
+    if not {"plan_check", "on_stage", "ocr_runner"} <= set(params):
         raise SystemExit("The pipeline package is older than this worker. Copy pipeline/geo_cascadia from the repo to your "
                          "Drive folder (worker/README.md, 'Shared Drive folder'), re-run the setup cells, then this cell.")
 
@@ -197,7 +199,223 @@ class Backend:
                 fails = 0
 
 
-# ----------------------------------------------------------------------------------------------- 3. one job
+# ----------------------------------------------------------------------------------------------- 3. memory + sign reading
+def _gb(b):
+    return f"{b / 2 ** 30:.1f}"
+
+
+def mem_line():
+    """RAM used / total on the machine (this worker's share) and GPU memory used / total (all processes, nvidia-smi, so
+    the OCR process is included). Never initialises CUDA itself."""
+    parts = []
+    try:
+        import psutil
+        vm = psutil.virtual_memory()
+        parts.append(f"RAM {_gb(vm.total - vm.available)}/{_gb(vm.total)} GB (worker {_gb(psutil.Process().memory_info().rss)})")
+    except Exception:
+        try:
+            m = {ln.split(":")[0]: int(ln.split()[1]) * 1024 for ln in open("/proc/meminfo")}
+            parts.append(f"RAM {_gb(m['MemTotal'] - m['MemAvailable'])}/{_gb(m['MemTotal'])} GB")
+        except Exception:
+            parts.append("RAM ?")
+    try:
+        r = subprocess.run(["nvidia-smi", "--query-gpu=memory.used,memory.total", "--format=csv,noheader,nounits"],
+                           capture_output=True, text=True, timeout=5)
+        used, total = (float(x) for x in r.stdout.strip().splitlines()[0].split(","))
+        parts.append(f"GPU {used / 1024:.1f}/{total / 1024:.1f} GB")
+    except Exception:
+        pass                                                       # no NVIDIA GPU
+    return " · ".join(parts)
+
+
+def log_mem(label):
+    print(f"  [mem] {label}: {mem_line()}", flush=True)
+
+
+def free_memory():
+    """Before sign reading: the detector (YOLO) is no longer referenced once detection returns; collect it and hand its
+    cached GPU memory back, so the OCR process gets the RAM and GPU."""
+    gc.collect()
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+    except Exception:
+        pass
+
+
+# The OCR process. It imports the pipeline's own OCR code and runs it unchanged; it only reports when the models are
+# loaded (where the Colab crashes happened), progress, and the result. "@@" lines are for the worker.
+OCR_CHILD = r'''
+import json, os, sys, time
+spec = json.load(open(sys.argv[1]))
+if spec.get("pkg"):
+    sys.path.insert(0, spec["pkg"])
+from geo_cascadia.config import Config
+from geo_cascadia import ocr as O
+base = Config()
+tup = lambda v: tuple(tup(x) for x in v) if isinstance(v, list) else v      # JSON made the tuple settings lists
+cfg = Config(**{k: tup(v) if isinstance(getattr(base, k, None), tuple) else v for k, v in spec["cfg"].items()})
+say = lambda *a: print("@@", *a, flush=True)
+if spec["mode"] == "selftest":
+    from PIL import Image, ImageDraw, ImageFont
+    t = time.time()
+    eng = O.OCR(cfg); say("LOADED")
+    im = Image.new("RGB", (360, 90), "white")
+    try:
+        font = ImageFont.load_default(size=56)
+    except TypeError:
+        font = ImageFont.load_default()
+    ImageDraw.Draw(im).text((12, 12), "HOTEL", fill="black", font=font)
+    path = spec["result"] + ".png"; im.save(path)
+    det = {"pano_id": "selftest", "heading": 0, "pitch": 0, "conf": 1.0, "y1": 100, "y2": 190, "H": 640,
+           "footprint_faced": None}
+    r = eng.read(path, det)
+    json.dump({"text": r.get("best") or r.get("text") or "", "mode": eng.mode, "seconds": round(time.time() - t, 1)},
+              open(spec["result"], "w"))
+else:
+    dets = json.load(open(spec["dets"]))
+    real = O.OCR
+    def loaded(c):
+        e = real(c); say("LOADED"); return e
+    O.OCR = loaded
+    res, names, stats = O.run_ocr(dets, cfg, spec["out_dir"], lambda name, n, total: say("PROGRESS", n, total))
+    json.dump({"names": names, "stats": stats}, open(spec["result"], "w"))
+say("DONE")
+'''
+
+
+def pkg_parent():
+    """The folder holding the geo_cascadia package this worker imported, for the OCR process's sys.path."""
+    m = sys.modules.get("geo_cascadia")
+    f = getattr(m, "__file__", None) if m else None
+    return os.path.dirname(os.path.dirname(os.path.abspath(f))) if f else ""
+
+
+def crash_reason(rc, tail):
+    if rc in (-9, 137):
+        return "the system killed it, which usually means it ran out of memory (RAM)"
+    if rc in (-11, 139):
+        return "a native crash (segmentation fault) inside Paddle / CUDA"
+    if rc in (-6, 134):
+        return "a native abort inside Paddle / CUDA"
+    if rc == 0:
+        return "it ended without a result"
+    last = next((ln for ln in reversed(tail) if ln.strip()), "")
+    return f"exit code {rc}" + (f": {last.strip()[:160]}" if last else "")
+
+
+def run_child(mode, cfg, extra=None, progress=None, script=None, label=""):
+    """Run the OCR process once. Returns (ok, result, why). The worker survives whatever happens to it; a cancel or a stop
+    (Cancelled / KeyboardInterrupt from progress or the heartbeat) kills it."""
+    tmp = os.path.join(WORK_DIR, "_ocr")
+    os.makedirs(tmp, exist_ok=True)
+    if not script:
+        script = os.path.join(tmp, "ocr_child.py")
+        open(script, "w", encoding="utf-8").write(OCR_CHILD)
+    spec_p, result = os.path.join(tmp, f"{mode}_spec.json"), os.path.join(tmp, f"{mode}_result.json")
+    for f in (result, result + ".png"):
+        if os.path.exists(f):
+            os.remove(f)
+    # no secret goes to disk (keys stay in the environment); class ids are ints, which JSON would turn into strings
+    c = {k: v for k, v in dataclasses.asdict(cfg).items() if k not in ("maps_key", "classes")}
+    json.dump({"mode": mode, "pkg": pkg_parent(), "cfg": c, "result": result, **(extra or {})}, open(spec_p, "w"), default=str)
+    env = dict(os.environ, PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8")
+    env["PYTHONPATH"] = os.pathsep.join(x for x in (pkg_parent(), env.get("PYTHONPATH")) if x)
+    if cfg.device == "cpu":
+        env["CUDA_VISIBLE_DEVICES"] = ""                           # the CPU fallback never touches the GPU
+    tail = collections.deque(maxlen=30)
+    proc = subprocess.Popen([sys.executable, script, spec_p], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env,
+                            text=True, encoding="utf-8", errors="replace", bufsize=1)
+    try:
+        for line in proc.stdout:
+            line = line.rstrip()
+            if line.startswith("@@ PROGRESS"):
+                _, _, n, total = line.split()
+                if progress:
+                    progress("ocr", int(n), int(total))
+            elif line.startswith("@@ LOADED"):
+                log_mem(f"OCR models loaded{label}")
+            elif not line.startswith("@@"):
+                tail.append(line)
+                print("  │ " + line, flush=True)
+        rc = proc.wait()
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+    ok = rc == 0 and os.path.exists(result)
+    return ok, (json.load(open(result)) if ok else None), (None if ok else crash_reason(rc, tail))
+
+
+def cpu_fallback(cfg):
+    return dataclasses.replace(cfg, device="cpu", ocr_mode="fast")
+
+
+def ocr_runner_for(tell, log, script=None):
+    """run_area's ocr_runner: sign reading in its own process. A crash is retried once the same way; a second crash
+    on the GPU falls back to CPU quick mode. The OCR stage saves ocr.json as it goes, so each try continues."""
+    def runner(dets, cfg, out_dir, progress):
+        free_memory()
+        log_mem("before OCR (detector freed)")
+        tmp = os.path.join(WORK_DIR, "_ocr")
+        os.makedirs(tmp, exist_ok=True)
+        dets_p = os.path.join(tmp, "dets.json")
+        json.dump(dets, open(dets_p, "w"))
+        tries = [cfg, cfg] + ([cpu_fallback(cfg)] if cfg.device == "gpu" else [])
+        why = None
+        for i, c in enumerate(tries):
+            where = f" ({c.device.upper()}, {c.ocr_mode} mode)"
+            ok, r, why = run_child("run", c, {"dets": dets_p, "out_dir": out_dir}, progress, script, where)
+            log.append({"try": i + 1, "device": c.device, "ocr_mode": c.ocr_mode, "ok": ok, "why": why})
+            if ok:
+                log_mem("after OCR (OCR process ended)")
+                names = {fp: tuple(v) for fp, v in (r.get("names") or {}).items()}
+                return json.load(open(os.path.join(out_dir, "ocr.json"))), names, r["stats"]
+            log_mem("after the OCR crash")
+            print(f"✗ Sign reading crashed{where}: {why}.")
+            if i + 1 < len(tries):
+                nxt = tries[i + 1]
+                if nxt.device == c.device:
+                    tell(f"Sign reading crashed ({why}); trying once more. Signs already read are kept.")
+                else:
+                    tell(f"Sign reading crashed twice on the GPU ({why}), so it continues on the CPU in quick mode: "
+                         f"at most {nxt.fast_max_crops_per_building} signs per building, and slower.")
+                print("  " + ("retrying once" if nxt.device == c.device else "falling back to CPU quick mode") + "…")
+        raise RuntimeError(f"Sign reading crashed {len(tries)} times ({why}). Press Retry: it continues from the saved "
+                           "progress.")
+    return runner
+
+
+def ocr_self_test(cfg):
+    """Load the sign reader once, read one test image, free it: before claiming a job, so a runtime that cannot read
+    signs is known before any photo is bought."""
+    go = OCR_SELF_TEST
+    if go == "ask":
+        go = (ask("Run the OCR self-test first? It loads the sign reader, reads one test image and frees it "
+                  "(about 1 min) [Y/n]: ") or "y").lower().startswith("y")
+    if not go:
+        return
+    first = dataclasses.replace(cfg, ocr_mode=CPU_OCR_MODE) if cfg.device == "cpu" else cfg
+    tries = [first] + ([cpu_fallback(cfg)] if cfg.device == "gpu" else [])
+    for c in tries:
+        where = f"{c.device.upper()}, {c.ocr_mode} mode"
+        log_mem(f"before the OCR self-test ({where})")
+        ok, r, why = run_child("selftest", c, label=f" ({where})")
+        if ok:
+            print(f"✓ OCR self-test ({where}): OK. It read “{r['text'] or 'nothing'}” in {r['seconds']} s. "
+                  "The OCR process has ended and its memory is free.")
+            if c is not first:
+                print("  Jobs still run: when sign reading crashes on the GPU, the worker switches to the CPU on its own.")
+            return
+        print(f"✗ OCR self-test ({where}) failed: {why}.")
+    if not (ask("Sign reading does not work in this runtime. Runtime → Restart session and re-run the setup cells is "
+                "the usual fix. Start the worker anyway? [y/N]: ") or "n").lower().startswith("y"):
+        raise SystemExit("Stopped before claiming a job: fix sign reading first (worker/README.md).")
+
+
+# ----------------------------------------------------------------------------------------------- 4. one job
 class NeedsApproval(Exception):
     def __init__(self, estimate):
         super().__init__("needs approval")
@@ -282,13 +500,15 @@ def run_job(api, job, base_cfg, run_area, state):
     note["ocr_mode"] = cfg.ocr_mode
     json.dump(note, open(note_p, "w"))
     # a note for the job card when this is not the first attempt
-    people_note = None
+    people_note = None                                             # the job card's note (card["note"] once running)
     if continuing:
         people_note = ("Continuing from the progress saved on Drive" if from_drive else "Continuing from the saved progress"
                        ) + ": stages already finished are not repeated and photos already fetched are not bought again."
     elif job.get("resumed_claim"):
         people_note = ("Started again from the beginning: this worker has no saved progress for this street "
                        "(a different Google account, or Drive not connected).")
+    card = {"note": people_note}
+    ocr_log = []
     ppath, pused, pleft = places_left()
     cfg.places_max_calls = min(cfg.places_max_calls, pleft)
     price = cfg.sv_price
@@ -309,7 +529,7 @@ def run_job(api, job, base_cfg, run_area, state):
         last.update(t=now, stage=stage)
         try:
             r = api.call("/worker/progress", {"job": job["id"], "stage": stage, "done": done, "total": total,
-                                              "worker_id": state["id"], "note": people_note})
+                                              "worker_id": state["id"], "note": card["note"]})
             if r.get("job_status") in ("cancelling", "cancelled", "failed"):
                 state["cancel"] = True
         except Exception:
@@ -319,11 +539,16 @@ def run_job(api, job, base_cfg, run_area, state):
     def progress(name, done, total):
         post(SUB.get(name, name), done, total)
 
+    def tell(msg):
+        card["note"] = msg                                         # on the job card from the next report on
+        post(state.get("stage") or "ocr", None, None, force=True)
+
     def on_stage(name, seconds):
+        nxt_name = STAGES[STAGES.index(name) + 1] if name in STAGES and STAGES.index(name) + 1 < len(STAGES) else None
+        log_mem(f"{name} done" + (f" → {nxt_name} starts" if nxt_name else ""))
         if saved:
             last["sync"] = time.time(); sync(out, saved)          # a finished stage is safe on Drive
-        nxt = STAGES[STAGES.index(name) + 1] if name in STAGES and STAGES.index(name) + 1 < len(STAGES) else name
-        post(nxt, 0, None, force=True)
+        post(nxt_name or name, 0, None, force=True)
 
     def plan_check(plan):
         est = plan_estimate(plan, price)
@@ -340,8 +565,14 @@ def run_job(api, job, base_cfg, run_area, state):
              " - starting from the beginning (no saved progress)" if job.get("resumed_claim") else "")
           + (f"\n  progress is saved to Drive after each stage ({saved})" if saved else ""))
     post("panoramas", 0, None, force=True)
-    exp, _ = run_area(poly, out, cfg, area_name=name, way_ids=inp.get("way_ids"), progress=progress,
-                      on_stage=on_stage, plan_check=plan_check, resume=True)
+    log_mem("panoramas starts")
+    try:
+        exp, _ = run_area(poly, out, cfg, area_name=name, way_ids=inp.get("way_ids"), progress=progress,
+                          on_stage=on_stage, plan_check=plan_check, resume=True, ocr_runner=ocr_runner_for(tell, ocr_log))
+    finally:
+        if ocr_log:                                                # what sign reading went through, kept with the run
+            note["ocr_tries"] = note.get("ocr_tries", []) + ocr_log
+            json.dump(note, open(note_p, "w"))
     check()
     used = (exp.get("meta", {}).get("run") or {}).get("places_calls") or 0
     json.dump({"used": pused + used}, open(ppath, "w"))
@@ -399,11 +630,13 @@ def classify(err):
     return "FAILED", (m.splitlines() or ["error"])[0][:300]
 
 
-# ----------------------------------------------------------------------------------------------- 4. the loop
+# ----------------------------------------------------------------------------------------------- 5. the loop
 def main():
     check_transformers()
     cfg, run_area = load_pipeline()
     cfg = cfg.resolve() if hasattr(cfg, "resolve") else cfg
+    log_mem("worker start")
+    ocr_self_test(cfg)
     keys(cfg)
     api = Backend()
     prune_drive(api)

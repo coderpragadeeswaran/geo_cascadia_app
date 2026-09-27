@@ -8,7 +8,7 @@ import shutil
 import pytest
 
 from app.settings import ROOT, Settings
-from conftest import TEST_REVIEWER
+from conftest import TEST_REVIEWER, real_claimable
 
 TOKEN = Settings().worker_token
 POLY = {"type": "Polygon", "coordinates": [[[77.3425, 11.1080], [77.3440, 11.1080], [77.3440, 11.1092],
@@ -66,11 +66,11 @@ def test_job_queue_and_worker_protocol(online, job):
     assert online.post("/worker/next", json={"worker_id": "w"}, headers={"X-Worker-Token": "wrong"}).status_code == 401
     h = {"X-Worker-Token": TOKEN}
     # P6 (D34): a test job is claimed only by its id; a worker asking without one never takes test jobs
-    anyjob = online.post("/worker/next", json={"worker_id": "pytest-other"}, headers=h).json()["job"]
-    assert anyjob is None or anyjob["id"] != jid
-    if anyjob:                                              # a real queued job was claimed: give it back untouched
-        with _db(online).pool.connection() as c:
-            c.execute("update jobs set status = 'queued', worker_id = null, started_at = null, heartbeat_at = null where id = %s", (anyjob["id"],))
+    with _db(online).pool.connection() as c:
+        free = not real_claimable(c)
+    if free:                                                # only when no real job could be taken by a claim without id
+        anyjob = online.post("/worker/next", json={"worker_id": "pytest-other"}, headers=h).json()["job"]
+        assert anyjob is None or anyjob["id"] != jid
     claimed = online.post("/worker/next", json={"worker_id": "pytest-worker", "job": jid}, headers=h).json()["job"]
     assert claimed["id"] == jid and claimed["status"] == "running"
     assert claimed["input"]["polygon"]["type"] == "Polygon" and claimed["input"]["slug"].startswith("pytest_area_")

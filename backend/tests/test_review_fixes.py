@@ -317,7 +317,8 @@ def test_trimmed_job_uses_only_the_stretch(online):
     stretch = {"type": "LineString", "coordinates": main[a:b + 1]}
     bad = {"type": "LineString", "coordinates": [[lon + 0.01, lat + 0.01], [lon + 0.011, lat + 0.011]]}
     assert online.post("/jobs", json={"lat": lat, "lon": lon, "lines": bad}).status_code == 422      # off the street
-    r = online.post("/jobs", json={"lat": lat, "lon": lon, "lines": stretch})
+    # a test job: never blocked by (or blocking) a real analysis that is running
+    r = online.post("/jobs", json={"lat": lat, "lon": lon, "lines": stretch, "test": True})
     assert r.status_code == 201, r.text
     job = r.json()["job"]
     try:

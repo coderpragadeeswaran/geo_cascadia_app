@@ -183,3 +183,16 @@ A job that fails with an error keeps its progress: on Drive (`MyDrive/gc_worker_
 Press **Retry** on the job card or the Jobs page. The same job is queued again, and the worker continues from the
 saved stages without fetching Street View photos again. Progress is deleted when the job finishes, is cancelled or is
 removed from the list. On start, the worker asks the backend which saved folders are still needed.
+
+## Sign reading crashes (D38)
+
+Sign reading (OCR) runs in its own process. If that process crashes, the worker carries on: it prints the cause and
+a `[mem]` line, then tries once more. After a second crash on the GPU it switches to CPU quick mode (at most 3 signs
+per building), and the job card says so. Signs already read are kept.
+
+At start the worker offers an **OCR self-test** (Enter = yes). It loads the sign reader, reads one test image, then
+frees the memory. Set `OCR_SELF_TEST` at the top of the cell to `True` or `False` to stop being asked.
+
+`[mem]` lines at every stage show RAM and GPU use. When a Colab session restarts, the last `[mem]` line shows how close
+it was to the limit.
+
