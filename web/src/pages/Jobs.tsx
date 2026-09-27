@@ -160,7 +160,12 @@ function JobDetail({ id, online, onOpen, onDelete }: { id: string; online: boole
           {timeLeft(elapsed, j.device, est) ? ` · ${timeLeft(elapsed, j.device, est)}` : ''}</p>
       )}
       <div className="mt-3">
-        {lines ? <GeoMini streets={[{ name: j.street ?? 'street', geometry: lines as GeoJSON.MultiLineString }]} highlight={j.street ?? 'street'} fit="area" height={170} label={`${j.street ?? 'The street'} on a small plan`} />
+        {lines ? <GeoMini contextPath={`/jobs/${j.id}/minimap`} area={j.area_slug ?? null} outlines={j.area_slug ? 'auto' : undefined}
+          stops={j.area_slug ? 'all' : undefined} height={200} minSpanM={200}
+          streets={[{ name: j.street ?? 'street', geometry: lines as GeoJSON.MultiLineString, length_m: j.input?.length_m ?? null }]} highlight={j.street ?? 'street'}
+          highlightText={`${j.street ?? 'Requested stretch'} · ${j.input?.length_m ? `${fmt.format(Math.round(j.input.length_m))} m` : 'length not known'}${j.input?.trimmed ? ' (trimmed)' : ''}`}
+          label={`${j.street ?? 'The street'} on a small plan`}
+          caption={j.area_slug ? 'Ticks: the camera stops the analysis used.' : 'The camera stops are planned when a worker starts the analysis; they appear here once it has run.'} />
           : <p className="t-small ink3">No street geometry stored for this job.</p>}
       </div>
       <dl className="t-small mt-3 grid grid-cols-[120px_1fr] gap-y-1">

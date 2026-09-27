@@ -17,6 +17,7 @@ CPU_OCR_MODE = "fast"           # on a CPU, sign reading uses the fast mode (a f
 SAVE_TO_DRIVE = True            # with Drive mounted, each street's progress is saved there after every stage, so a restarted
 DRIVE_JOBS_DIR = "/content/drive/MyDrive/gc_worker_jobs"   # worker on the same account continues (no photo bought twice)
 OCR_SELF_TEST = "ask"           # at start: load the sign reader once, read one test image, free it. "ask" | True | False
+OVERPASS_RETRY_S = (30, 60, 120)  # OpenStreetMap busy at the area stage: wait this long and try again, then fail (Retry)
 
 import _thread, collections, dataclasses, gc, getpass, glob, inspect, json, os, platform, shutil, socket, subprocess, sys, \
     threading, time, traceback, uuid
@@ -26,6 +27,13 @@ try:
 except ImportError:                                           # tiny dependency, present on Colab / Kaggle
     os.system(f"{sys.executable} -m pip -q install requests"); import requests
 
+# D39: transformers 4.x imports TensorFlow when it is installed, and TensorFlow crashed Paddle (sign reading) with a
+# segfault on Colab, even on CPU. Tell transformers never to load it (this process and the OCR process inherit it).
+os.environ.setdefault("USE_TF", "0")
+os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
+TF_FIX = ('!pip uninstall -y tensorflow tf-keras tensorflow-hub  and  %env USE_TF=0  and  %env TRANSFORMERS_NO_TF=1  '
+          '(then Runtime → Restart session and re-run the setup cells)')
+BROWSER_KEY = "This Google key only works in a browser; use the server key (Enter keeps the one from the setup cells)."
 ON_COLAB = "google.colab" in sys.modules or os.path.isdir("/content")
 WORK_DIR = WORK_DIR or ("/content/gc_jobs" if ON_COLAB else os.path.join(os.path.expanduser("~"), "gc_jobs"))
 os.makedirs(WORK_DIR, exist_ok=True)
@@ -91,6 +99,38 @@ def check_transformers():
               "runtime and re-run the setup cells.")
 
 
+def check_tensorflow():
+    """D39: TensorFlow next to Paddle crashed sign reading on Colab. Warn with the exact S1a fix when it is installed."""
+    from importlib.metadata import PackageNotFoundError, version
+    found = []
+    for pkg in ("tensorflow", "tensorflow-cpu", "tf-keras", "tensorflow-hub"):
+        try:
+            found.append(f"{pkg} {version(pkg)}")
+        except PackageNotFoundError:
+            pass
+    if found:
+        print(f"⚠ TensorFlow is installed ({', '.join(found)}). With transformers 4.x it crashed Paddle (sign reading) on "
+              f"Colab. Put this in S1a: {TF_FIX}"
+              + (" TensorFlow is already loaded in this session." if "tensorflow" in sys.modules else ""))
+    return found
+
+
+def google_key_problem(key):
+    """One free call (Street View metadata) with the Google key the worker will use: None when it works (or when the
+    answer is unclear), else a plain sentence. A website-restricted (browser) key is refused with a referer message."""
+    try:
+        j = requests.get("https://maps.googleapis.com/maps/api/streetview/metadata",
+                         params={"location": "11.0296,76.9752", "key": key}, timeout=15).json()
+    except Exception:
+        return None                                                # no network answer: the first job will tell
+    status, msg = j.get("status"), j.get("error_message") or ""
+    if status in ("OK", "ZERO_RESULTS", "NOT_FOUND"):
+        return None
+    if "referer" in msg.lower() or "referrer" in msg.lower():
+        return BROWSER_KEY
+    return f"Google refused this key ({status}{': ' + msg[:160] if msg else ''})."
+
+
 def check_pipeline(run_area):
     """This worker needs the P6 version of the package (live progress + cost cap). An older copy on Drive lacks them."""
     params = inspect.signature(run_area).parameters
@@ -139,24 +179,35 @@ def load_pipeline():
     return c, ra
 
 
-def keys(cfg, only_aws=False):
+def keys(cfg, only_aws=False, only_google=False):
     """AWS (cloud AI) and Google (Street View + Places) keys, asked without echo; kept in memory / env only. Keys from the
     setup cells are cleaned too (a space pasted into S1b breaks signing just the same)."""
-    os.environ["AWS_ACCESS_KEY_ID"] = ask("AWS access key id: ", secret=True) or os.environ.get("AWS_ACCESS_KEY_ID", "")
-    os.environ["AWS_SECRET_ACCESS_KEY"] = ask("AWS secret access key: ", secret=True) or os.environ.get("AWS_SECRET_ACCESS_KEY", "")
-    tok = ask("AWS session token (Enter if none): ", secret=True)
-    if tok:
-        os.environ["AWS_SESSION_TOKEN"] = tok
+    if not only_google:
+        os.environ["AWS_ACCESS_KEY_ID"] = ask("AWS access key id: ", secret=True) or os.environ.get("AWS_ACCESS_KEY_ID", "")
+        os.environ["AWS_SECRET_ACCESS_KEY"] = ask("AWS secret access key: ", secret=True) or os.environ.get("AWS_SECRET_ACCESS_KEY", "")
+        tok = ask("AWS session token (Enter if none): ", secret=True)
+        if tok:
+            os.environ["AWS_SESSION_TOKEN"] = tok
+    setup_key = clean(getattr(cfg, "setup_maps_key", None) or cfg.maps_key)
+    cfg.setup_maps_key = setup_key                                 # "Enter keeps the one from the setup cells"
     if not only_aws:
         g = ask("Google server key (Street View + Places) [Enter = keep the one from the setup cells]: ", secret=True)
-        if g:
-            cfg.maps_key = g
+        cfg.maps_key = g or setup_key
     for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
         if os.environ.get(k):
             os.environ[k] = clean(os.environ[k])
     cfg.maps_key = clean(cfg.maps_key)
     if not cfg.maps_key:
         raise SystemExit("A Google server key is needed for Street View.")
+    if only_aws:
+        return
+    for _ in range(3):                                             # D39: a browser key is caught here, not after a paid run
+        why = google_key_problem(cfg.maps_key)
+        if not why:
+            return
+        print(f"✗ {why}")
+        cfg.maps_key = clean(ask("Google server key: ", secret=True) or setup_key)
+    raise SystemExit("No working Google server key: create or unrestrict a server key (worker/README.md), then re-run the cell.")
 
 
 # ----------------------------------------------------------------------------------------------- 2. the backend
@@ -566,9 +617,24 @@ def run_job(api, job, base_cfg, run_area, state):
           + (f"\n  progress is saved to Drive after each stage ({saved})" if saved else ""))
     post("panoramas", 0, None, force=True)
     log_mem("panoramas starts")
+    waits = list(OVERPASS_RETRY_S)
     try:
-        exp, _ = run_area(poly, out, cfg, area_name=name, way_ids=inp.get("way_ids"), progress=progress,
-                          on_stage=on_stage, plan_check=plan_check, resume=True, ocr_runner=ocr_runner_for(tell, ocr_log))
+        while True:
+            try:
+                exp, _ = run_area(poly, out, cfg, area_name=name, way_ids=inp.get("way_ids"), progress=progress,
+                                  on_stage=on_stage, plan_check=plan_check, resume=True, ocr_runner=ocr_runner_for(tell, ocr_log))
+                break
+            except Exception as err:
+                if not map_server_busy(err) or not waits:
+                    raise
+                # D39: OpenStreetMap is often busy for a minute or two; the run resumes from its saved stages
+                w, n = waits.pop(0), len(OVERPASS_RETRY_S) - len(waits)
+                tell(f"Map server busy (OpenStreetMap), retrying in {w} s… (try {n} of {len(OVERPASS_RETRY_S)})")
+                print(f"  OpenStreetMap is busy; retrying in {w} s (try {n} of {len(OVERPASS_RETRY_S)})…")
+                for _ in range(w):
+                    check()
+                    time.sleep(1)
+                tell(f"Map server was busy (OpenStreetMap); continuing after {n} {'retry' if n == 1 else 'retries'}.")
     finally:
         if ocr_log:                                                # what sign reading went through, kept with the run
             note["ocr_tries"] = note.get("ocr_tries", []) + ocr_log
@@ -619,8 +685,19 @@ def plan_estimate(plan, price):
             "buildings": faced, "cap_photos": MAX_PHOTOS_PER_JOB, "cap_usd": MAX_USD_PER_JOB}
 
 
+def map_server_busy(err):
+    """the area stage could not reach OpenStreetMap (all Overpass mirrors busy)"""
+    m = str(err)
+    return "Overpass" in m or "overpass" in m
+
+
 def classify(err):
     m = str(err)
+    if "referer" in m.lower() or "referrer" in m.lower():
+        return "GOOGLE_BROWSER_KEY", BROWSER_KEY
+    if map_server_busy(err):
+        return "FAILED", ("The map server (OpenStreetMap) stayed busy after several tries. Press Retry in a few minutes: "
+                          "the analysis continues from where it stopped.")
     for code in ("NO_STREET_VIEW", "NO_STREETS", "NO_CAMERAS"):
         if m.startswith(code):
             return code, m.split(":", 1)[-1].strip()
@@ -633,6 +710,7 @@ def classify(err):
 # ----------------------------------------------------------------------------------------------- 5. the loop
 def main():
     check_transformers()
+    check_tensorflow()
     cfg, run_area = load_pipeline()
     cfg = cfg.resolve() if hasattr(cfg, "resolve") else cfg
     log_mem("worker start")
@@ -704,11 +782,13 @@ def main():
                     print("Enter fresh AWS keys; the same job resumes from where it stopped.")
                     keys(cfg, only_aws=True)                        # the job is claimable again; its files are kept
                     resume = job["id"]
-                elif code == "FAILED":
+                elif code in ("FAILED", "GOOGLE_BROWSER_KEY"):
                     if state.get("out") and drive_dir(job):
                         sync(state["out"], drive_dir(job))         # keep everything for Retry in the app
                     print("  Its progress is kept" + (" on Drive" if drive_dir(job) else " in this session") +
                           ": press Retry on the job in the app to continue from here (no photo is bought again).")
+                    if code == "GOOGLE_BROWSER_KEY":
+                        keys(cfg, only_google=True)                # a server key now; Retry then finishes the job
                 else:
                     forget(job, state.get("out"))                  # no Street View on this street: nothing to keep
             finally:

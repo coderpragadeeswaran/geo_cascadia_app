@@ -60,8 +60,9 @@ def _write_json(path, obj):
     os.replace(tmp, path)
 
 
-def overpass(query, cache_dir, deadline):
-    """Cached Overpass call: primary mirror, then one fallback, within the deadline. Returns (elements, from_cache)."""
+def overpass(query, cache_dir, deadline, per_call=None):
+    """Cached Overpass call: primary mirror, then one fallback, within the deadline. Returns (elements, from_cache).
+    per_call: seconds per mirror (default PER_CALL_S, tuned for a click; background fetches may wait longer)."""
     path = os.path.join(cache_dir, "overpass", hashlib.md5(query.encode()).hexdigest() + ".json")
     hit = _read_json(path)
     if hit is not None:
@@ -72,7 +73,7 @@ def overpass(query, cache_dir, deadline):
         if left < 1.0:
             break
         try:
-            r = requests.post(url, data={"data": query}, headers=UA, timeout=(min(3.05, left), min(PER_CALL_S, left)))
+            r = requests.post(url, data={"data": query}, headers=UA, timeout=(min(3.05, left), min(per_call or PER_CALL_S, left)))
             if r.status_code == 200 and r.text.lstrip().startswith("{"):
                 els = r.json().get("elements", [])
                 _write_json(path, els)

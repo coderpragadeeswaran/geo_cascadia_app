@@ -1231,3 +1231,66 @@ worker "pytest".
   `conftest.real_claimable()` is 0.
 - `test_p5::test_clear_test_jobs…` skips while a real analysis is active, like `test_p6`. `test_trimmed_job…` uses a
   test job.
+
+### D39. One mini-map for the whole app; fixes from the real Colab run
+**A. Mini-maps.** Every small plan is one component, `GeoMini`, drawn in SVG from our own data. There is no second
+Google map and no Street View image, so the D21 heap limits hold.
+- **Sizing.** The drawing is re-laid out in real pixels for the width it gets (ResizeObserver). Before, a fixed
+  480-unit viewBox was scaled, so labels became ~19 px in the 780 px example sheet and ~6 px in narrow columns.
+- **Always drawn.**
+  - Roads around, faint. They come from `GET /areas/{slug}/minimap`: one Overpass query per area, cached on disk.
+    After a failure, "not available" is answered at once for 2 minutes, and the legend then says "other roads not
+    loaded (OpenStreetMap busy)".
+  - The analysed streets, with hover showing name and length.
+  - Building outlines near what is shown (`outlines="auto"`).
+  - N and scale plates in the corners.
+  - A legend under the plan, built from what is drawn, with counts.
+- **Labels (declutter).** Markers carry no text.
+  - At most 3 labels are written, in priority order: the key measurement, callouts, the highlighted street's name
+    and length, other streets, one neighbouring road.
+  - Each label tries several spots spread along its line or around its point. It is dropped if it would overlap a
+    marker, an uncertainty circle, another label or a corner plate (`labelLayout.placeMapLabels`, tested in
+    `test:ui`).
+  - Everything else is in the legend and in the hover/focus tooltip.
+  - Markers shrink when the plan is zoomed out. Camera stops are ticks across the road (along their photo direction).
+- **Content per place** (shared builders in `lib/mini.ts`):
+  - **Hood 01 Streets planned:** the analysed streets lit, the three longest named with their length, camera stops
+    as ticks, one neighbouring road named.
+  - **Street by street:** the selected street among the others, its buildings coloured by register status, lights,
+    poles, dark stretches and stops, with counts in the legend.
+  - **Examples** (`/hood/examples` now carries `measure`, `rays`, `street` and `outline`):
+    - Camera positions: wedges, the buildings photographed, other stops, and the spacing to the nearest stop.
+    - Dropped cameras: the OpenStreetMap outline the camera stands in. It is looked up once per point and cached;
+      if it is not found, a note says so.
+    - Thinned / off-street panoramas: the distance to the nearest chosen stop or analysed street. It equals the
+      number in the example's sentence (tested).
+    - Photo examples: camera, direction, and the poles, lights and signs located inside it (≤ 60 m).
+    - Positions: sight lines styled by method, and the distance from the middle of the outline.
+    - Poles and lights: pinpointed vs approximate, lines of sight, and the camera-to-object distance for one camera.
+    - Not in the register / differs / matches: neighbours coloured by status, with the synthetic-register note.
+    - Dark stretches: drawn along the road with the **recorded** length (the same number as the sentence; the
+      along-road length is on hover).
+  - **Jobs:** the requested stretch with its length, plus roads around (`GET /jobs/{id}/minimap`). The camera stops
+    appear once the job has an area.
+  - **Review and the Explore drawer:** `ObjectMini`, showing the object, its cameras and lines of sight, its street
+    and the buildings around. Assets and business signs now get it in the drawer too. `PositionMini` uses the same
+    component.
+- **Not changed:** the optional Explore overview `Minimap`, which shows the main map's viewport and is off by
+  default. Trust has no mini-maps.
+- `streetpick.overpass` gained an optional `per_call` timeout; the click picker keeps 6.5 s and mini-maps use 15 s.
+
+**B. Real-run fixes.**
+1. S1a needs transformers 4.57.6 and TensorFlow removed (`pip uninstall -y tensorflow tf-keras tensorflow-hub`,
+   `USE_TF=0`, `TRANSFORMERS_NO_TF=1`). transformers 4.x loads TensorFlow, which segfaulted Paddle even on CPU.
+   - The worker sets both variables at start; the OCR process inherits them.
+   - It warns with the exact fix when a TensorFlow package is installed (`check_tensorflow`).
+2. A Places 403 "Requests from referer <empty> are blocked" means a browser key was given to the worker.
+   - At start, one free Street View metadata call tests the key (`google_key_problem`). The worker then asks again,
+     and Enter keeps the setup cells' key.
+   - Mid-job, the error becomes the plain sentence on the job card. The worker asks for the key, and Retry
+     continues from the saved progress.
+3. OpenStreetMap (Overpass) outages at the area stage are retried by the worker after 30, 60 and 120 s.
+   - The card shows "Map server busy (OpenStreetMap), retrying in 30 s… (try 1 of 3)", then "continuing after N
+     retries".
+   - After the last try the job fails as retryable, with a plain message.
+

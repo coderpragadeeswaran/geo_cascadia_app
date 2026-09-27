@@ -23,7 +23,7 @@ from .settings import ROOT, Settings
 
 sys.path.insert(0, os.path.join(ROOT, "pipeline"))   # geo_cascadia (import only — never modified)
 
-from . import drive, evidence, gaps, hood, trust, views  # noqa: E402
+from . import drive, evidence, gaps, hood, minimap, trust, views  # noqa: E402
 from .storage import StorageError  # noqa: E402
 from .store import Data, OfflineError  # noqa: E402
 
@@ -259,6 +259,14 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             raise HTTPException(404, f"no camera stops recorded on {street!r} (plan.json)")
         return {"offline": off, "area": slug, **res}
 
+    @app.get("/areas/{slug}/minimap", tags=["areas"])
+    def area_minimap(slug: str, D: Data = Depends(get_data)):
+        """D39: context for the small plans: every road around the area (OpenStreetMap, fetched once and cached) and the
+        run's camera stops. roads_available=false when OpenStreetMap could not be reached (analysed streets only)."""
+        res, off = D.read(lambda s: minimap.context(need(s, slug), app.state.plans.get(slug),
+                                                    os.path.join(settings.data_dir, "cache", "streetpick")))
+        return {"offline": off, "area": slug, **res}
+
     # ------------------------------------------------------------ under the hood / trust (P5)
     @app.get("/areas/{slug}/hood", tags=["hood"])
     def area_hood(slug: str, D: Data = Depends(get_data)):
@@ -272,7 +280,9 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     def area_hood_examples(slug: str, key: str = Query(..., description=f"one of {', '.join(hood.EXAMPLE_KEYS)}"),
                            D: Data = Depends(get_data)):
         """Up to 3 real items for one step or branch of the story, each with the reason it belongs there."""
-        res, off = D.read(lambda s: hood.examples(need(s, slug), app.state.runfiles.get(slug), key))
+        cache = os.path.join(settings.data_dir, "cache", "streetpick")
+        res, off = D.read(lambda s: hood.examples(need(s, slug), app.state.runfiles.get(slug), key,
+                                                  outline_at=lambda la, lo: minimap.building_at(la, lo, cache)))
         if res is None:
             raise HTTPException(422, f"unknown example key {key!r}")
         return {"offline": off, "area": slug, "key": key, "examples": res}

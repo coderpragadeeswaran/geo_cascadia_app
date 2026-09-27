@@ -19,6 +19,7 @@ import threading
 from collections import Counter, defaultdict
 
 from .evidence import view_key
+from .minimap import street_lines
 
 RESUMED_BADGE = "resumed run, not representative"
 TIER = {-1: "skipped", 0: "watermark", 1: "no_text", 2: "ocr", 3: "vlm"}
@@ -489,8 +490,9 @@ EXAMPLE_KEYS = ("streets", "cameras.kept", "cameras.inside", "panos.not_selected
                 "match.matched", "match.discrepancy", "match.no_record", "gaps", "unmapped.kept")
 
 
-def examples(bundle, F, key):
-    """Up to 3 real items for a step or branch of the story, each with the reason it is there. None = unknown key."""
+def examples(bundle, F, key, outline_at=None):
+    """Up to 3 real items for a step or branch of the story, each with the reason it is there. None = unknown key.
+    outline_at(lat, lon): the mapped building outline containing a point (D39: the one a dropped camera stands in)."""
     if key not in EXAMPLE_KEYS:
         return None
     B, A = bundle["buildings"], bundle["assets"]
@@ -517,6 +519,30 @@ def examples(bundle, F, key):
                 out.append({"lat": c[0], "lon": c[1], "heading": v.get("heading"), "fov": v.get("fov") or 90})
         return out
 
+    def ll(lat, lon):
+        return {"lat": round(lat, 7), "lon": round(lon, 7)}
+
+    def cam_ray(v):
+        """D39: where the photo was taken from and which way it looked (for the example's mini-map)"""
+        c = cam.get(v.get("pano_id"))
+        return [{"lat": c[0], "lon": c[1], "heading": v.get("heading"), "fov": v.get("fov") or 90}] if c else []
+
+    def nearest_on_streets(lat, lon):
+        """the closest point of an analysed street line to (lat, lon), in a local metre frame"""
+        kx, ky = 111320 * math.cos(math.radians(lat)), 110540
+        best = None
+        for st in bundle["streets"]:
+            for line in street_lines(st):
+                for (a_la, a_lo), (b_la, b_lo) in zip(line, line[1:]):
+                    ax, ay, bx, by = (a_lo - lon) * kx, (a_la - lat) * ky, (b_lo - lon) * kx, (b_la - lat) * ky
+                    dx, dy = bx - ax, by - ay
+                    t = max(0.0, min(1.0, -(ax * dx + ay * dy) / (dx * dx + dy * dy))) if dx or dy else 0.0
+                    px, py = ax + t * dx, ay + t * dy
+                    d = math.hypot(px, py)
+                    if best is None or d < best[0]:
+                        best = (d, lat + py / ky, lon + px / kx)
+        return ll(best[1], best[2]) if best else None
+
     def view_photo(v, reason, title, target=None):
         boxes = [_box(d, target=d is target) for d in sorted(by_view.get(view_key(v["pano_id"], v["heading"], v["pitch"], v["fov"]), []),
                                                               key=lambda d: -d["conf"])]
@@ -528,7 +554,10 @@ def examples(bundle, F, key):
                      points=[]) | {"street": s["name"]} for s in _spread(S)]
     if key == "cameras.kept":
         out = []
+        dist = lambda e, f: math.hypot((f["camera_lon"] - e["camera_lon"]) * 111320 * math.cos(math.radians(e["camera_lat"])),
+                                       (f["camera_lat"] - e["camera_lat"]) * 110540)
         for e in _spread(plan):
+            nxt = min((f for f in plan if f is not e and f.get("street") == e.get("street")), key=lambda f: dist(e, f), default=None)
             level = [v for v in e.get("views") or [] if not v.get("pitch")]
             dirs = {round(v["heading"]) for v in level}
             fps = sorted({v["footprint"] for v in level if v.get("footprint")})
@@ -540,13 +569,22 @@ def examples(bundle, F, key):
                             [["panorama", e["pano_id"], T], ["road bearing", f"{e.get('road_bearing')}°", T],
                              ["views", ", ".join(f"{v['side']} {v['heading']}°" for v in level), T]])
                        | {"rays": [{"lat": e["camera_lat"], "lon": e["camera_lon"], "heading": v["heading"], "fov": v.get("fov") or 90,
-                                    "faces": v.get("footprint")} for v in level], "footprints": fps})
+                                    "faces": v.get("footprint")} for v in level], "footprints": fps, "street": nm(e.get("street")),
+                          # D39: the spacing to the next camera stop on the same street (the planner keeps stops >= 12 m apart)
+                          "measure": {"a": ll(e["camera_lat"], e["camera_lon"]), "b": ll(nxt["camera_lat"], nxt["camera_lon"]),
+                                      "what": "to the nearest other camera stop"} if nxt else None})
         return out
     if key == "cameras.inside":
-        return [_map(nm(a.get("street")) or "dropped stop", "the camera point falls inside a mapped building outline, so the "
-                     "planner dropped it", [{"lat": a["lat"], "lon": a["lon"], "label": "dropped camera", "drop": True}],
-                     [["panorama", a["pano_id"], T], ["reason", a.get("reason"), T]]) | {"inside": True}
-                for a in _spread(F.get("plan_anomalies") or [])]
+        out = []
+        for a in _spread(F.get("plan_anomalies") or []):
+            ring = outline_at(a["lat"], a["lon"]) if outline_at else None
+            out.append(_map(nm(a.get("street")) or "dropped stop", "the camera point falls inside a mapped building outline, so the "
+                            "planner dropped it", [{"lat": a["lat"], "lon": a["lon"], "label": "dropped camera", "drop": True}],
+                            [["panorama", a["pano_id"], T], ["reason", a.get("reason"), T]])
+                       | {"inside": True, "street": nm(a.get("street")), "outline": ring,
+                          "note": None if ring else "The outline it falls inside is not an OpenStreetMap building here (the planner "
+                                                    "also uses Microsoft's building map), so it is not drawn."})
+        return out
     if head == "panos":
         sk = skipped_panoramas(bundle, F)
         P = [p for p in F.get("panos") or [] if p["pano_id"] in sk and (grp == "not_selected" or sk[p["pano_id"]][0] == grp)]
@@ -561,10 +599,16 @@ def examples(bundle, F, key):
                         "(stops are kept at least 12 m apart along the road)" if stops and near(p, stops[0]) <= 13
                    else f"on the street, but the planner thinned it: it lies on a street piece shorter than 25 m or within 12 m "
                         f"along the road of an earlier stop (nearest chosen stop {round(near(p, stops[0])) if stops else '?'} m away)")
+            # D39: the key measurement — to the nearest chosen stop (thinned) or to the nearest analysed street (off street)
+            to = nearest_on_streets(p["camera_lat"], p["camera_lon"]) if kind == "off_street" else (
+                ll(stops[0]["camera_lat"], stops[0]["camera_lon"]) if stops else None)
             out.append(_map("panorama not used", why,
                             [{"lat": p["camera_lat"], "lon": p["camera_lon"], "label": "panorama not used", "drop": True}]
                             + [{"lat": e["camera_lat"], "lon": e["camera_lon"], "label": "camera stop"} for e in stops],
-                            [["photo date", p.get("date")], ["panorama", p["pano_id"], T], ["source", p.get("source"), T]]))
+                            [["photo date", p.get("date")], ["panorama", p["pano_id"], T], ["source", p.get("source"), T]])
+                       | {"measure": {"a": ll(p["camera_lat"], p["camera_lon"]), "b": to,
+                                      "what": "to the nearest analysed street" if kind == "off_street" else "to the nearest chosen camera stop"}
+                          if to else None, "street": nm(stops[0].get("street")) if stops else None})
         return out
     if head == "views":
         mapped = grp == "mapped"
@@ -590,7 +634,9 @@ def examples(bundle, F, key):
         out = []
         for d in _spread(ds):
             v = {"pano_id": d["pano_id"], "heading": d["heading"], "pitch": d["pitch"], "fov": d["fov"]}
-            out.append(view_photo(v, why, f"{nm(d.get('street'))} · {d['cls'].replace('_', ' ')} {round(d['conf'] * 100)}%", target=d))
+            ph = view_photo(v, why, f"{nm(d.get('street'))} · {d['cls'].replace('_', ' ')} {round(d['conf'] * 100)}%", target=d)
+            ph["rays"] = cam_ray(v)
+            out.append(ph)
         return out
     if head == "signs":
         O = F.get("ocr") or []
@@ -609,6 +655,7 @@ def examples(bundle, F, key):
             if d is None:
                 ph["note"] = "the crop's box is not stored for this view"
             ph["facts"] = [["OCR text", text or "—"], ["OCR confidence", o.get("best_conf"), T], ["pipeline reason", (o.get("reason") or "").replace("_", " "), T]]
+            ph["rays"] = cam_ray(v)
             out.append(ph)
         return out
     pick = None

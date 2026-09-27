@@ -14,6 +14,7 @@ import { GeoMini } from '@/components/GeoMini'
 import { AlignedBars, Donut, Funnel, SegBar, StageTimeline } from '@/components/viz'
 import { KPI_DEFS, kpiFilter } from '@/lib/derive'
 import { shortArea } from '@/lib/labels'
+import { MATCH_LEGEND, REGISTER_NOTE, assetPoints, buildingPolys, darkLines, miniStreets } from '@/lib/mini'
 import { useAreaData } from '@/lib/useAreaData'
 import { cn, fmt, noun, plural } from '@/lib/utils'
 import { useUi } from '@/store/ui'
@@ -90,8 +91,8 @@ function ErrorState({ retry }: { retry: () => void }) {
 function Story({ h, pick }: { h: HoodData; pick: Pick }) {
   const n = h.n
   const detail = useDetail()
-  const { streets, geo } = useAreaData()
-  const mini = useMemo(() => streets.map((s) => ({ name: s.props.name, geometry: s.geometry })), [streets])
+  const { streets, geo, area } = useAreaData()
+  const mini = useMemo(() => miniStreets(streets), [streets])
   const exBtn = (key: string, label: string) => ({ key, label })
   const pipe = h.pipeline ?? {}
   // every count defaults to 0 (never NaN), e.g. when an older API has no "sign" count yet
@@ -100,7 +101,9 @@ function Story({ h, pick }: { h: HoodData; pick: Pick }) {
     { id: 'streets', title: 'Streets planned', figure: n.streets, unit: noun(n.streets, 'street'),
       plain: `${fmt.format(n.streets_m)} m of road were chosen. Everything below happened along ${n.streets === 1 ? 'this street' : `these ${n.streets} streets`}.`,
       tech: `streets.json: ${n.streets} merged OSM streets, ${fmt.format(n.streets_m)} m (display names from street_names.json).`,
-      visual: () => geo ? <GeoMini streets={mini} lit fit="area" label="Analysed streets" height={200} /> : null,
+      visual: () => geo ? <GeoMini area={area} streets={mini} lit fit="area" stops="all" height={230}
+        label={`The ${plural(n.streets, 'analysed street')} with the camera stops along them`}
+        caption="Hover a street for its name and length; the small ticks are the camera stops." /> : null,
       examples: [exBtn('streets', 'Streets analysed')] },
     { id: 'cameras', title: 'Camera positions', figure: n.cameras, unit: 'camera positions',
       plain: `Instead of photographing every panorama in all 12 directions, the planner chose ${plural(n.cameras, 'camera position')} that face the buildings.${n.cameras_inside_footprint ? ` ${plural(n.cameras_inside_footprint, 'position')} ${n.cameras_inside_footprint === 1 ? 'was' : 'were'} dropped: the camera stood inside a building outline.` : ''} Of the other panoramas, ${fmt.format(n.panoramas_off_street)} lie more than 15 m from the analysed streets and ${fmt.format(n.panoramas_thinned)} were thinned out because a camera position a few metres away was already chosen.`,
@@ -337,8 +340,8 @@ type SortKey = keyof StreetRow
 function StreetsTable({ h }: { h: HoodData }) {
   const [sort, setSort] = useState<{ k: SortKey; desc: boolean }>({ k: 'length_m', desc: true })
   const [sel, setSel] = useState<string | null>(null)
-  const { streets } = useAreaData()
-  const mini = useMemo(() => streets.map((s) => ({ name: s.props.name, geometry: s.geometry })), [streets])
+  const { streets, area, records, gaps } = useAreaData()
+  const mini = useMemo(() => miniStreets(streets), [streets])
   const rows = [...h.streets].sort((a, b) => {
     const x = a[sort.k], y = b[sort.k]
     const c = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y))
@@ -366,8 +369,8 @@ function StreetsTable({ h }: { h: HoodData }) {
         </div>
         <div>
           {cur ? (
-            <div className="grid items-start gap-4 md:grid-cols-[360px_minmax(0,1fr)]">
-              <GeoMini streets={mini} highlight={cur.street} fit="area" label={`${cur.street} in the area`} height={210} />
+            <div className="grid items-start gap-4 md:grid-cols-[420px_minmax(0,1fr)]">
+              <StreetMini area={area} mini={mini} street={cur.street} records={records} gaps={gaps} />
               <div>
               <p className="t-small">{cur.street}: {fmt.format(cur.length_m)} m, {plural(cur.buildings, 'building')}, {fmt.format(cur.no_record)} not in the register, {plural(cur.gaps, 'dark stretch')}.</p>
               <button className="btn btn-line mt-2" onClick={() => openStreet(cur.street)}><MapPin /> Open in Explore</button>
@@ -468,3 +471,17 @@ function Compare({ slugs, onOpen }: { slugs: string[]; onOpen: (slug: string) =>
     </div>
   )
 }
+
+/** D39: the selected street among the others, with what was found along it (counts in the legend) */
+function StreetMini({ area, mini, street, records, gaps }: { area: string | null; mini: ReturnType<typeof miniStreets>; street: string
+  records: ReturnType<typeof useAreaData>['records']; gaps: ReturnType<typeof useAreaData>['gaps'] }) {
+  const bs = useMemo(() => (records?.buildings ?? []).filter((b) => b.street === street), [records, street])
+  const as = useMemo(() => (records?.assets ?? []).filter((a) => a.street === street), [records, street])
+  const gs = useMemo(() => gaps.filter((g) => g.props.street === street), [gaps, street])
+  return (
+    <GeoMini area={area} streets={mini} highlight={street} stops={{ street }} polygons={buildingPolys(bs)} points={assetPoints(as)}
+      lines={darkLines(gs)} minSpanM={260} height={300} label={`${street} among the other streets, with its buildings, lights and dark stretches`}
+      caption={bs.some((b) => b.match_status in MATCH_LEGEND) ? REGISTER_NOTE : undefined} />
+  )
+}
+

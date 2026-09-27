@@ -34,3 +34,24 @@ export function placeLabels(items: { x1: number; y1: number; x2: number; y2: num
   }
   return out
 }
+
+/** D39: mini-map labels. Requests come in priority order, each with candidate positions (text baseline x, y); the first
+ *  candidate that stays inside the plan and overlaps no obstacle (markers, corner plates) and no earlier label wins. A
+ *  request with no free candidate is dropped (its text stays in the legend / tooltip). At most `max` labels. */
+export type MapLabel = { x: number; y: number; text: string; strong?: boolean }
+export function placeMapLabels(reqs: { text: string; cands: [number, number][]; strong?: boolean }[], obstacles: Rect[], W: number, H: number,
+  width: (text: string) => number, max = 3, fontPx = 12): MapLabel[] {
+  const occ = [...obstacles], out: MapLabel[] = []
+  for (const r of reqs) {
+    if (out.length >= max) break
+    const w = width(r.text), h = fontPx + 4
+    for (const [x, y] of r.cands) {
+      const b = { x: x - 2, y: y - h + 3, w: w + 4, h }
+      if (b.x < 4 || b.x + b.w > W - 4 || b.y < 4 || b.y + b.h > H - 4) continue
+      if (occ.some((o) => hit(o, b))) continue
+      occ.push(b); out.push({ x, y, text: r.text, strong: r.strong })
+      break
+    }
+  }
+  return out
+}

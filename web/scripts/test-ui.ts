@@ -1,6 +1,6 @@
 /** Pure UI helpers (review fixes 10, 11, 13, 14), no browser: `npm run test:ui`. Exits 1 on the first failure. */
 import { strict as assert } from 'node:assert'
-import { placeLabels, type Rect } from '../src/lib/labelLayout'
+import { placeLabels, placeMapLabels, type Rect } from '../src/lib/labelLayout'
 import { JOB_STAGES, jobStatus, matchLabel, stageLine, stageProgress, stageShort, timeLeft } from '../src/lib/labels'
 import { kpis, type Records } from '../src/lib/derive'
 import { photoProblem, saveDecision } from '../src/lib/review'
@@ -137,6 +137,32 @@ t('P6: job stages, progress and an honest time left', () => {
   assert.deepEqual(jobStatus({ status: 'needs_approval', display_status: 'needs_approval' }).label, 'Needs approval')
   assert.equal(jobStatus({ status: 'running', display_status: 'interrupted' }).label, 'Interrupted')
   assert.equal(jobStatus({ status: 'running', display_status: 'cancelling' }).label, 'Cancelling…')
+})
+
+// D39: mini-map labels (GeoMini) — small, never overlapping each other, the markers or the corner plates; at most 3
+const W8 = (t: string) => t.length * 7
+const overlaps = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+const box = (l: { x: number; y: number; text: string }) => ({ x: l.x - 2, y: l.y - 13, w: W8(l.text) + 4, h: 16 })
+t('map labels: at most 3, inside the plan, never overlapping', () => {
+  const reqs = Array.from({ length: 8 }, (_, i) => ({ text: `Street number ${i}`, cands: [[40, 60 + i * 5], [40, 120 + i * 20]] as [number, number][] }))
+  const out = placeMapLabels(reqs, [], 480, 220, W8)
+  assert.ok(out.length <= 3 && out.length > 0)
+  for (const [i, a] of out.entries()) {
+    const r = box(a)
+    assert.ok(r.x >= 4 && r.x + r.w <= 476 && r.y >= 4 && r.y + r.h <= 216, 'inside')
+    for (const b of out.slice(i + 1)) assert.ok(!overlaps(r, box(b)), 'no overlap')
+  }
+})
+t('map labels: never over the corner plates or a marker; dropped when nothing is free', () => {
+  const plates: Rect[] = [{ x: 450, y: 0, w: 30, h: 42 }, { x: 0, y: 188, w: 120, h: 32 }]
+  const marker: Rect = { x: 94, y: 94, w: 12, h: 12 }
+  const out = placeMapLabels([{ text: '11 m', cands: [[455, 20], [10, 205], [96, 104], [120, 90]] }], [...plates, marker], 480, 220, W8)
+  assert.deepEqual(out.map((l) => [l.x, l.y]), [[120, 90]])                      // the first three candidates are covered
+  assert.equal(placeMapLabels([{ text: 'camera stop', cands: [[96, 104]] }], [marker], 480, 220, W8).length, 0)
+})
+t('map labels: priority order wins the free spot', () => {
+  const out = placeMapLabels([{ text: '9 m', cands: [[200, 100]], strong: true }, { text: 'Sathy Main Road', cands: [[200, 100], [200, 150]] }], [], 480, 220, W8)
+  assert.deepEqual(out.map((l) => [l.text, l.y]), [['9 m', 100], ['Sathy Main Road', 150]])
 })
 
 console.log(`${n} UI tests passed`)

@@ -14,7 +14,7 @@ Q = ["Show commercial buildings with more than two visible floors that do not ha
 def test_offline_mode_serves_json_read_only(offline):
     r = offline.get("/areas")
     assert r.status_code == 200 and r.json()["offline"] is True
-    assert {a["slug"] for a in r.json()["areas"]} == set(AREAS)
+    assert set(AREAS) <= {a["slug"] for a in r.json()["areas"]}      # plus any street analysed from the app (P6)
     w = next(a for a in r.json()["areas"] if a["slug"] == "ward29")
     unknown = sum(b["attributes"]["use"]["value"] is None for b in raw_export("ward29")["buildings"])   # 135 after D32
     assert w["counts"]["buildings"] == 381 and w["counts"]["assets_triangulated"] == 20 and w["counts"]["use_not_classified"] == unknown

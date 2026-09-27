@@ -23,7 +23,7 @@ from shapely.geometry import mapping, shape
 from shapely.ops import transform
 from shapely.validation import explain_validity
 
-from . import loader, streetpick, views
+from . import loader, minimap, streetpick, views
 from .store import Data, OfflineError
 
 router = APIRouter()
@@ -311,6 +311,20 @@ def job_get(job_id: str, request: Request, D: Data = Depends(get_data)):
     length = (job["input"] or {}).get("length_m")
     return {"offline": False, "job": job, "worker_online": worker_online(request.app),
             "estimate": _estimate(request, D, length) if length else None}
+
+
+@router.get("/jobs/{job_id}/minimap", tags=["jobs"])
+def job_minimap(job_id: str, request: Request, D: Data = Depends(get_data)):
+    """D39: the Jobs page's mini-map: roads around the requested stretch and, once analysed, its camera stops."""
+    def fn(s):
+        with s.pool.connection() as c:
+            return _get_job(c, job_id)
+    job = D.write(fn)
+    slug = job.get("area_slug")
+    bundle, _ = D.read(lambda s: s.bundle(slug)) if slug else (None, False)
+    plan = request.app.state.plans.get(slug) if slug else None
+    cache = os.path.join(request.app.state.settings.data_dir, "cache", "streetpick")
+    return {"offline": False, "job": job_id, **minimap.job_context(job.get("input"), bundle, plan, cache)}
 
 
 @router.post("/jobs/{job_id}/cancel", tags=["jobs"])

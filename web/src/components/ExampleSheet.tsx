@@ -4,14 +4,16 @@
 import { MapPin, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useHoodExamples, type HoodExample } from '@/api/p5'
-import type { EvidenceBox } from '@/api/types'
+import type { Building, EvidenceBox } from '@/api/types'
 import { floorsText, matchLabel, positionMethodLabel, useLabel } from '@/lib/labels'
+import { REGISTER_NOTE, assetPoints, buildingPolys, darkLines, miniStreets, signPoints } from '@/lib/mini'
 import { propsFor, useAreaData } from '@/lib/useAreaData'
 import { cn, fmt1 } from '@/lib/utils'
 import { useUi } from '@/store/ui'
 import { EvidencePhoto } from './EvidencePhoto'
 import { Boxes, EvidenceViews } from './EvidenceViews'
-import { GeoMini } from './GeoMini'
+import { GeoMini, metres, type MiniLine, type MiniPolygon, type MiniStreet } from './GeoMini'
+import { ObjectMini } from './ObjectMini'
 import { Fact } from './HowWeKnow'
 import { PositionMini } from './PositionMini'
 import { useDetail } from './Detail'
@@ -61,35 +63,26 @@ export function ExampleSheet({ area, exKey, label, onClose }: { area: string; ex
 }
 
 function Example({ ex, exKey, onClose }: { ex: HoodExample; exKey: string; onClose: () => void }) {
-  const { records, streets, props } = useAreaData()
+  const { records, streets, props, area, gaps } = useAreaData()
   const detail = useDetail()
   const [photo, setPhoto] = useState(false)
-  const mini = streets.map((s) => ({ name: s.props.name, geometry: s.geometry }))
+  const mini = useMemo(() => miniStreets(streets), [streets])
   const b = ex.kind === 'building' ? records?.buildings.find((x) => x.id === ex.id) : undefined
   const a = ex.kind === 'asset' ? records?.assets.find((x) => x.id === ex.id) : undefined
   const u = ex.kind === 'unmapped' ? records?.unmapped.find((x) => x.id === ex.id) : undefined
   const g = ex.kind === 'gap' ? ex : undefined
-  // what the sentence talks about, drawn on the plan (H2): outlines near the example, the faced / containing outline
-  // highlighted, the camera's view wedges, and sight lines from cameras to the object
-  const outlines = useMemo(() => {
+  // the outlines the sentence is about (faced by the camera, or the one a dropped camera stands in); every other outline
+  // around is drawn by the mini-map itself (outlines="auto")
+  const keyOutlines = useMemo<MiniPolygon[]>(() => {
     const B = records?.buildings ?? []
-    const at = ex.points?.[0] ?? (b ? { lat: b.lat, lon: b.lon } : a ? { lat: a.lat, lon: a.lon } : ex.rays?.[0] ?? null)
-    if (!at) return []
-    const kx = 111320 * Math.cos((at.lat * Math.PI) / 180)
-    const near = B.filter((x) => Math.hypot((x.lon - at.lon) * kx, (x.lat - at.lat) * 110540) < 70 && (x.footprint?.polygon_latlon?.length ?? 0) > 2)
-    const hl = new Set<string>([...(ex.footprints ?? []), ...(b ? [b.id] : [])])
-    if (ex.inside && ex.points?.[0]) for (const x of near) if (inRing(ex.points[0], x.footprint!.polygon_latlon as [number, number][])) hl.add(x.id)
-    return near.map((x) => ({ ring: x.footprint!.polygon_latlon as [number, number][], hl: hl.has(x.id) }))
-  }, [records, ex, b, a])
-  const lights = useMemo(() => {
-    if (!g?.line || !records) return []
-    const [s0, s1] = g.line
-    const kx = 111320 * Math.cos((s0[0] * Math.PI) / 180)
-    const d = (la: number, lo: number) => Math.min(Math.hypot((lo - s0[1]) * kx, (la - s0[0]) * 110540), Math.hypot((lo - s1[1]) * kx, (la - s1[0]) * 110540))
-    const len = Math.hypot((s1[1] - s0[1]) * kx, (s1[0] - s0[0]) * 110540)
-    return records.assets.filter((x) => d(x.lat, x.lon) < Math.max(120, len / 2 + 40))
-      .map((x) => ({ lat: x.lat, lon: x.lon, tone: x.type === 'streetlight' ? 'sodium' as const : 'drop' as const, hollow: x.type !== 'streetlight' }))
-  }, [g, records])
+    const ids = new Set<string>(ex.footprints ?? [])
+    if (ex.inside && ex.points?.[0]) for (const x of B) if ((x.footprint?.polygon_latlon?.length ?? 0) > 2 && inRing(ex.points[0], x.footprint!.polygon_latlon as [number, number][])) ids.add(x.id)
+    const legend = ex.inside ? 'the building it stands in' : exKey === 'cameras.kept' ? 'building it photographs' : 'building this photo faces'
+    const own = B.filter((x) => ids.has(x.id) && (x.footprint?.polygon_latlon?.length ?? 0) > 2)
+      .map((x) => ({ ring: x.footprint!.polygon_latlon as [number, number][], hl: true, legend, tip: x.attributes?.name?.value || 'Mapped building outline' }))
+    // a dropped camera usually stands in a building that was not analysed: its OpenStreetMap outline comes with the example
+    return ex.outline && !own.length ? [{ ring: ex.outline, hl: true, legend, tip: 'Building outline (OpenStreetMap) the camera point falls inside' }] : own
+  }, [records, ex, exKey])
   const showOnMap = () => {
     const kind = b ? 'building' : a ? a.type : u ? 'unmapped_business' : g ? 'streetlight_gap' : null
     const p = kind && ex.id ? propsFor(props, kind, ex.id) : null
@@ -99,30 +92,28 @@ function Example({ ex, exKey, onClose }: { ex: HoodExample; exKey: string; onClo
     if (p) ui.select(p)
     else if (ex.street) ui.selectStreet(ex.street)
   }
+  const measure = ex.measure ? { a: ex.measure.a, b: ex.measure.b } : null
+  const bRing = (b?.footprint?.polygon_latlon ?? []) as [number, number][]
   return (
     <div>
       <div className="[&_figure.aspect-square]:mx-auto [&_figure.aspect-square]:max-w-[min(100%,calc(94vh-250px))]">
         {ex.kind === 'photo' && ex.view && (
-          <div className={cn('grid items-start gap-4', ex.rays?.length ? 'grid-cols-[minmax(0,1fr)_250px]' : 'grid-cols-1')}>
+          <div className={cn('grid items-start gap-4', ex.rays?.length ? 'grid-cols-[minmax(0,1fr)_300px]' : 'grid-cols-1')}>
             <EvidencePhoto view={ex.view} label={`${ex.title} · ${Math.round(ex.view.heading)}°`}>
               <Boxes boxes={(ex.boxes ?? []) as EvidenceBox[]} all={(ex.boxes?.length ?? 0) <= 4} hidden={new Set()}
                 targetName={exKey.startsWith('signs') ? 'This sign' : exKey.startsWith('bld') ? 'This building' : 'This box'} />
             </EvidencePhoto>
-            {!!ex.rays?.length && (
-              <div>
-                <GeoMini streets={mini} label="Where the camera stood and which way it looked" polygons={outlines} height={250} minSpanM={70}
-                  rays={ex.rays.map((r) => ({ ...r, len_m: 30, hl: true }))} points={(ex.points ?? []).map((p) => ({ lat: p.lat, lon: p.lon, tone: 'ink' as const, label: p.label }))} />
-                <p className="t-small ink3 mt-1.5">{ex.footprints?.length
-                  ? 'The wedge is the photo’s direction; the orange outline is the mapped building it faces.'
-                  : 'The wedge is the photo’s direction. No building outline on the map falls inside it, so no building is checked here.'}</p>
-              </div>
-            )}
+            {!!ex.rays?.length && <PhotoMini area={area} mini={mini} ray={ex.rays[0]} faced={keyOutlines} records={records} />}
           </div>
         )}
         {b && ex.map && (
           <>
-            <GeoMini streets={mini} label="The building outline and the cameras that looked towards it" polygons={outlines}
-              rays={(ex.rays ?? []).map((r) => ({ ...r, len_m: 30 }))} points={(ex.rays ?? []).map((r) => ({ lat: r.lat, lon: r.lon, tone: 'ink' as const, label: 'camera' }))} minSpanM={70} />
+            <GeoMini area={area} outlines="auto" streets={mini} highlight={b.street} minSpanM={70} height={240}
+              label="The building outline and the cameras that looked towards it"
+              polygons={bRing.length > 2 ? [{ ring: bRing, hl: true, legend: 'this building' }] : []}
+              rays={(ex.rays ?? []).map((r) => ({ ...r, len_m: 30, tip: `Photo direction ${Math.round(r.heading)}°` }))}
+              points={(ex.rays ?? []).map((r) => ({ lat: r.lat, lon: r.lon, tone: 'ink' as const, shape: 'ring' as const, legend: 'camera', tip: 'Camera that looked towards it' }))}
+              caption="Wedges: the photo directions. None of these photos showed a building box on this outline." />
             {photo ? <div className="mt-3"><EvidenceViews kind="building" id={b.id} at={{ lat: b.lat, lng: b.lon }} target="building" /></div>
               : <button className="btn btn-line mt-2" onClick={() => setPhoto(true)}>Show the nearest photo</button>}
           </>
@@ -133,32 +124,39 @@ function Example({ ex, exKey, onClose }: { ex: HoodExample; exKey: string; onClo
             {photo ? <div className="mt-3"><EvidenceViews kind="building" id={b.id} at={{ lat: b.lat, lng: b.lon }} target="building" /></div>
               : <button className="btn btn-line mt-2" onClick={() => setPhoto(true)}>Show the photo</button>}
           </>
+        ) : exKey.startsWith('match.') ? (
+          <>
+            <MatchMini area={area} mini={mini} b={b} records={records} />
+            <div className="mt-3"><EvidenceViews kind="building" id={b.id} at={{ lat: b.lat, lng: b.lon }} target="building" /></div>
+          </>
         ) : <EvidenceViews kind="building" id={b.id} at={{ lat: b.lat, lng: b.lon }} target="building" />)}
         {a && (
           <>
-            <GeoMini streets={mini} label={`${a.type} position and the cameras that saw it`} polygons={outlines}
-              rays={(ex.rays ?? []).map((r) => ({ lat: r.lat, lon: r.lon, heading: r.heading, to: { lat: a.lat, lon: a.lon } }))}
-              points={[...(ex.rays ?? []).map((r) => ({ lat: r.lat, lon: r.lon, tone: 'ink' as const, label: 'camera' })),
-                { lat: a.lat, lon: a.lon, tone: a.type === 'streetlight' ? 'sodium' : 'ink', r_m: a.uncertainty_m, dashed: a.method !== 'triangulated', label: a.type }]} minSpanM={60} />
-            <p className="t-small ink3 mt-1">{a.method === 'triangulated' ? 'Dashed lines: the sight lines from each camera; they cross at the pole.' : 'One camera saw it, so the position along its sight line is an estimate (circle = how far off it could be).'}</p>
+            <ObjectMini area={area} obj={{ kind: 'asset', a }} streets={mini} height={240} label={`${a.type} position and the cameras that saw it`}
+              caption={a.method === 'triangulated' ? 'The dashed lines of sight from each camera cross at the pole.' : 'One camera saw it, so the position along its line of sight is an estimate (circle: how far off it could be).'} />
             {photo ? <div className="mt-3"><EvidenceViews kind="asset" id={a.id} at={{ lat: a.lat, lng: a.lon }} target={a.type === 'streetlight' ? 'lamp' : 'pole'} /></div>
               : <button className="btn btn-line mt-2" onClick={() => setPhoto(true)}>Show the photo</button>}
           </>
         )}
-        {u && <EvidenceViews kind="unmapped" id={u.id} at={{ lat: u.lat, lng: u.lon }} target="sign" />}
-        {g?.line && <>
-          <GeoMini streets={mini} label="Dark stretch with the streetlights and poles around it" lines={[{ coords: g.line, tone: 'dark' }]} points={lights} minSpanM={120} />
-          <p className="t-small ink3 mt-1">Dark band: the stretch. Orange dots: streetlights seen; hollow dots: poles with no lamp seen.</p>
+        {u && <>
+          <ObjectMini area={area} obj={{ kind: 'unmapped', u }} streets={mini} height={220} label="Where the business sign was seen, and from which camera" />
+          <div className="mt-3"><EvidenceViews kind="unmapped" id={u.id} at={{ lat: u.lat, lng: u.lon }} target="sign" /></div>
         </>}
+        {g?.line && <GapMini area={area} mini={mini} ex={g} gaps={gaps} records={records} />}
         {ex.kind === 'map' && (
-          <>
-            <GeoMini streets={mini} label={ex.title} highlight={ex.street ?? null} polygons={outlines}
-              rays={(ex.rays ?? []).map((r) => ({ ...r, len_m: 26, hl: !!r.faces }))}
-              points={(ex.points ?? []).map((p) => ({ lat: p.lat, lon: p.lon, tone: p.drop ? 'drop' as const : 'sodium' as const, hollow: p.drop, label: p.label }))}
-              fit={ex.points?.length ? 'items' : 'area'} minSpanM={ex.points?.length ? (ex.rays?.length || ex.inside ? 70 : 120) : 160} />
-            {!!ex.rays?.length && <p className="t-small ink3 mt-1">Wedges: the directions photographed from this stop. Orange outlines: the mapped buildings they face.</p>}
-            {ex.inside && <p className="t-small ink3 mt-1">Orange outline: the mapped building the camera point falls inside.</p>}
-          </>
+          <GeoMini area={area} outlines="auto" streets={mini} highlight={ex.street ?? null} label={ex.title} height={250}
+            polygons={keyOutlines} measure={measure}
+            stops={exKey === 'streets' && ex.street ? { street: ex.street } : exKey.startsWith('cameras.') ? 'all' : undefined}
+            rays={(ex.rays ?? []).map((r) => ({ ...r, len_m: 26, hl: !!r.faces, tip: `Photo direction ${Math.round(r.heading)}°${r.faces ? ', faces a mapped building' : ', no building outline in view'}` }))}
+            points={(ex.points ?? []).map((p) => p.drop
+              ? { lat: p.lat, lon: p.lon, tone: 'drop' as const, shape: 'x' as const, legend: exKey === 'cameras.inside' ? 'dropped camera position' : 'panorama not used',
+                tip: exKey === 'cameras.inside' ? 'Dropped: the camera point is inside a building outline' : 'Panorama not used by the planner' }
+              : { lat: p.lat, lon: p.lon, tone: 'sodium' as const, legend: exKey === 'cameras.kept' ? 'this camera stop' : 'chosen camera stop',
+                tip: exKey === 'cameras.kept' ? 'The camera stop in this example' : 'A camera stop the planner chose' })}
+            fit={ex.points?.length ? 'items' : 'area'} minSpanM={ex.points?.length ? (ex.rays?.length || ex.inside ? 70 : 90) : 160}
+            caption={[ex.measure ? `The line with its distance: ${ex.measure.what}.` : null,
+              ex.rays?.length ? 'Wedges: the directions photographed from this stop.' : null,
+              exKey === 'streets' ? 'Ticks: the camera stops on this street.' : null].filter(Boolean).join(' ') || undefined} />
         )}
       </div>
       <div className="t-small mt-3 space-y-1">
@@ -190,3 +188,53 @@ function inRing(p: { lat: number; lon: number }, ring: [number, number][]) {
   }
   return inside
 }
+
+/** D39: a photo's direction with what the run located inside it (within 60 m): poles, lights, business signs and the
+ *  building it faces, counted in the legend */
+const WEDGE_M = 60
+function inWedge(p: { lat: number; lon: number }, r: { lat: number; lon: number; heading: number; fov?: number }) {
+  const kx = 111320 * Math.cos((r.lat * Math.PI) / 180)
+  const dx = (p.lon - r.lon) * kx, dy = (p.lat - r.lat) * 110540
+  const d = Math.hypot(dx, dy)
+  if (d > WEDGE_M || d < 1) return false
+  const brg = ((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360
+  const off = Math.abs(((brg - r.heading + 540) % 360) - 180)
+  return off <= (r.fov ?? 90) / 2
+}
+function PhotoMini({ area, mini, ray, faced, records }: { area: string | null; mini: MiniStreet[]; ray: NonNullable<HoodExample['rays']>[number]
+  faced: MiniPolygon[]; records: ReturnType<typeof useAreaData>['records'] }) {
+  const pts = useMemo(() => [...assetPoints((records?.assets ?? []).filter((x) => inWedge(x, ray))),
+    ...signPoints((records?.unmapped ?? []).filter((x) => inWedge(x, ray)))], [records, ray])
+  return (
+    <GeoMini area={area} outlines="auto" streets={mini} polygons={faced} height={250} minSpanM={70}
+      rays={[{ ...ray, len_m: WEDGE_M * 0.6, hl: true, legend: 'photo direction', tip: `Photo direction ${Math.round(ray.heading)}°` }]}
+      points={[{ lat: ray.lat, lon: ray.lon, tone: 'ink', shape: 'ring', legend: 'camera', tip: 'Where the photo was taken' }, ...pts]}
+      frame={[{ lat: ray.lat, lon: ray.lon }, ...pts, ...faced.flatMap((f) => f.ring.map(([lat, lon]) => ({ lat, lon })))]}
+      label="Where the camera stood, which way it looked, and what was located in that direction"
+      caption={`Markers: the poles, lights and signs the run located in this direction (within ${WEDGE_M} m).${faced.length ? ' Orange outline: the mapped building the photo faces.' : ' No building outline on the map falls inside it, so no building is checked here.'}`} />
+  )
+}
+
+/** D39: the building among its neighbours, each coloured by register status (synthetic register) */
+function MatchMini({ area, mini, b, records }: { area: string | null; mini: MiniStreet[]; b: Building; records: ReturnType<typeof useAreaData>['records'] }) {
+  const near = useMemo(() => (records?.buildings ?? []).filter((x) => metres(x, b) < 90), [records, b])
+  return (
+    <GeoMini area={area} streets={mini} highlight={b.street} polygons={buildingPolys(near, b.id)} frame={[b]} minSpanM={140} height={220}
+      label="The building and its neighbours, coloured by what the register says" caption={REGISTER_NOTE} />
+  )
+}
+
+/** D39: a dark stretch along its road with its length, and the lights and poles around it */
+function GapMini({ area, mini, ex, gaps, records }: { area: string | null; mini: MiniStreet[]; ex: HoodExample
+  gaps: ReturnType<typeof useAreaData>['gaps']; records: ReturnType<typeof useAreaData>['records'] }) {
+  const along = gaps.find((x) => x.props.id === ex.id)
+  const lines = useMemo<MiniLine[]>(() => along ? darkLines([along], true) : [{ coords: ex.line!, tone: 'dark', legend: 'dark stretch (no light within 60 m)', measure: true, measureText: ex.reason.match(/^[\d,]+ m/)?.[0] }], [along, ex.line])
+  const ends = useMemo(() => lines[0].coords.map(([lat, lon]) => ({ lat, lon })), [lines])
+  const near = useMemo(() => (records?.assets ?? []).filter((x) => ends.some((e) => metres(e, x) < 140)), [records, ends])
+  return (
+    <GeoMini area={area} outlines="auto" streets={mini} highlight={along?.props.street ?? ex.street ?? null} streetLabel={false} lines={lines}
+      points={assetPoints(near)} frame={ends} minSpanM={160} height={240} label="Dark stretch with the streetlights and poles around it"
+      caption="The number on the dark band is its recorded length; hover the band for the length along the road when it differs." />
+  )
+}
+

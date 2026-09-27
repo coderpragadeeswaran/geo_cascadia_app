@@ -1,47 +1,53 @@
-/** Predicted building position (D27), for "How do we know?": a small plan (metres, north up) with the footprint outline,
- *  the footprint centre, the predicted point and its uncertainty circle, plus the method badge. Pure SVG in the design
- *  tokens, so it follows Night / Daylight and costs no second map instance (D21 memory). */
+/** Predicted building position (D27), for "How do we know?" and the position examples. D39: drawn with the shared
+ *  mini-map: the outline, its street, the buildings and roads around, the middle of the outline (+) and the predicted
+ *  point with its uncertainty circle, styled by method: camera views crossing (sight lines from each camera), one line
+ *  of sight meeting the wall, the front-wall centre, or the middle of the outline. The distance from the middle of the
+ *  outline to the predicted point is written on the plan. */
+import { useMemo } from 'react'
+import { useEvidence } from '@/api/queries'
 import type { Building } from '@/api/types'
-import { NorthPlate, ScalePlate } from '@/components/GeoMini'
+import { GeoMini, metres, type MiniPoint, type MiniRay } from '@/components/GeoMini'
 import { Tip } from '@/components/ui/tooltip'
 import { positionMethodLabel, positionMethodTerm, positionMethodWhy } from '@/lib/labels'
+import { miniStreets } from '@/lib/mini'
+import { useAreaData } from '@/lib/useAreaData'
 import { fmt, fmt1 } from '@/lib/utils'
 
-const VW = 300, VH = 190, PAD = 22
-const SCALES = [2, 5, 10, 20, 50]
+const METHOD_LEGEND: Record<string, string> = {
+  triangulated: 'position: camera views cross', wall_hit: 'position: line of sight meets the wall',
+  wall_centre: 'position: centre of the front wall', footprint_centre: 'position: middle of the outline',
+}
 
 export function PositionMini({ b }: { b: Building }) {
+  const { area, streets } = useAreaData()
+  const mini = useMemo(() => miniStreets(streets), [streets])
   const p = b.predicted_position
+  const { data: views } = useEvidence(p ? area : null, 'building', b.id)
   const ring = b.footprint?.polygon_latlon ?? []
+  const sighted = p?.method === 'triangulated' || p?.method === 'wall_hit'
+  const cams = useMemo(() => {
+    if (!sighted) return []
+    const seen = new Map<string, { lat: number; lon: number }>()
+    for (const v of views ?? []) if (v.camera && !seen.has(v.pano_id)) seen.set(v.pano_id, v.camera)
+    return [...seen.values()].slice(0, p?.method === 'wall_hit' ? 1 : 3)
+  }, [views, sighted, p?.method])
   if (!p || ring.length < 3) return <span className="ink3">No predicted position for this building.</span>
-  const kx = 111320 * Math.cos((b.lat * Math.PI) / 180), ky = 110540
-  const xy = (lat: number, lon: number): [number, number] => [(lon - b.lon) * kx, (lat - b.lat) * ky]
-  const fp = ring.map(([la, lo]) => xy(la, lo))
-  const pt = xy(p.lat, p.lon)
-  const r = p.uncertainty_m ?? 0
-  const xs = [...fp.map((q) => q[0]), pt[0] - r, pt[0] + r, 0], ys = [...fp.map((q) => q[1]), pt[1] - r, pt[1] + r, 0]
-  let [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)]
-  const span = Math.max(x1 - x0, y1 - y0, 12)
-  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2
-  x0 = cx - span / 2; x1 = cx + span / 2; y0 = cy - span / 2; y1 = cy + span / 2
-  const k = Math.min((VW - 2 * PAD) / (x1 - x0), (VH - 2 * 32) / (y1 - y0))   // top/bottom 32 px: N and scale plates (D36)
-  const sx = (x: number) => VW / 2 + (x - cx) * k, sy = (y: number) => VH / 2 - (y - cy) * k
-  const bar = SCALES.find((m) => m * k >= 40) ?? SCALES[SCALES.length - 1]
-  const dCentre = Math.hypot(pt[0], pt[1])
+  const at = { lat: p.lat, lon: p.lon }, centre = { lat: b.lat, lon: b.lon }
+  const dCentre = metres(centre, at)
+  const rays: MiniRay[] = cams.map((c) => ({ lat: c.lat, lon: c.lon, heading: 0, to: at, tip: `Line of sight from a camera, ${Math.round(metres(c, at))} m` }))
+  const points: MiniPoint[] = [
+    ...cams.map((c) => ({ lat: c.lat, lon: c.lon, tone: 'ink' as const, shape: 'ring' as const, legend: 'camera', tip: 'Camera whose photo shows this building' })),
+    ...(p.method !== 'footprint_centre' ? [{ ...centre, tone: 'drop' as const, shape: 'x' as const, legend: 'middle of the outline', tip: 'Middle of the building outline (its map position)' }] : []),
+    { ...at, tone: 'sodium', r_m: p.uncertainty_m, dashed: true, legend: METHOD_LEGEND[p.method] ?? 'predicted position',
+      tip: `${positionMethodLabel(p)}${p.uncertainty_m != null ? `, ±${fmt1.format(p.uncertainty_m)} m` : ''}` },
+  ]
   return (
     <figure className="mt-1">
-      <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full max-w-[340px] rounded-[var(--ns-r-control)]"
-        style={{ background: 'var(--ns-bg0)', boxShadow: 'inset 0 0 0 1px var(--ns-line)' }} role="img"
-        aria-label={`Footprint outline with the predicted position (${positionMethodLabel(p)}), ${p.uncertainty_m != null ? `uncertainty ${fmt1.format(p.uncertainty_m)} m` : 'uncertainty not estimated'}`}>
-        <polygon points={fp.map(([x, y]) => `${sx(x)},${sy(y)}`).join(' ')} fill="var(--ns-line)" stroke="var(--ns-ink2)" strokeWidth="1.5" />
-        {/* footprint centre (the building's map position) */}
-        <path d={`M${sx(0) - 5} ${sy(0)}h10M${sx(0)} ${sy(0) - 5}v10`} stroke="var(--ns-ink3)" strokeWidth="1.5" />
-        {r > 0 && <circle cx={sx(pt[0])} cy={sy(pt[1])} r={r * k} fill="var(--ns-sodium)" fillOpacity=".12" stroke="var(--ns-sodium)" strokeWidth="1.2" strokeDasharray="4 3" />}
-        <circle cx={sx(pt[0])} cy={sy(pt[1])} r="5" fill="var(--ns-sodium)" stroke="var(--ns-bg0)" strokeWidth="2" />
-        {/* scale bar and north */}
-        <ScalePlate x={6} y={VH - 25} barPx={bar * k} label={`${bar} m`} />
-        <NorthPlate x={VW - 25} y={5} />
-      </svg>
+      <GeoMini area={area} outlines="auto" streets={mini} highlight={b.street} height={210} minSpanM={40}
+        polygons={[{ ring: ring as [number, number][], hl: true, legend: 'this building', tip: b.attributes?.name?.value || 'This building' }]}
+        rays={rays} points={points} measure={dCentre >= 1.5 && p.method !== 'footprint_centre' ? { a: centre, b: at, text: `${fmt1.format(dCentre)} m` } : null}
+        frame={[at, centre, ...cams, ...ring.map(([lat, lon]) => ({ lat, lon }))]}
+        label={`Building outline with the predicted position (${positionMethodLabel(p)}), ${p.uncertainty_m != null ? `uncertainty ${fmt1.format(p.uncertainty_m)} m` : 'uncertainty not estimated'}`} />
       <figcaption className="t-small mt-1.5 space-y-0.5">
         <div>
           <Tip label={positionMethodWhy(p)} side="top">
@@ -56,7 +62,7 @@ export function PositionMini({ b }: { b: Building }) {
         <div className="ink2">{p.uncertainty_m != null
           ? <>±{fmt1.format(p.uncertainty_m)} m: the different camera pairs agree within about {fmt.format(Math.max(1, Math.round(p.uncertainty_m)))} m <span className="ink3 text-[13px]">· uncertainty, spread of camera-pair estimates</span></>
           : <>How far off it could be: <span className="ink3">not estimated{p.method === 'triangulated' ? ' (only two camera views, so nothing to compare)' : ''}</span></>}</div>
-        <div className="ink3">Orange dot: where we think the building stands, {fmt1.format(dCentre)} m from the middle of its outline (+). Also shown on the map when zoomed in close.</div>
+        <div className="ink3">{p.method === 'footprint_centre' ? 'The predicted position is the middle of the outline.' : `The predicted position is ${fmt1.format(dCentre)} m from the middle of the outline.`} Also shown on the map when zoomed in close.</div>
       </figcaption>
     </figure>
   )

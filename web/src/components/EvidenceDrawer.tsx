@@ -4,17 +4,19 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Check, CircleSlash, Flag, Loader2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ApiError } from '@/api/client'
 import { useObjectDetail } from '@/api/queries'
 import type { AnyProps, Asset, Building, GapProps, MissingProps, ReviewItem, UnmappedBusiness } from '@/api/types'
 import { assetRegLabel, ASSET_REG, diffLabel, floorsStatusPlain, floorsText, googleFlagPlain, matchLabel, nameQualityPlain, reviewLabel, reviewReasons, useLabel } from '@/lib/labels'
 import { RouteLine } from '@/lib/routes'
+import { miniStreets } from '@/lib/mini'
 import { useAreaData } from '@/lib/useAreaData'
 import { cn, costText, fmt, fmt1, plural, withArticle } from '@/lib/utils'
 import { DONE_LABEL, patchReviewCaches, PHOTO_TYPES, photoProblem, saveDecision, undoDecision, type Decision } from '@/lib/review'
 import { useUi } from '@/store/ui'
 import { EvidenceViews } from './EvidenceViews'
+import { ObjectMini, type MiniObject } from './ObjectMini'
 import { PositionMini } from './PositionMini'
 import { StatusDot } from './FindingsTable'
 import { GapHow } from './GapList'
@@ -174,6 +176,7 @@ function AssetBody({ a }: { a: Asset }) {
               : `About ±${fmt1.format(a.uncertainty_m ?? 0)} m: a fixed default for single-camera estimates, not measured for this object.`}</Fact>
             <Fact k="Times seen" hint={`${a.confidence ?? '—'} confidence`}>{a.n_detections != null ? `Found ${plural(a.n_detections, 'time')} in the photos` : '—'}, {a.confidence === 'high' ? 'so we are fairly sure' : a.confidence === 'medium' ? 'so we are somewhat sure' : a.confidence === 'low' ? 'so it needs a second look' : ''}</Fact>
             <Fact k="Map position"><span className="t-data">{a.lat.toFixed(6)}, {a.lon.toFixed(6)}</span></Fact>
+            <Fact k="Where it stands"><DrawerMini obj={{ kind: 'asset', a }} /></Fact>
             <Fact k="ID"><span className="t-data">{a.id}</span></Fact>
           </HowWeKnow>
         </Section>
@@ -198,6 +201,7 @@ function UnmappedBody({ u }: { u: UnmappedBusiness }) {
       <PanelHead eyebrow="Business with no mapped building" title={u.name ?? '—'} sub={u.street ?? undefined} />
       <Body>
         <EvidenceViews kind="unmapped" id={u.id} at={{ lat: u.lat, lng: u.lon }} target="sign" />
+        <div className="mt-3"><DrawerMini obj={{ kind: 'unmapped', u }} /></div>
         <Section title="What we saw">
           <p className="t-body">A shop sign was read here, but OpenStreetMap has no building outline at this spot, so it can’t be matched to the register.</p>
           <Row k="Seen in">{u.sightings != null ? plural(u.sightings, 'photo') : '— photos'}</Row>
@@ -334,5 +338,12 @@ function ReviewActions({ item, loading, finding }: { item: ReviewItem | null; lo
         {msg}{msg.endsWith('✓') && last?.id === item.id && <> · <button className="link" onClick={undo}>Undo</button></>}</p>}
     </Section>
   )
+}
+
+/** D39: the object on a small plan: its cameras and lines of sight, its street, the buildings around (same map as Review) */
+function DrawerMini({ obj }: { obj: MiniObject }) {
+  const { area, streets } = useAreaData()
+  const mini = useMemo(() => miniStreets(streets), [streets])
+  return <ObjectMini area={area} obj={obj} streets={mini} height={200} label="Where it stands: its street, the buildings around it, and the cameras that saw it" />
 }
 

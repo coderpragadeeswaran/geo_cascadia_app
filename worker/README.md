@@ -63,8 +63,18 @@ No CORS or Maps-key change is needed: the worker talks to the API server-to-serv
 
 1. Runtime → Change runtime type → **T4 GPU**.
 2. Run your setup cells **S0** (install package), **S1a** (deps) and **S1b** (keys). They define `cfg` and `run_area`.
-   - S1a must pin transformers: `!pip install -q "transformers==4.57.6"`. The worker prints the installed version at
-     start and warns if it is not the tested one (D37).
+   - S1a needs these lines. They fixed the OCR crash of the real run (D37, D39):
+     ```
+     !pip install -q "transformers==4.57.6"
+     !pip uninstall -y tensorflow tf-keras tensorflow-hub
+     %env USE_TF=0
+     %env TRANSFORMERS_NO_TF=1
+     ```
+     Why: transformers 4.x loads TensorFlow whenever it is installed (Colab has it pre-installed), and TensorFlow
+     crashed Paddle (sign reading) with a segfault, even on CPU. After changing S1a, use Runtime → Restart session, then
+     run S0, S1a and S1b again.
+   - At start the worker prints the transformers version and warns if it is not the tested one. If TensorFlow is
+     installed it warns and prints the exact fix.
 3. New cell: paste all of `worker/colab_worker.py`, then run it.
 4. Answer the questions:
    - *Pipeline + weights*: press **Enter** to use the setup cells, or paste the shared Drive folder link.
@@ -195,4 +205,15 @@ frees the memory. Set `OCR_SELF_TEST` at the top of the cell to `True` or `False
 
 `[mem]` lines at every stage show RAM and GPU use. When a Colab session restarts, the last `[mem]` line shows how close
 it was to the limit.
+
+## Google key and map-server problems (D39)
+
+- **Browser key given to the worker.** Places answers 403 "Requests from referer <empty> are blocked" when the key
+  given to the worker is website-restricted (the browser key). At start the worker tests the key with one free
+  Street View metadata call. If it is a browser key, it says "This Google key only works in a browser; use the
+  server key (Enter keeps the one from the setup cells)" and asks again. If this happens during a job, the job card
+  shows the same sentence, the worker asks for the key, and **Retry** continues from the saved progress.
+- **OpenStreetMap (Overpass) busy.** If the map server is down at the area stage, the worker retries by itself after
+  30 s, 60 s and 120 s. The card shows "Map server busy (OpenStreetMap), retrying…". The run continues from its saved
+  stages, so no photo is bought again. After the last try the job fails, and Retry is available.
 

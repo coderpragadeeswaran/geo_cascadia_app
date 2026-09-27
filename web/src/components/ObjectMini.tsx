@@ -1,46 +1,51 @@
-/** D36: the mini-map for one object (Review's right column): its street with the name written on it, the building
- *  outlines around it, the cameras whose photos are its evidence and a dashed line of sight from each camera to the
- *  object. Framed on the object and its cameras; the N and scale plates sit in the top and bottom bands, never over it.
- *  Camera positions come with the evidence views (shared cache with the evidence photos: no extra request). */
-import { useMemo } from 'react'
+/** D36 / D39: the mini-map for one object (Review's right column, Explore's evidence drawer, "see real examples"): the
+ *  object drawn as on the main map, the cameras whose photos are its evidence with a dashed line of sight from each,
+ *  its street with the name on it, the building outlines and roads around. With one camera, the camera-to-object
+ *  distance is written on the plan (the key measurement for a single-camera position). Camera positions come with the
+ *  evidence views (shared cache with the evidence photos: no extra request). */
+import { useMemo, type ReactNode } from 'react'
 import { useEvidence } from '@/api/queries'
-import type { Building } from '@/api/types'
-import { GeoMini, type MiniPoint, type MiniPolygon, type MiniRay, type MiniStreet } from './GeoMini'
+import type { Asset, Building, UnmappedBusiness } from '@/api/types'
+import { MATCH_LEGEND } from '@/lib/mini'
+import { GeoMini, metres, type MiniPoint, type MiniPolygon, type MiniRay, type MiniStreet } from './GeoMini'
 
-const NEAR_M = 70                      // building outlines drawn within this distance of the object
+export type MiniObject = { kind: 'building'; b: Building } | { kind: 'asset'; a: Asset } | { kind: 'unmapped'; u: UnmappedBusiness }
 
-export function ObjectMini({ area, kind, id, lat, lon, street, streets, buildings, extra = [], label }: {
-  area: string | null; kind: 'building' | 'asset'; id: string; lat: number; lon: number; street: string | null
-  streets: MiniStreet[]; buildings: Building[]; extra?: MiniPoint[]; label: string
+export function ObjectMini({ area, obj, streets, extra = [], label, height = 210, caption }: {
+  area: string | null; obj: MiniObject; streets: MiniStreet[]; extra?: MiniPoint[]; label: string; height?: number; caption?: ReactNode
 }) {
-  const { data: views } = useEvidence(area, kind, id)
-  const kx = 111320 * Math.cos((lat * Math.PI) / 180), ky = 110540
-  const dist = (la: number, lo: number) => Math.hypot((lo - lon) * kx, (la - lat) * ky)
-  const polygons = useMemo<MiniPolygon[]>(() => buildings
-    .filter((b) => (b.footprint?.polygon_latlon?.length ?? 0) >= 3 && dist(b.lat, b.lon) <= NEAR_M)
-    .map((b) => ({ ring: b.footprint!.polygon_latlon as [number, number][], hl: kind === 'building' && b.id === id })),
-  [buildings, id, kind, lat, lon]) // eslint-disable-line react-hooks/exhaustive-deps
+  const id = obj.kind === 'building' ? obj.b.id : obj.kind === 'asset' ? obj.a.id : obj.u.id
+  const { data: views } = useEvidence(area, obj.kind, id)
+  // where the lines of sight end: a building's predicted position (on its front) when known, else its map position
+  const at = obj.kind === 'building'
+    ? (obj.b.predicted_position ? { lat: obj.b.predicted_position.lat, lon: obj.b.predicted_position.lon } : { lat: obj.b.lat, lon: obj.b.lon })
+    : obj.kind === 'asset' ? { lat: obj.a.lat, lon: obj.a.lon } : { lat: obj.u.lat, lon: obj.u.lon }
+  const street = obj.kind === 'building' ? obj.b.street : obj.kind === 'asset' ? obj.a.street : obj.u.street
   const cams = useMemo(() => {
     const seen = new Map<string, { lat: number; lon: number }>()
     for (const v of views ?? []) if (v.camera && !seen.has(v.pano_id)) seen.set(v.pano_id, v.camera)
     return [...seen.values()].slice(0, 4)
   }, [views])
-  const rays: MiniRay[] = cams.map((c) => ({ lat: c.lat, lon: c.lon, heading: 0, to: { lat, lon } }))
-  const points: MiniPoint[] = [
-    ...extra,
-    ...cams.map((c) => ({ lat: c.lat, lon: c.lon, tone: 'ink' as const, hollow: true })),
-    { lat, lon, tone: 'sodium' },
-  ]
+  const rays: MiniRay[] = cams.map((c) => ({ lat: c.lat, lon: c.lon, heading: 0, to: at, tip: `Line of sight, ${Math.round(metres(c, at))} m` }))
+  const polygons: MiniPolygon[] = obj.kind === 'building' && (obj.b.footprint?.polygon_latlon?.length ?? 0) >= 3
+    ? [{ ring: obj.b.footprint!.polygon_latlon as [number, number][], hl: true, legend: 'this building',
+      tip: `${obj.b.attributes?.name?.value || 'This building'}: ${MATCH_LEGEND[obj.b.match_status as keyof typeof MATCH_LEGEND] ?? 'register status unknown'}` }]
+    : []
+  const target: MiniPoint[] = obj.kind === 'asset'
+    ? [{ ...at, tone: obj.a.type === 'streetlight' ? 'sodium' : 'pole', r_m: obj.a.uncertainty_m, dashed: obj.a.method !== 'triangulated',
+      legend: obj.a.type === 'streetlight' ? 'this streetlight' : 'this pole',
+      tip: `${obj.a.type === 'streetlight' ? 'Streetlight' : 'Pole'} · ${obj.a.method === 'triangulated' ? 'pinpointed from 2+ cameras' : 'approximate (one camera)'}${obj.a.uncertainty_m != null ? `, could be off by ${Math.round(obj.a.uncertainty_m)} m` : ''}` }]
+    : obj.kind === 'unmapped'
+      ? [{ ...at, tone: 'sign', shape: 'diamond', legend: 'this business sign (position approximate)', tip: `${obj.u.name || 'Business sign'} · no building outline on the map` }]
+      : obj.b.predicted_position ? [{ ...at, tone: 'sodium', legend: 'where the building stands (front)', tip: 'Predicted position of the building' }] : []
+  const points: MiniPoint[] = [...extra,
+    ...cams.map((c, i) => ({ lat: c.lat, lon: c.lon, tone: 'ink' as const, shape: 'ring' as const, legend: 'camera', tip: `Camera ${i + 1}: a photo of it was taken here` })),
+    ...target]
+  const single = cams.length === 1 ? { a: cams[0], b: at } : null
   return (
-    <figure>
-      <GeoMini streets={streets} highlight={street} polygons={polygons} rays={rays} points={points} height={190} minSpanM={70}
-        frame={[{ lat, lon }, ...cams]} label={label} />
-      <figcaption className="t-small ink3 mt-1 flex flex-wrap gap-x-3">
-        <span><span className="sodium">●</span> this {kind === 'asset' ? 'pole or light' : 'building'}</span>
-        {cams.length > 0 && <span>○ {cams.length === 1 ? 'camera' : 'cameras'} · dashed: line of sight</span>}
-        {!views && <span>loading the cameras…</span>}
-        {views && !cams.length && <span>camera position not recorded</span>}
-      </figcaption>
-    </figure>
+    <GeoMini area={area} outlines="auto" streets={streets} highlight={street} polygons={polygons} rays={rays} points={points} measure={single}
+      height={height} minSpanM={60} frame={[at, ...cams, ...(polygons[0]?.ring.map(([lat, lon]) => ({ lat, lon })) ?? [])]} label={label}
+      caption={<>{!views ? 'Loading the cameras… ' : !cams.length ? 'Camera position not recorded for this item. ' : cams.length === 1 && !caption ? 'One camera saw it: the distance is along its line of sight. ' : ''}
+        {obj.kind === 'building' ? 'Register: synthetic (demo). ' : null}{caption}</>} />
   )
 }

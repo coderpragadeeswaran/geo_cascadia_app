@@ -43,7 +43,11 @@ export interface HoodExample {
   id?: string; title: string; reason: string; facts?: [string, unknown, string?][]
   rays?: { lat: number; lon: number; heading: number; fov?: number; faces?: string | null }[]; footprints?: string[]; inside?: boolean; map?: boolean
   view?: { pano_id: string; heading: number; pitch: number; fov: number }; boxes?: HoodBox[]; note?: string
-  points?: { lat: number; lon: number; label?: string; drop?: boolean }[]; line?: [number, number][]; street?: string
+  points?: { lat: number; lon: number; label?: string; drop?: boolean }[]; line?: [number, number][]; street?: string | null
+  /** D39: the key measurement drawn on the example's mini-map (e.g. the spacing to the nearest chosen camera stop) */
+  measure?: { a: { lat: number; lon: number }; b: { lat: number; lon: number }; what: string } | null
+  /** D39: the OpenStreetMap outline a dropped camera stands in ([lat, lon] ring), when found */
+  outline?: [number, number][] | null
 }
 
 export const useHood = (slug: string | null) =>
