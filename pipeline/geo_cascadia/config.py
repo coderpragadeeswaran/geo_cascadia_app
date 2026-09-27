@@ -2,6 +2,13 @@
 import os
 from dataclasses import dataclass, field
 
+# D32 follow-up: words that appear on signs but never name a business (announcements, offers, greetings). A sign made
+# only of these (plus place words) is never a display name and is not evidence of a business (textmatch.name_kind).
+GENERIC_SIGN_WORDS = ("open", "opening", "opened", "grand", "sale", "offer", "offers", "discount", "discounts",
+                      "welcome", "welcomes", "new", "now", "today", "special", "hurry", "free", "closed",
+                      "available", "here", "entry", "exit", "entrance", "contact", "call", "hot", "best", "only", "limited",
+                      "off", "flat", "upto", "up", "to", "clearance", "season", "festival", "diwali", "pongal", "happy")
+
 
 @dataclass
 class Config:
@@ -52,6 +59,17 @@ class Config:
     ocr_target_h: int = 200
     fast_max_crops_per_building: int = 3
 
+    # ---- building use from sign text (D32): fills ONLY a use that is still unknown, never a model decision ----
+    # a building with a readable business sign (an OCR read >= ocr_min_conf that supports the kept name) is commercial.
+    # House name plates are not businesses: a sign containing any of these words (Latin or Tamil) is skipped.
+    sign_use_house_words: tuple = ("illam", "ilam", "nilayam", "nilaiyam", "nilaya", "nivas", "nivasam", "niwas", "bhavan",
+                                   "bhavanam", "bhavana", "bhawan", "house", "home", "homes", "villa", "villas", "residency",
+                                   "residence", "cottage", "kudil", "veedu", "apartment", "apartments", "flats", "enclave",
+                                   "இல்லம்", "நிலையம்", "நிவாஸ்", "பவனம்", "வீடு", "குடில்", "இல்லம")
+    sign_generic_words: tuple = GENERIC_SIGN_WORDS        # used by textmatch.name_kind (module list, one place)
+    sign_use_min_crop_w: int = 50                        # px in the 640 x 640 photo: smaller signs are name plates
+    sign_use_min_crop_area: int = 3000                   # px^2
+
     # ---- VLM ----
     vlm_workers: int = 4
     name_gate: float = 0.7
@@ -81,6 +99,7 @@ class Config:
     # ---- validation numbers shown next to each attribute (from Ward 29 hand labels) ----
     validation: dict = field(default_factory=lambda: {
         "use": "90% vs hand labels (n=29)",
+        "use_sign": "rule: readable business sign (not measured against hand labels)",
         "floors": "61% exact / 100% within 1 (n=33)",
         "names": "routed 74% (n=31); 15% confirmed by Google vs 2% chance",
         "condition": "withheld: 53% vs 66% majority baseline (n=38)"})

@@ -11,7 +11,7 @@ import type { AnyProps, Asset, Building, GapProps, MissingProps, ReviewItem, Unm
 import { assetRegLabel, ASSET_REG, diffLabel, floorsStatusPlain, floorsText, googleFlagPlain, matchLabel, nameQualityPlain, reviewLabel, reviewReasons, useLabel } from '@/lib/labels'
 import { RouteLine } from '@/lib/routes'
 import { useAreaData } from '@/lib/useAreaData'
-import { cn, costText, fmt, fmt1, plural } from '@/lib/utils'
+import { cn, costText, fmt, fmt1, plural, withArticle } from '@/lib/utils'
 import { DONE_LABEL, patchReviewCaches, PHOTO_TYPES, photoProblem, saveDecision, undoDecision, type Decision } from '@/lib/review'
 import { useUi } from '@/store/ui'
 import { EvidenceViews } from './EvidenceViews'
@@ -70,7 +70,9 @@ function buildingSummary(b: Building) {
   const p = b.predicted_position
   const seen = n ? `We looked at this building in ${plural(n, 'street photo')}.` : 'No street photo faced this building.'
   const u = !use?.value ? ' Its use could not be told: no clear photo of the front.'
-    : use.route === 'tier1_local_clip' ? ' Its use was decided by a small built-in model (no cloud AI).' : ' Its use comes from an AI image check of the clearest photo.'
+    : use.route === 'tier1_local_clip' ? ' Its use was decided by a small built-in model (no cloud AI).'
+      : use.route === 'sign_text' ? ' There is no clear photo of the building, but its readable shop sign shows it is a business.'
+        : ' Its use comes from an AI image check of the clearest photo.'
   const pos = !p ? '' : p.method === 'triangulated' ? ` Its position is measured from where ${plural(p.n_cameras, 'camera view')} cross.`
     : p.method === 'wall_hit' ? ' Its position is where one camera’s line of sight meets its front wall on the map.'
       : ' Its position is the middle of its outline on the map, because no camera view could measure it.'
@@ -129,7 +131,7 @@ function BuildingBody({ b }: { b: Building }) {
         </Section>
         <Section title="What the register says" right={<Synthetic />}>
           {reg?.property_id ? (
-            <p className="t-body">{`${reg.record_use ? `A ${reg.record_use.replace(/_/g, ' ')}` : 'A property'}${reg.record_floors != null ? ` with ${plural(reg.record_floors, 'floor')}` : ''}.`}</p>
+            <p className="t-body">{`${withArticle(reg.record_use ? reg.record_use.replace(/_/g, ' ') : 'property', true)}${reg.record_floors != null ? ` with ${plural(reg.record_floors, 'floor')}` : ''}.`}</p>
           ) : <p className="t-body">No record for this building.</p>}
           {!!b.reasons?.length && (
             <ul className="mt-2 space-y-1">{b.reasons.map((r) => <li key={r} className="t-small flex gap-2"><span className="mt-[7px] size-1.5 shrink-0 rounded-full" style={{ background: 'var(--ns-sodium)' }} />{plainReason(r)}</li>)}</ul>

@@ -203,6 +203,7 @@ def facts(bundle, F, model_card=None):
     ur = Counter(attr(b, "use").get("route") for b in B)
     put("use_local", ur.get("tier1_local_clip", 0), "use.route == tier1_local_clip")
     put("use_vlm", ur.get("tier3_vlm", 0), "use.route == tier3_vlm")
+    put("use_sign", ur.get("sign_text", 0), "use.route == sign_text (readable business sign, D32)")
     put("use_unknown", sum(attr(b, "use").get("value") is None for b in B), "use.value is null (D9)")
     fs = Counter(attr(b, "floors").get("status") for b in B)
     for k in ("measured", "low_confidence", "not_measured"):
@@ -417,7 +418,7 @@ def hood(bundle, F, model_card=None):
                          "verdict": verdict, "share_views_unmapped": share, "views": n["views"], "views_unmapped": n["views_unmapped"],
                          "buildings": n["buildings"], "unmapped_kept": n["unmapped_kept"]},
             "sankey": sankey(n), "sign_funnel": sign_funnel(n),
-            "routes": {"use": {"local": n["use_local"], "vlm": n["use_vlm"], "unknown": n["use_unknown"]},
+            "routes": {"use": {"local": n["use_local"], "vlm": n["use_vlm"], "sign": n["use_sign"], "unknown": n["use_unknown"]},
                        "names": {"ocr": n["name_route_tier2_ocr"], "vlm_gate": n["name_route_tier3_vlm_ocr_gate"],
                                  "vlm_only": n["name_route_tier3_vlm_unverified"]}},
             "streets": per_street(bundle, F), "story": st,
@@ -454,7 +455,7 @@ def _map(title, reason, points=(), facts=None):
 EXAMPLE_KEYS = ("streets", "cameras.kept", "cameras.inside", "panos.not_selected", "panos.off_street", "panos.thinned", "views.mapped", "views.unmapped",
                 "det.building", "det.signboard", "det.pole", "det.lamp_head", "det.tilted", "det.user",
                 "signs.all", "signs.ocr", "signs.vlm", "signs.no_text", "signs.watermark",
-                "use.local", "use.vlm", "use.unknown", "names.named", "names.good", "names.google",
+                "use.local", "use.vlm", "use.sign", "use.unknown", "names.named", "names.good", "names.google",
                 "names.ocr", "names.vlm_gate", "names.vlm_only",
                 "floors.measured", "floors.low_confidence", "floors.not_measured",
                 "bld.usable", "bld.rejected", "bld.no_box", "assets.triangulated", "assets.approximate",
@@ -586,10 +587,11 @@ def examples(bundle, F, key):
         return out
     pick = None
     if head == "use":
-        route = {"local": "tier1_local_clip", "vlm": "tier3_vlm"}.get(grp)
+        route = {"local": "tier1_local_clip", "vlm": "tier3_vlm", "sign": "sign_text"}.get(grp)
         pick = [b for b in B if attr(b, "use").get("route") == route] if route else [b for b in B if attr(b, "use").get("value") is None]
         why = {"local": "use decided by the local model (CLIP + logistic regression), no cloud call",
                "vlm": "the local model was unsure, so the VLM decided the use",
+               "sign": "no clear photo of the building, but a readable business sign is linked to it, so it counts as a business",
                "unknown": "no usable photo of this building, so its use is not known (shown, never hidden)"}[grp]
         return [_ref("building", b, why) for b in _spread(pick)]
     if head == "names":

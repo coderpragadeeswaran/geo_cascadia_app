@@ -195,7 +195,7 @@ function Card({ c }: { c: TrustCard }) {
   const detail = useDetail()
   const r = frac(c.result), b = frac(c.baseline)
   const n = c.result.n ?? c.baseline?.n
-  const ids: Record<string, string> = { use: 'use', floors: 'floors', names: 'names', streetlights: 'streetlights', position: 'position-card' }
+  const ids: Record<string, string> = { use: 'use', floors: 'floors', names: 'names', streetlights: 'streetlights', position: 'position-card', use_sign: 'use-sign' }
   return (
     <article id={ids[c.id]} className="scroll-mt-6 flex flex-col rounded-[var(--ns-r-sheet)] p-4" style={{ boxShadow: 'inset 0 0 0 1px var(--ns-line-strong)' }}>
       <div className="flex items-start justify-between gap-2">
@@ -225,7 +225,9 @@ function Card({ c }: { c: TrustCard }) {
           ))}
         </dl>
       )}
-      <p className="t-small ink3 mt-2">Source: the team’s model card, checked by hand{n != null ? ` on ${plural(n, 'example')}` : ''}. Method: {c.method}.</p>
+      <p className="t-small ink3 mt-2">{c.result.src
+        ? <>Source: the team’s model card, checked by hand{n != null ? ` on ${plural(n, 'example')}` : ''}. Method: {c.method}.</>
+        : <>Source: a fixed rule in the analysis, not checked by hand yet. Rule: {c.method}.</>}</p>
       {detail === 'technical' && <div className="mt-2"><Src>method: {c.method}</Src><Src>result: {c.result.src}{c.result.n_src ? ` · n: ${c.result.n_src}` : ''}</Src>{c.baseline && <Src>baseline: {c.baseline.src}</Src>}</div>}
       <div className="flex-1" />
       <button className="link t-small mt-3 inline-flex items-center gap-1 self-start" onClick={() => useUi.getState().go('trust', c.section)}>More detail <ArrowRight className="size-3.5" /></button>

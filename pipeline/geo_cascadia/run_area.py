@@ -13,6 +13,7 @@ from .ocr import run_ocr
 from .vlm import VLM, run_names, run_building_attrs, finalize_buildings
 from .reference import street_names, places_crosscheck
 from .match import synthetic_property_register, match_properties, score_planted, asset_layer, review_queue
+from .signuse import fill_use_from_signs
 from .textmatch import name_quality
 from .workspace import build_dashboard, QueryEngine
 from .export import build_export, to_geojson
@@ -107,6 +108,9 @@ def run_area(polygon, out_dir, cfg=None, area_name="area", street_filter=None, p
         router = UseRouter(cfg.use_router_path, cfg.device)
     vbld, shots_ok = run_building_attrs(views, sv, vlm, cfg, out_dir, progress, router=router)
     final = finalize_buildings(buildings, ocr_res, ocr_names, vnames, vbld, cfg)
+    # D32: a building whose use is still unknown but has a readable business sign is commercial (rule, no model call)
+    final, sign_use_stats = fill_use_from_signs(final, ocr_res, cfg)
+    print("use from sign text:", sign_use_stats)
     ub, ub_stats = unmapped_businesses(dets, ocr_res, area.frame, vlm, cfg, out_dir)
     save("unmapped_businesses", ub); print("unmapped businesses:", ub_stats)
     save("final_attributes", final)
@@ -143,6 +147,7 @@ def run_area(polygon, out_dir, cfg=None, area_name="area", street_filter=None, p
                  "ocr_mode": ocr_stats["mode"], "ocr_sec_per_crop": ocr_stats["sec_per_crop"],
                  "buildings_use_local": sum((b.get("vlm") or {}).get("use_route") == "tier1_local_clip" for b in vbld),
                  "buildings_use_vlm": sum((b.get("vlm") or {}).get("use_route", "tier3_vlm") == "tier3_vlm" for b in vbld if "vlm" in b),
+                 "buildings_use_sign": sign_use_stats["filled"],
                  "vlm_calls": vlm.calls, "vlm_cost_usd": round(vlm.cost(), 4), "places_calls": pstats["places_calls"],
                  "device": cfg.device, "floors_examples_found": shots_ok, "stage_seconds": T,
                  "total_minutes": round((time.time() - t0) / 60, 1),

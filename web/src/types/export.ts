@@ -15,7 +15,7 @@ const Counts = z.record(z.string(), z.number())
 export const MatchStatus = z.enum(['matched', 'discrepancy', 'no_record'])
 export const Severity = z.enum(['none', 'medium', 'high'])
 export const FloorsStatus = z.enum(['measured', 'low_confidence', 'not_measured'])
-export const UseRoute = z.enum(['tier1_local_clip', 'tier3_vlm'])
+export const UseRoute = z.enum(['tier1_local_clip', 'tier3_vlm', 'sign_text'])
 export const FloorsRoute = z.enum(['tier3_vlm_fewshot'])
 export const NameRoute = z.enum(['tier2_ocr', 'tier3_vlm+ocr_gate', 'tier3_vlm_unverified'])
 export const NameQuality = z.enum(['good', 'fragment', 'tamil_unverified'])
@@ -154,6 +154,7 @@ export function makeExportSchemas(mode: SchemaMode) {
     sign_crops_total: z.number(), crops_read_by_ocr: z.number(), crops_discarded_no_text: z.number(),
     crops_escalated: z.number(), crops_skipped_fast_mode: z.number(), ocr_mode: z.string(), ocr_sec_per_crop: z.number(),
     buildings_use_local: z.number().optional(), buildings_use_vlm: z.number().optional(), // absent in older runs
+    buildings_use_sign: z.number().optional(),            // D32: use filled from a readable business sign
     vlm_calls: z.number(), vlm_cost_usd: z.number(), places_calls: z.number(), device: z.string(),
     floors_examples_found: z.boolean().optional(),
     stage_seconds: Counts, total_minutes: z.number(),

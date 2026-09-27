@@ -145,9 +145,10 @@ def test_google_count_explained(offline, ward29):
     flag = "sign_not_in_google_within_40m"
     flagged = [b for b in ward29["buildings"] if flag in (b.get("google_flags") or [])]
     shops = [b for b in flagged if (b["attributes"].get("use") or {}).get("value") in ("commercial", "mixed")]
-    assert r["total"] == len(shops) == 34 and len(flagged) == 93
-    assert r["note"].startswith("34 shops & businesses (commercial or mixed use) have a sign name")
-    assert "93 named buildings are not on Google" in r["note"] and f"including {93 - 34} that are not shops" in r["note"]
+    ns, nf = len(shops), len(flagged)                         # D32: counts follow the data (34 / 93 before it)
+    assert r["total"] == ns and ns > 0 and nf > ns
+    assert r["note"].startswith(f"{ns} shops & businesses (commercial or mixed use) have a sign name")
+    assert f"{nf} named buildings are not on Google" in r["note"] and f"including {nf - ns} that are not shops" in r["note"]
 
 
 # ------------------------------------------------------------------ 7. any script: unknown words are ignored, never dropped

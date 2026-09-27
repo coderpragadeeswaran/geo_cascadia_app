@@ -246,7 +246,9 @@ def review_row(bundle, q):
         b = next((x for x in bundle["buildings"] if x["id"] == q["ref_id"]), None) or {}
         obj = {"use": _attr(b, "use").get("value"), "floors": _attr(b, "floors").get("value"),
                "floors_status": _attr(b, "floors").get("status"), "match_status": b.get("match_status"),
-               "name": _attr(b, "name").get("value"), "severity": b.get("severity")}
+               # a sign text is shown as the building's name only when it reads as a real name (D32 name quality)
+               "name": _attr(b, "name").get("value") if _attr(b, "name").get("quality") == "good" else None,
+               "severity": b.get("severity")}
     else:
         a = next((x for x in bundle["assets"] if x["id"] == q["ref_id"]), None) or {}
         obj = {"type": a.get("type"), "confidence": a.get("confidence"), "method": a.get("method"),

@@ -104,9 +104,9 @@
    "tier3_vlm": 44
   },
   "use_values": {
-   "not observed": 25,
+   "not observed": 14,
    "institutional": 1,
-   "commercial": 23,
+   "commercial": 34,
    "residential": 11,
    "under_construction": 3,
    "mixed": 3
@@ -148,8 +148,8 @@
    "tier3_vlm_unverified": 1
   },
   "name_quality": {
-   "fragment": 14,
-   "good": 38,
+   "fragment": 15,
+   "good": 37,
    "tamil_unverified": 2
   },
   "google_confirmed": 13
@@ -175,14 +175,14 @@
  },
  "matching": {
   "match_status": {
-   "matched": 45,
-   "discrepancy": 19,
+   "matched": 43,
+   "discrepancy": 21,
    "no_record": 2
   },
   "discrepancy_types": {
    "extra_floor": 9,
    "area_understated": 2,
-   "use_change": 10,
+   "use_change": 12,
    "location_shift": 4,
    "missing_record": 2
   },
@@ -226,10 +226,10 @@
   "register_note": "SYNTHETIC property + asset registers with planted errors (no open municipal data)"
  },
  "review": {
-  "items": 77,
+  "items": 79,
   "by_priority": {
    "1": 6,
-   "2": 13,
+   "2": 15,
    "3": 1,
    "4": 8,
    "5": 1,
@@ -237,8 +237,8 @@
   },
   "by_reason": {
    "high-severity discrepancy": 6,
-   "attribute discrepancy \u2014 verify on imagery": 17,
-   "building seen from one view only": 6,
+   "attribute discrepancy \u2014 verify on imagery": 19,
+   "building seen from one view only": 7,
    "floor count low confidence (roofline not visible)": 13,
    "name read by VLM only (not supported by OCR)": 1,
    "single-detection asset": 48
@@ -273,6 +273,6 @@
   "66 buildings registered; 44 had a usable view for use/floors, 7 had no building box at all.",
   "1267 sign crops: 537 read locally, 95 escalated; 54 buildings named, 13 confirmed by Google.",
   "36 businesses found on unmapped frontage (approximate points).",
-  "77 items sent to human review."
+  "79 items sent to human review."
  ]
 }

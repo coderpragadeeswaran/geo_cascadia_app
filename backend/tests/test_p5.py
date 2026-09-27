@@ -273,12 +273,17 @@ def test_trust_shows_only_model_card_values(offline):
         nums += e["numbers"]
     assert len(nums) > 40
     for x in nums:
+        if x["src"] is None:                                   # only the D32 sign rule: explicitly "not measured"
+            assert x["value"] == "not measured"
+            continue
         assert _at(mc, x["src"]) == x["value"], x
         if "n" in x:
             src = x["n_src"]
             val = _at(mc, src)
             assert val == x["n"] or (isinstance(val, dict) and re.search(rf"_n{x['n']}$", src)), x   # n in a key name
-    assert {c["id"] for c in t["cards"]} == {"use", "floors", "names", "streetlights", "position"}
+    assert {c["id"] for c in t["cards"]} == {"use", "use_sign", "floors", "names", "streetlights", "position"}
+    sign = next(c for c in t["cards"] if c["id"] == "use_sign")
+    assert "not measured" in sign["measured"] and sign["caveat"].startswith("Known limits: adverts/posters can mislead")
     floors = next(c for c in t["cards"] if c["id"] == "floors")
     assert floors["result"]["n"] == 36                                                              # D2: floors n=36
     assert t["confusion_matrix"] is None                                                            # none in model_card

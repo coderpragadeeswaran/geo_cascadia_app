@@ -22,7 +22,7 @@ export interface Hood {
   coverage: { level: 'full' | 'partial' | null; verdict: string | null; share_views_unmapped: number | null; views: number; views_unmapped: number; buildings: number; unmapped_kept: number }
   sankey: { columns: SankeyCol[] }
   sign_funnel: { key: string; label: string; value: number; unit: string; examples: string }[]
-  routes: { use: { local: number; vlm: number; unknown: number }; names: { ocr: number; vlm_gate: number; vlm_only: number } }
+  routes: { use: { local: number; vlm: number; sign: number; unknown: number }; names: { ocr: number; vlm_gate: number; vlm_only: number } }
   streets: StreetRow[]
   story: StorySentence[]
   corrections: StorySentence[]
@@ -51,7 +51,7 @@ export const useHoodExamples = (slug: string | null, key: string | null) =>
   useQuery({ queryKey: ['hood-ex', slug, key], queryFn: () => api<{ examples: HoodExample[] }>(`/areas/${slug}/hood/examples?key=${encodeURIComponent(key!)}`).then((r) => r.examples),
     enabled: !!(slug && key), staleTime: Infinity })
 
-export interface TrustNum { label: string; value: number | string; kind: 'pct' | 'num' | 'm' | 'pctn' | 'text'; src: string; n?: number; n_src?: string }
+export interface TrustNum { label: string; value: number | string; kind: 'pct' | 'num' | 'm' | 'pctn' | 'text'; src: string | null; n?: number; n_src?: string }
 export interface TrustCard { id: string; title: string; measured: string; method: string; result: TrustNum; baseline: TrustNum | null; more: TrustNum[]; verdict: string; caveat: string; section: string }
 export interface Experiment { lane: string; name: string; status: 'production' | 'rejected' | 'replaced' | 'tried' | 'withheld'; numbers: TrustNum[]; why: string | null; src: string | null }
 export interface ConsistencyRow {

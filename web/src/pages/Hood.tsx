@@ -94,6 +94,8 @@ function Story({ h, pick }: { h: HoodData; pick: Pick }) {
   const mini = useMemo(() => streets.map((s) => ({ name: s.props.name, geometry: s.geometry })), [streets])
   const exBtn = (key: string, label: string) => ({ key, label })
   const pipe = h.pipeline ?? {}
+  // every count defaults to 0 (never NaN), e.g. when an older API has no "sign" count yet
+  const use = { local: h.routes.use.local ?? 0, vlm: h.routes.use.vlm ?? 0, sign: h.routes.use.sign ?? 0, unknown: h.routes.use.unknown ?? 0 }
   const chapters: Chapter[] = [
     { id: 'streets', title: 'Streets planned', figure: n.streets, unit: noun(n.streets, 'street'),
       plain: `${fmt.format(n.streets_m)} m of road were chosen. Everything below happened along ${n.streets === 1 ? 'this street' : `these ${n.streets} streets`}.`,
@@ -130,14 +132,15 @@ function Story({ h, pick }: { h: HoodData; pick: Pick }) {
       visual: (run) => <Funnel run={run} onPick={pick} rows={h.sign_funnel} />,
       examples: [exBtn('signs.ocr', 'Read by OCR'), exBtn('signs.vlm', 'Sent to the cloud model'), exBtn('signs.no_text', 'No readable text'), ...(n.unmapped_kept ? [exBtn('unmapped.kept', 'Businesses not on the map')] : [])] },
     { id: 'routed', title: 'Local or cloud AI', figure: n.use_local, figure2: n.use_vlm, unit: 'local / cloud',
-      plain: `To keep cost down, a small local model decides each building’s use first; only when it is unsure does the cloud model look. ${plural(n.use_local, 'building')} ${n.use_local === 1 ? 'was' : 'were'} decided locally and ${fmt.format(n.use_vlm)} by the cloud model; ${fmt.format(n.use_unknown)} had no usable photo, so their use is not known.`,
+      plain: `A small local model decides each building’s use first; only when it is unsure does the cloud model look, and a readable shop sign counts when there is no clear photo. Building use: ${fmt.format(use.local)} local, ${fmt.format(use.vlm)} cloud, ${fmt.format(use.sign)} from a shop sign (no clear photo), ${fmt.format(use.unknown)} not known.`,
       tech: `use.route: tier1_local_clip ${n.use_local} (CLIP ViT-B/32 + logistic regression), tier3_vlm ${n.use_vlm} (${pipe.vlm ?? 'Nova Lite'}); use.value null ${n.use_unknown} (D9). name.route: tier2_ocr ${n.name_route_tier2_ocr}, tier3_vlm+ocr_gate ${n.name_route_tier3_vlm_ocr_gate}, tier3_vlm_unverified ${n.name_route_tier3_vlm_unverified}. Counted from exported buildings; stored counters that differ are on Trust › Stored vs computed.`,
       visual: () => (
         <div className="flex flex-wrap gap-8">
-          <Donut title="Building use decided by" onPick={pick} center={<><span className="t-data text-[15px]">{fmt.format(h.routes.use.local + h.routes.use.vlm)}</span><span className="t-small ink3 text-[12px]">decided</span></>}
-            segs={[{ key: 'l', label: 'local model', value: h.routes.use.local, kind: 'kept', examples: 'use.local' },
-              { key: 'v', label: 'cloud model (VLM)', value: h.routes.use.vlm, kind: 'alt', examples: 'use.vlm' },
-              { key: 'u', label: 'not known', value: h.routes.use.unknown, kind: 'unclassified', examples: 'use.unknown' }]} />
+          <Donut title="Building use decided by" onPick={pick} center={<><span className="t-data text-[15px]">{fmt.format(use.local + use.vlm + use.sign)}</span><span className="t-small ink3 text-[12px]">decided</span></>}
+            segs={[{ key: 'l', label: 'local model', value: use.local, kind: 'kept', examples: use.local ? 'use.local' : null },
+              { key: 'v', label: 'cloud model (VLM)', value: use.vlm, kind: 'alt', examples: use.vlm ? 'use.vlm' : null },
+              { key: 's', label: 'shop sign (no clear photo)', value: use.sign, kind: 'idle', examples: use.sign ? 'use.sign' : null },
+              { key: 'u', label: 'not known', value: use.unknown, kind: 'unclassified', examples: use.unknown ? 'use.unknown' : null }]} />
           <Donut title="Names kept from signs, read by" onPick={pick} center={<><span className="t-data text-[15px]">{fmt.format(n.named)}</span><span className="t-small ink3 text-[12px]">names kept</span></>}
             segs={[{ key: 'o', label: 'OCR alone', value: h.routes.names.ocr, kind: 'kept', examples: 'names.ocr' },
               { key: 'g', label: 'cloud model, OCR agrees', value: h.routes.names.vlm_gate, kind: 'alt', examples: 'names.vlm_gate' },

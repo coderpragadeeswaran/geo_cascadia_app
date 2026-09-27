@@ -39,7 +39,9 @@ const reasonsOf = (r: ReviewRow) => reviewReasons(r.reasons, { match_status: r.o
 function title(r: ReviewRow) {
   if (r.item_type === 'asset') return `${r.asset_cls === 'streetlight' ? 'Streetlight' : 'Pole'} · ${r.street ?? '—'}`
   const use = r.object?.use as string | null | undefined
-  return `${r.object?.name && typeof r.object.name === 'string' ? r.object.name : use ? useLabel(use) : 'Building'} · ${r.street ?? '—'}`
+  // a sign text is the title only when it reads as a real name (backend sends only those); else "<Use> on <street>"
+  if (r.object?.name && typeof r.object.name === 'string') return `${r.object.name} · ${r.street ?? '—'}`
+  return `${use ? useLabel(use) : 'Building'} on ${r.street ?? '—'}`
 }
 
 export default function Review() {

@@ -892,3 +892,75 @@ sticky section nav that follows the scroll.
   hand on n examples".
 - **J4 / J5:** one "Estimate" heading on Jobs. Developer terms removed from visible text: model_card → "model card";
   worker stage text: "Progress appears here once a worker runs the analysis."
+
+## 2026-09-27 — pipeline fix: sign text → building use
+
+### D32. Building use from a readable business sign; stricter display names
+**Diagnosis.** `vlm.finalize_buildings` takes use only from the building-photo step (local router / VLM). That step
+runs only for buildings with a usable building box (`building_views` reliable). Sign names come from a separate OCR
+path (`ocr.run_ocr`, linked by the view's footprint). A building whose box was missing or failed the quality gate kept
+use "not known" even with a readable shop sign. Buildings with use unknown and a linked name before the fix: Ward 29
+59, Trichy 18, Tiruppur 0.
+
+**Rule** (`pipeline/geo_cascadia/signuse.py` `fill_use_from_signs`, called by `run_area` right after
+`finalize_buildings`; no model call). Only a use that is still unknown is filled: `use = commercial`,
+`use_route = "sign_text"`, `validated = "rule: readable business sign (not measured against hand labels)"`. It needs:
+- a kept name supported by OCR (`ocr` or `vlm_verified_by_ocr`);
+- a tier-2 OCR read of the building's own sign (confidence ≥ `ocr_min_conf` 0.55) that supports that name
+  (`support ≥ name_gate` 0.7);
+- a sign crop of at least 50 px wide and 3,000 px² (`sign_use_min_crop_w / _area`);
+- text that is a business name or a generic business word (`textmatch.name_kind`); one word of ≤ 6 letters is too little;
+- no house-name word (`cfg.sign_use_house_words`: illam, nilayam, nivas, bhavan, house, villa, residency, …, Tamil forms).
+
+**Names** (`textmatch.name_kind`, used by `name_quality`). A sign text is a display name only if it reads as a name.
+These are rated "fragment" (shown as sign text only):
+- street signs ("… Road", "… Gardens");
+- cut-off words (COIMBATO, EDICINES);
+- OCR junk (rOI Go);
+- generic business words ("COACHING").
+
+Google-confirmed names stay good. The app shows the name only when it is good; otherwise "<Use> on <street>".
+
+**Applied to the saved runs** (`tools/sign_use_recompute.py --write`: saved files only, no YOLO / OCR / VLM /
+Street View / Places). It first checks that the pipeline's own matching on the saved attributes reproduces the old
+export exactly (it does, all 3 areas). Then `run_report.json` was rebuilt and all 3 areas reloaded (review decisions
+kept).
+
+| area | use not known | named clearly | differs from register | matches | review items |
+|---|---|---|---|---|---|
+| Ward 29 | 160 → 134 (+26 commercial) | 116 → 107 | 102 → 117 | 260 → 245 | 260 → 276 |
+| Trichy | 25 → 14 (+11) | 38 → 37 | 19 → 21 | 45 → 43 | 77 → 79 |
+| Tiruppur | 0 → 0 | 0 → 0 | — | — | 13 → 13 |
+
+- Knock-on: the synthetic register records "house" on residential streets, so a sign-proven shop there becomes "use
+  differs from register" (Ward 29: 15 matched → differs, 2 gained a difference). This is the pipeline's existing
+  matching rule, unchanged.
+- The "not on Google" flag is dropped for names that became fragments (the pipeline's existing rule: 9 in Ward 29,
+  1 in Trichy).
+
+**Validation.**
+- The Ward 29 hand-label set (n=31) is not in the repository (only its numbers in model_card), so it could not be
+  re-scored. The rule fills only buildings the model left unknown, and a held-out accuracy is computed on model
+  predictions, so those buildings are untouched if the set contains only model-predicted buildings.
+- Trichy `spot_labels.csv`: 8/12 before, 8/12 after; none of its buildings changed.
+- The accuracy of the sign rule itself is not measured.
+
+**Known limit:** OCR garble that forms a plausible word ("OPENING", "DEXENTERARSSES") still passes the name check; a
+dictionary would be needed.
+
+**D32 addendum (owner browser check, 27 Sep).**
+- **Generic sign words** (`config.GENERIC_SIGN_WORDS`: open, opening, grand, sale, offer, welcome, new, today, …). A sign
+  made only of these is `name_kind = "nonname"`: never a display name and not evidence of use. Re-applied from saved
+  files as above (regression check passed).
+  - Ward 29: use not known 160 → **135** (25 from a shop sign; "OPENING" no longer counts); names read clearly
+    116 → **105**; differs from register 102 → 117; review items 260 → 276.
+  - Trichy: unchanged from D32 (25 → 14, 11 from a sign; 38 → 37 names).
+  - Tiruppur: no change.
+- **Hood step 06:** the sentence reads "N local, N cloud, N from a shop sign (no clear photo), N not known". Every count
+  defaults to 0, so an API without the sign count shows 0, never NaN. The NaN seen in the browser came from an API
+  process started before D32.
+- **a / an:** one helper (`lib/utils.ts` `article` / `withArticle`), used for the register sentence ("An apartment with
+  3 floors"); UI test.
+- **Trust:** a card "Building use from a shop sign": accuracy "not measured", source "a fixed rule in the analysis, not
+  checked by hand yet". Known limits: adverts/posters can mislead (e.g. "FOOTBALL COACHING" on a wall, w1236978198);
+  OCR garble can pass; a random spot-check is planned. The rule itself is unchanged.

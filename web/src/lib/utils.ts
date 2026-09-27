@@ -15,6 +15,21 @@ export const noun = (n: number, one: string, many?: string) => (n === 1 ? one : 
 /** "1 building", "2 buildings", "1,234 dark stretches" (Indian digit grouping, like fmt) */
 export const plural = (n: number, one: string, many?: string) => `${fmt.format(n)} ${noun(n, one, many)}`
 
+/** "a" or "an" by sound, in one place: an apartment, an office, a house, a university, a one-storey, an hour, an NGO */
+export function article(word: string) {
+  const w = word.trim().toLowerCase()
+  if (!w) return 'a'
+  if (/^(uni|use|usu|uti|eu|ewe|one|once)/.test(w)) return 'a'
+  if (/^(hour|honest|honou?r|heir)/.test(w)) return 'an'
+  if (/^[A-Z]{2,}(\s|$)/.test(word.trim()) &&/^[aefhilmnorsx]/i.test(w)) return 'an'   // spoken letters: an NGO, an MRI
+  return /^[aeiou]/.test(w) ? 'an' : 'a'
+}
+/** "a house" / "An apartment" (capitalised when the sentence starts with it) */
+export const withArticle = (phrase: string, capital = false) => {
+  const a = article(phrase)
+  return `${capital ? a.charAt(0).toUpperCase() + a.slice(1) : a} ${phrase}`
+}
+
 /** a per-object VLM cost: calls were made but the run stored no cost (the pipeline did not record the floors call's
  *  tokens, e.g. 163 Ward 29 buildings store 1 call at $0.0) -> "cost not recorded", never a made-up amount */
 export function costText(calls: number, amount: number | null | undefined) {

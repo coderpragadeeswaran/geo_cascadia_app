@@ -3,7 +3,7 @@ flags every response with offline=true, refuses writes with 503, and returns the
 import pytest
 from shapely.geometry import shape
 
-from conftest import AREAS
+from conftest import AREAS, raw_export
 
 Q = ["Show commercial buildings with more than two visible floors that do not have a matching property record",
      "Show streets where no streetlight is detected within 60 m",
@@ -16,7 +16,8 @@ def test_offline_mode_serves_json_read_only(offline):
     assert r.status_code == 200 and r.json()["offline"] is True
     assert {a["slug"] for a in r.json()["areas"]} == set(AREAS)
     w = next(a for a in r.json()["areas"] if a["slug"] == "ward29")
-    assert w["counts"]["buildings"] == 381 and w["counts"]["assets_triangulated"] == 20 and w["counts"]["use_not_classified"] == 160
+    unknown = sum(b["attributes"]["use"]["value"] is None for b in raw_export("ward29")["buildings"])   # 135 after D32
+    assert w["counts"]["buildings"] == 381 and w["counts"]["assets_triangulated"] == 20 and w["counts"]["use_not_classified"] == unknown
     for path in ("/areas/ward29", "/areas/ward29/geojson", "/areas/ward29/buildings", "/areas/ward29/assets",
                  "/buildings/ward29/w1252504337", "/review?area=ward29", "/jobs", "/config/public", "/model-card"):
         res = offline.get(path)

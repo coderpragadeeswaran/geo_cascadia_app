@@ -4,7 +4,7 @@ import { placeLabels, type Rect } from '../src/lib/labelLayout'
 import { jobStatus, matchLabel } from '../src/lib/labels'
 import { kpis, type Records } from '../src/lib/derive'
 import { photoProblem, saveDecision } from '../src/lib/review'
-import { costText, noun, plural, usd } from '../src/lib/utils'
+import { article, costText, noun, plural, usd, withArticle } from '../src/lib/utils'
 import { mainLine, pointAt, project, slice } from '../src/map/trim'
 
 let n = 0
@@ -84,6 +84,14 @@ t('P5: a matched building with unknown use says "Register entry exists — use n
   assert.equal(matchLabel('matched', true, true), 'Matches the register')
   assert.equal(matchLabel('discrepancy', true, false), 'Differs from the register')
   assert.equal(matchLabel('no_record', false, false), 'Not in register')
+})
+
+t('a / an by sound, one helper', () => {
+  for (const [w, a] of [['apartment', 'an'], ['office', 'an'], ['house', 'a'], ['shop', 'a'], ['university', 'a'], ['hour', 'an'],
+    ['one-storey house', 'a'], ['institution', 'an'], ['under construction building', 'an'], ['NGO office', 'an'], ['vacant plot', 'a']] as const)
+    assert.equal(article(w), a, w)
+  assert.equal(withArticle('apartment', true), 'An apartment')
+  assert.equal(withArticle('house'), 'a house')
 })
 
 t('P5: appeal photo limits (JPEG / PNG / WebP, ≤ 8 MB)', () => {

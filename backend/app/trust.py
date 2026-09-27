@@ -82,6 +82,17 @@ def cards(mc):
         "verdict": (f"Reading signs with OCR first gets {_pct(get(mc, f'{cl}.routed_ocr_then_vlm'))} of {_key_n('crop_level_n31')} "
                     f"sign crops right, better than sending every crop to the cloud model ({_pct(get(mc, f'{cl}.all_vlm'))})."),
         "caveat": "Tamil and partly readable signs are flagged, not trusted.", "section": "names"})
+    # D32: use from a readable business sign. A fixed rule, not measured: no model_card number exists, so none is shown.
+    out.append({
+        "id": "use_sign", "title": "Building use from a shop sign", "measured": "not measured against hand labels",
+        "method": "fixed rule: when no clear photo of the building exists, a readable business sign linked to it (not a house "
+                  "name plate, not a small plate) counts it as a shop or business; a use decided by a model is never changed",
+        "result": {"label": "accuracy", "value": "not measured", "kind": "text", "src": None},
+        "baseline": None, "more": [],
+        "verdict": "Used only for buildings with no clear photo of their front: a readable shop sign on the building counts it "
+                   "as a shop or business.",
+        "caveat": "Known limits: adverts/posters can mislead; OCR garble can pass. A random spot-check is planned.",
+        "section": "use"})
     pc = "detector.per_class"
     out.append({
         "id": "streetlights", "title": "Streetlight seen / not seen", "measured": get(mc, "detector.test_set"),

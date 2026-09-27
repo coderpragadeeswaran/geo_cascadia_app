@@ -28,7 +28,9 @@ def test_every_street_joins_its_records(client, slug):
 def test_ward29_unnamed_osm_ways_get_display_names(client):
     streets, _ = _streets(client, "ward29")
     k = next(s for s in streets if s["name"] == "Korathottam Road")
-    assert k["osm_name"] == "(unnamed residential #907980850)" and k["issues_per_km"] == 41.13
+    B = [b for b in raw_export("ward29")["buildings"] if b["street"] == "Korathottam Road"]
+    issues = sum(b["match_status"] in ("discrepancy", "no_record") for b in B)
+    assert k["osm_name"] == "(unnamed residential #907980850)" and k["issues_per_km"] == round(issues / (k["length_m"] / 1000), 2)
 
 
 def test_ward29_gap_display_rules(client):

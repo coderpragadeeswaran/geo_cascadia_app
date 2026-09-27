@@ -41,7 +41,8 @@ def build_export(area_name, cfg, buildings, results, views, vlm_bld, ocr_res, as
                           "depth_m": b.get("depth_m"), "polygon_latlon": b.get("footprint_latlon")},
             "attributes": {
                 "use": {"value": m["obs_use"], "route": m.get("use_route") or ("tier3_vlm" if m["obs_use"] else None),
-                        "validated": cfg.validation["use"]},
+                        "validated": cfg.validation.get("use_sign", "not measured") if m.get("use_route") == "sign_text"
+                                     else cfg.validation["use"]},
                 "property_identifiers": m.get("property_ids", []),
                 "floors": {"value": m["obs_floors"], "status": m["floors_status"],
                            "route": "tier3_vlm_fewshot" if m["obs_floors"] is not None else None, "validated": cfg.validation["floors"]},
