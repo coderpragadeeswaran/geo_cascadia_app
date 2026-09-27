@@ -9,14 +9,14 @@ import { Loader2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { post, useAreas } from '@/api/queries'
 import type { JobPreview } from '@/api/types'
-import { jobStatus, shortArea } from '@/lib/labels'
+import { JOB_STAGES, jobStatus, shortArea } from '@/lib/labels'
 import { fmt, noun } from '@/lib/utils'
 import { useAnalyse } from '@/map/analyse'
 import { flyToBounds } from '@/map/MapView'
 import { mainLine, MIN_STRETCH_M } from '@/map/trim'
 import { useUi } from '@/store/ui'
 
-const STAGES = ['panoramas', 'area', 'plan', 'detect', 'geometry', 'ocr', 'vlm', 'reference', 'match', 'export']
+const STAGES = JOB_STAGES
 const card = 'sheet pointer-events-auto w-[min(470px,92vw)] px-5 py-4'
 
 function Elapsed({ since }: { since: number }) {

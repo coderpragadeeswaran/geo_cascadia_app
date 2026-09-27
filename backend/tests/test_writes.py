@@ -8,6 +8,7 @@ import shutil
 import pytest
 
 from app.settings import ROOT, Settings
+from conftest import TEST_REVIEWER
 
 TOKEN = Settings().worker_token
 POLY = {"type": "Polygon", "coordinates": [[[77.3425, 11.1080], [77.3440, 11.1080], [77.3440, 11.1092],
@@ -18,30 +19,33 @@ def _db(online):
     return online.app.state.data
 
 
-def test_review_round_trip(online):
-    item = online.get("/review?area=ward29&status=pending&item_type=building&page_size=1").json()["rows"][0]
-    iid, ref = item["id"], item["ref_id"]
+def test_review_round_trip(online, review_area):
+    """Approve a dedicated test item, reload it from the database (cache dropped): still approved, map feature updated."""
+    item = online.get(f"/review?area={review_area}&status=pending&page_size=1").json()["rows"][0]
+    iid, ref, kind = item["id"], item["ref_id"], item["item_type"]
     ev = None
     try:
-        r = online.patch(f"/review/{iid}", data={"action": "appeal"})
+        r = online.patch(f"/review/{iid}", data={"action": "appeal", "reviewer": TEST_REVIEWER})
         assert r.status_code == 422                                             # appeal needs a note
-        r = online.patch(f"/review/{iid}", data={"action": "approve", "reviewer": "pytest", "note": "looks right"})
+        r = online.patch(f"/review/{iid}", data={"action": "approve", "reviewer": TEST_REVIEWER})
         assert r.status_code == 200, r.text
         ev = r.json()["event_id"]
-        assert r.json()["status"] == "approved" and r.json()["reviewer"] == "pytest"
-        b = online.get(f"/buildings/ward29/{ref}").json()["building"]
+        assert r.json()["status"] == "approved" and r.json()["reviewer"] == TEST_REVIEWER
+        online.app.state.data.db.invalidate(review_area)                        # "reload": read back from the database
+        assert online.get(f"/review/{iid}").json()["status"] == "approved"
+        b = online.get(f"/{kind}s/{review_area}/{ref}").json()[kind]
         assert b["review"]["status"] == "approved"                              # map/record reflect the decision
-        feats = online.get("/areas/ward29/geojson?layers=buildings").json()["features"]
+        feats = online.get(f"/areas/{review_area}/geojson?layers={kind}s").json()["features"]
         assert next(f for f in feats if f["properties"]["id"] == ref)["properties"]["review_status"] == "approved"
     finally:                                                                    # undo OUR decision only (D24)
         if ev is not None:
-            assert online.post(f"/review/{iid}/undo", json={"item_id": iid, "event_id": ev}).status_code == 200
+            assert online.post(f"/review/{iid}/undo", json={"item_id": iid, "event_id": ev, "reviewer": TEST_REVIEWER}).status_code == 200
     assert online.get(f"/review/{iid}").json()["status"] == "pending"
 
 
 @pytest.fixture
 def job(online):
-    r = online.post("/jobs", json={"polygon": POLY, "name": "pytest area"})
+    r = online.post("/jobs", json={"polygon": POLY, "name": "pytest area", "test": True})
     assert r.status_code == 201, r.text
     j = r.json()
     yield j

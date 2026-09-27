@@ -23,7 +23,7 @@ from .settings import ROOT, Settings
 
 sys.path.insert(0, os.path.join(ROOT, "pipeline"))   # geo_cascadia (import only — never modified)
 
-from . import drive, evidence, gaps, views  # noqa: E402
+from . import drive, evidence, gaps, hood, trust, views  # noqa: E402
 from .storage import StorageError  # noqa: E402
 from .store import Data, OfflineError  # noqa: E402
 
@@ -87,6 +87,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     app.state.detections = evidence.Detections(settings.areas_dir)
     app.state.plans = drive.Plans(settings.areas_dir)
     app.state.gapcalc = gaps.GapCalc(settings.areas_dir)
+    app.state.runfiles = hood.RunFiles(settings.areas_dir)
     app.state.workers = {}
     app.add_middleware(GZipMiddleware, minimum_size=2000)
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"])
@@ -242,6 +243,43 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         if not res["branches"]:
             raise HTTPException(404, f"no camera stops recorded on {street!r} (plan.json)")
         return {"offline": off, "area": slug, **res}
+
+    # ------------------------------------------------------------ under the hood / trust (P5)
+    @app.get("/areas/{slug}/hood", tags=["hood"])
+    def area_hood(slug: str, D: Data = Depends(get_data)):
+        """Under the Hood: every number of the pipeline story, computed from the records and the run's own files (`n`, with
+        its source in `src`); Sankey, sign funnel, route splits, per-street table, the story with its corrections, and
+        timings/cost flagged as resumed-run values (D1)."""
+        res, off = D.read(lambda s: hood.hood(need(s, slug), app.state.runfiles.get(slug), mc()))
+        return {"offline": off, **res}
+
+    @app.get("/areas/{slug}/hood/examples", tags=["hood"])
+    def area_hood_examples(slug: str, key: str = Query(..., description=f"one of {', '.join(hood.EXAMPLE_KEYS)}"),
+                           D: Data = Depends(get_data)):
+        """Up to 3 real items for one step or branch of the story, each with the reason it belongs there."""
+        res, off = D.read(lambda s: hood.examples(need(s, slug), app.state.runfiles.get(slug), key))
+        if res is None:
+            raise HTTPException(422, f"unknown example key {key!r}")
+        return {"offline": off, "area": slug, "key": key, "examples": res}
+
+    @app.get("/trust", tags=["trust"])
+    def trust_page(D: Data = Depends(get_data)):
+        """Trust cards and experiments: every number quotes model_card.json (`src` = its dotted path)."""
+        card = mc()
+        if card is None:
+            raise HTTPException(404, "data/model_card.json not found")
+        return {"offline": not D.db_online, "cards": trust.cards(card), "experiments": trust.experiments(card),
+                "confusion_matrix": None,
+                "confusion_note": "model_card.json has precision and recall per class, not a confusion matrix, so none is drawn."}
+
+    @app.get("/trust/consistency", tags=["trust"])
+    def trust_consistency(D: Data = Depends(get_data)):
+        """Every place, in every area, where a stored counter or story sentence differs from the computed count."""
+        def fn(s):
+            bundles = [b for b in (s.bundle(x) for x in s.slugs()) if b]
+            return trust.consistency(bundles, {b["slug"]: app.state.runfiles.get(b["slug"]) for b in bundles}, mc())
+        res, off = D.read(fn)
+        return {"offline": off, "rows": res}
 
     # ------------------------------------------------------------ query
     @app.post("/query", tags=["query"])

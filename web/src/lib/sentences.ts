@@ -58,9 +58,9 @@ export function areaSentences(r: Records, k: Kpis, gaps: GapProps[]): Sentence[]
     out.push({ key: 'unknown', tone: 'unknown', action: { kpi: 'use_not_classified' },
       text: `Use not known for ${plural(k.use_not_classified, 'building')}`, sub: `of ${fmt.format(k.buildings_analysed)}: no clear photo of the front` })
   }
-  if (k.low_confidence_observations) {
+  if (k.waiting_for_review) {
     out.push({ key: 'review', tone: 'review', action: { page: 'review' },
-      text: `${plural(k.low_confidence_observations, 'item')} ${k.low_confidence_observations === 1 ? 'is' : 'are'} waiting for a person to check` })
+      text: `${plural(k.waiting_for_review, 'item')} ${k.waiting_for_review === 1 ? 'is' : 'are'} waiting for a person to check` })
   }
   return out
 }
@@ -106,10 +106,11 @@ export function kpiSentence(key: string, k: Kpis): string {
     case 'streetlight_gaps': return `${plural(n, 'stretch', 'stretches')} of road with no visible streetlight`
     case 'streetlights': return `${plural(n, 'streetlight')} seen`
     case 'poles': return `${plural(n, 'pole')} seen (no lamp on them)`
-    case 'named_businesses': return `${plural(n, 'shop name')} read from signs`
+    case 'named_businesses': return `${plural(n, 'shop name')} read clearly from signs`
     case 'names_confirmed_by_google': return `${plural(n, 'shop name')} also found on Google Maps`
     case 'sign_text_unverified': return `${plural(n, 'sign')} to double-check`
-    case 'low_confidence_observations': return `${plural(n, 'item')} waiting for a person to check`
+    case 'low_confidence_observations': return `${plural(n, 'item')} sent to a person to check`
+    case 'waiting_for_review': return `${plural(n, 'item')} waiting for a person to check`
     case 'unmapped_businesses': return `${plural(n, 'business', 'businesses')} with no building on the map`
     case 'streets_covered': return `${plural(n, 'street')} analysed`
     default: return ''

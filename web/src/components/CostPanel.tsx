@@ -39,7 +39,7 @@ export function CostPanel() {
   const run = detail.cost.run_stats as Any
   return (
     <section aria-label="Cost and accuracy: routed vs all-VLM">
-      <p className="t-small ink2 mb-4 max-w-[640px]">Routing sends only uncertain cases to the vision-language model. Measured on Ward 29 by the team; all numbers from <span className="t-data">model_card.json</span>.</p>
+      <p className="t-small ink2 mb-4 max-w-[640px]">Routing sends only uncertain cases to the vision-language model. Measured on Ward 29 by the team; all numbers come from the team’s model card.</p>
       <div className="grid gap-8 md:grid-cols-2">
         <div className="space-y-3">
           <Pair label="Building use · VLM spend (Ward 29 run)" routed={ct.ward29_vlm_usd_with_router} all={ct.ward29_vlm_usd_without_router} fmtV={usd} better="lower" />

@@ -127,6 +127,22 @@ class Detections:
             self._cache[slug] = idx
         return idx
 
+    def bviews(self, slug):
+        """building_views.json: the pipeline's own best box per footprint (the box whose sight line hits it), or {}"""
+        path, stamp = self._read(slug, "building_views.json")
+        if not path:
+            return {}
+        key = f"bv:{slug}"
+        with self._lock:
+            hit = self._cache.get(key)
+            if hit and hit["stamp"] == stamp:
+                return hit["rows"]
+        with open(path, encoding="utf-8") as f:
+            rows = {q["fp"]: q for q in json.load(f)}
+        with self._lock:
+            self._cache[key] = {"stamp": stamp, "rows": rows}
+        return rows
+
     def ocr_best(self, idx):
         """crop file name → OCR text (for picking the signboard a building's sign view refers to)"""
         if idx["ocr"] is None:
@@ -139,6 +155,17 @@ class Detections:
                         m[name] = [t for t in (o.get("best"), o.get("clean"), o.get("text")) if t]
             idx["ocr"] = m
         return idx["ocr"]
+
+
+def _gate_why(q):
+    """why a building_views box failed the quality gate (same rule as tools/build_run_report.py), None when usable"""
+    if q.get("reliable"):
+        return None
+    for k, label in (("full_frame", "the box fills the whole photo"), ("top_cut", "the roof is cut off"),
+                     ("bottom_cut", "the base is cut off"), ("sliver", "a thin sliver at the photo edge")):
+        if q.get(k):
+            return label
+    return "an implausibly tall box"
 
 
 def _box(d, target=False, from_heading=None, xy=None):
@@ -233,12 +260,32 @@ def evidence(D, bundle, kind, obj_id):
             av = ev["attribute_view"]
             stored = {k: av[k] for k in ("x1", "y1", "x2", "y2")} if all(av.get(k) is not None for k in ("x1", "y1", "x2", "y2")) else None
             out.append({"key": "attr", **_exact_view(D, idx, av, "Front", stored, "building", obj_id)})
+        best = None
+        if not ev.get("attribute_view"):
+            best = D.bviews(bundle["slug"]).get(obj_id)
         if ev.get("sign_view"):
             sv = ev["sign_view"]
             out.append({"key": "sign", **_exact_view(D, idx, sv, "Sign", None, "signboard", obj_id, sv.get("ocr_text"))})
-        if not out and ev.get("views"):
-            v0 = {**ev["views"][0], "fov": ev["views"][0].get("fov") or 90}
-            out.append({"key": "v0", **_exact_view(D, idx, v0, "Nearest camera", None, "building", obj_id)})
+        if not ev.get("attribute_view"):
+            # P5 H7: no stored box. Only the pipeline's own box-to-outline match (building_views.json) may be called
+            # "this building"; a detection in a photo merely AIMED at the outline is not (its sight line missed it).
+            q = best
+            if q:
+                why = _gate_why(q)
+                view = {"pano_id": q["pano_id"], "heading": q["heading"], "pitch": q.get("pitch") or 0, "fov": q.get("fov") or 90}
+                box = {k: q[k] for k in ("x1", "y1", "x2", "y2")}
+                v = _exact_view(D, idx, view, "Best photo", box, "building", None)
+                v["user_note"] = (f"The box the analysis matched to this building failed the photo quality check ({why}), so its use "
+                                  "and floors were not read from it." if why else None)
+                out.insert(0, {"key": "best", **v})
+            elif not out and ev.get("views"):
+                v0 = {**ev["views"][0], "fov": ev["views"][0].get("fov") or 90}
+                v = _exact_view(D, idx, v0, "Nearest camera", None, "building", None)
+                v["target"] = "none"
+                v["boxes"] = [{**b, "target": False} for b in v["boxes"]]
+                v["user_note"] = ("The detector found no box for this building in any photo. The boxes here are other things it saw "
+                                  "from the nearest camera; none of them was matched to this building's outline.")
+                out.append({"key": "v0", **v})
         return out
     if kind == "asset":
         a = next((x for x in bundle["assets"] if x["id"] == obj_id), None)

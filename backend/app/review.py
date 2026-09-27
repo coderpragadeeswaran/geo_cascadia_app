@@ -18,8 +18,9 @@ def get_data(request: Request) -> Data:
 @router.get("/review")
 def review_list(area: Optional[str] = None, status: Optional[str] = None,
                 item_type: Optional[str] = None, street: Optional[str] = None, priority: Optional[int] = None,
-                page: int = 1, page_size: int = 100, D: Data = Depends(get_data)):
-    """Review items ordered by priority (1 = most urgent). Offline mode lists the export's queue (ids are null)."""
+                reason: Optional[str] = None, page: int = 1, page_size: int = 100, D: Data = Depends(get_data)):
+    """Review items ordered by priority (1 = most urgent). Filters combine (AND): status, item_type, street, priority and
+    reason (one of the pipeline's reason strings). Offline mode lists the export's queue (ids are null)."""
     def fn(s):
         slugs = [area] if area else s.slugs()
         rows = []
@@ -29,7 +30,8 @@ def review_list(area: Optional[str] = None, status: Optional[str] = None,
                 raise HTTPException(404, f"area {slug!r} not found")
             rows += [views.review_row(b, q) for q in b["review_queue"]
                      if (not status or q["status"] == status) and (not item_type or q["item_type"] == item_type)
-                     and (not street or q["street"] == street) and (priority is None or q["priority"] == priority)]
+                     and (not street or q["street"] == street) and (priority is None or q["priority"] == priority)
+                     and (not reason or reason in (q.get("reasons") or []))]
         rows.sort(key=lambda r: (r["priority"] if r["priority"] is not None else 99))
         return views.page(rows, page, page_size)
     res, off = D.read(fn)
@@ -59,15 +61,15 @@ def review_item(item_id: int, D: Data = Depends(get_data)):
 DECIDE_SQL = """
 with prev as (select id, area_id, ref_id, status, reviewer, note, appeal_photo_url from review_items where id = %(id)s for update),
 r as (
-    update review_items r set status = %(status)s, reviewer = coalesce(%(reviewer)s, r.reviewer),
-           note = coalesce(%(note)s, r.note), appeal_photo_url = coalesce(%(path)s, r.appeal_photo_url), updated_at = now()
+    update review_items r set status = %(status)s, reviewer = %(reviewer)s, note = %(note)s, appeal_photo_url = %(path)s,
+           updated_at = now()
     from prev where r.id = prev.id
     returning r.id, r.area_id, r.item_type, r.ref_id, r.status, r.reviewer, r.note, r.appeal_photo_url, r.updated_at),
 e as (
     insert into review_events (item_id, area_id, ref_id, action, status, previous_status, previous_reviewer, previous_note,
-                               previous_photo, reviewer, note)
+                               previous_photo, reviewer, note, photo)
     select prev.id, prev.area_id, prev.ref_id, %(action)s, r.status, prev.status, prev.reviewer, prev.note,
-           prev.appeal_photo_url, r.reviewer, r.note
+           prev.appeal_photo_url, r.reviewer, r.note, r.appeal_photo_url
     from prev join r on r.id = prev.id
     returning id),
 b as (update buildings t set review_status = r.status from r where r.item_type = 'building' and t.area_id = r.area_id and t.id = r.ref_id),
@@ -98,7 +100,7 @@ e as (
     insert into review_events (item_id, area_id, ref_id, action, status, previous_status, previous_reviewer, previous_note,
                                previous_photo, reviewer, note, undoes)
     select prev.id, prev.area_id, prev.ref_id, 'undo', r.status, prev.status, prev.reviewer, prev.note, prev.appeal_photo_url,
-           r.reviewer, r.note, %(event)s
+           %(reviewer)s, r.note, %(event)s
     from prev join r on r.id = prev.id
     returning id),
 b as (update buildings t set review_status = r.status from r where r.item_type = 'building' and t.area_id = r.area_id and t.id = r.ref_id),
@@ -124,24 +126,38 @@ def _apply(s, item_id, row):
 
 @router.patch("/review/{item_id}")
 def review_decide(item_id: int, request: Request, action: str = Form(..., description="approve | reject | appeal"),
-                  note: Optional[str] = Form(None, max_length=2000), reviewer: Optional[str] = Form(None, max_length=120),
-                  photo: Optional[UploadFile] = File(None, description="appeal photo (jpeg/png/webp, ≤ 8 MB)"),
+                  reviewer: str = Form(..., max_length=120, description="who decided (asked once in the browser, no login)"),
+                  note: Optional[str] = Form(None, max_length=2000, description="appeal only (required for an appeal)"),
+                  photo: Optional[UploadFile] = File(None, description="appeal only: jpeg/png/webp, ≤ 8 MB"),
                   D: Data = Depends(get_data)):
-    """Approve / reject / appeal ONE item. Appeals need a note; an optional photo goes to the private Supabase bucket.
-    Returns the item and `event_id` (its history row), which is what Undo needs. One SQL statement; the cached area is
-    patched in place."""
+    """Approve / reject / appeal ONE item, saved with the reviewer's name. A note and a photo belong to an appeal only
+    (P5 fix: a note typed in the appeal box is never saved with Approve / Reject). The photo goes to the private Supabase
+    bucket and is read back only through signed URLs. Returns the item and `event_id` (its history row), which is what
+    Undo needs. One SQL statement; the cached area is patched in place."""
     if action not in ACTIONS:
         raise HTTPException(422, f"action must be one of {list(ACTIONS)} (to undo, POST /review/{{item_id}}/undo)")
+    reviewer = (reviewer or "").strip()
+    if not reviewer:
+        raise HTTPException(422, "a reviewer name is needed")
     note = (note or "").strip() or None
+    has_photo = photo is not None and bool(photo.filename)
+    if action != "appeal" and (note or has_photo):
+        raise HTTPException(422, "a note or photo is saved only with an appeal")
     if action == "appeal" and not note:
         raise HTTPException(422, "an appeal needs a note")
+    content = None
+    if has_photo:                                     # checked before anything is uploaded or written
+        if photo.content_type not in storage.ALLOWED:
+            raise HTTPException(415, "the photo must be a JPEG, PNG or WebP image")
+        content = photo.file.read(storage.MAX_BYTES + 1)
+        if len(content) > storage.MAX_BYTES:
+            raise HTTPException(413, f"the photo is larger than {storage.MAX_BYTES // (1024 * 1024)} MB")
     settings = request.app.state.settings
 
     def fn(s):
         path = None
-        if photo is not None and photo.filename:
+        if content is not None:
             b, _ = _find(s, item_id)
-            content = photo.file.read(storage.MAX_BYTES + 1)
             path = storage.upload_photo(settings, b["slug"], item_id, content, photo.content_type)
         with s.pool.connection() as c:
             row = c.execute(DECIDE_SQL, {"status": ACTIONS[action], "action": action, "reviewer": reviewer, "note": note,
@@ -157,19 +173,21 @@ def review_decide(item_id: int, request: Request, action: str = Form(..., descri
 class UndoIn(BaseModel):
     item_id: int = Field(description="the review item the toast names (must match the path)")
     event_id: int = Field(description="the decision to undo (event_id returned by the decision)")
+    reviewer: Optional[str] = Field(None, max_length=120, description="who pressed Undo (recorded on the undo event)")
 
 
 @router.post("/review/{item_id}/undo")
 def review_undo(item_id: int, body: UndoIn, D: Data = Depends(get_data)):
     """Undo exactly one decision on exactly one item: the item goes back to what it was before that decision (status,
     reviewer, note, photo link). Needs the item id twice (path + body) and the decision's event id; refused (409) when
-    that decision is not the item's latest event. Nothing else is touched."""
+    that decision is not the item's latest event. Nothing else is touched. The undo event records who pressed Undo."""
     if body.item_id != item_id:
         raise HTTPException(422, "item_id in the body must match the item in the path")
+    who = (body.reviewer or "").strip() or None
 
     def fn(s):
         with s.pool.connection() as c:
-            row = c.execute(UNDO_SQL, {"id": item_id, "event": body.event_id}).fetchone()
+            row = c.execute(UNDO_SQL, {"id": item_id, "event": body.event_id, "reviewer": who}).fetchone()
             if not row:
                 ev = c.execute("select item_id, action from review_events where id = %s", (body.event_id,)).fetchone()
                 if not ev or ev[0] != item_id or ev[1] == "undo":
@@ -181,15 +199,37 @@ def review_undo(item_id: int, body: UndoIn, D: Data = Depends(get_data)):
     return {"offline": False, **views.review_row(b, item), "event_id": event}
 
 
+EVENT_COLS = ("id", "action", "status", "previous_status", "reviewer", "previous_reviewer", "note", "previous_note", "undoes",
+              "created_at")
+
+
 @router.get("/review/{item_id}/events")
 def review_events(item_id: int, D: Data = Depends(get_data)):
-    """The item's history (append-only), newest first."""
+    """The item's history (append-only), newest first: who, what, when, and whether it was undone later. `has_photo` = a
+    photo was uploaded with this decision (open it with /review/{id}/events/{event_id}/photo, a signed URL)."""
     def fn(s):
         with s.pool.connection() as c:
-            cols = ("id", "action", "status", "previous_status", "reviewer", "note", "undoes", "created_at")
-            return [dict(zip(cols, r)) for r in c.execute(
-                f"select {', '.join(cols)} from review_events where item_id = %s order by id desc", (item_id,))]
+            rows = c.execute(f"select {', '.join(EVENT_COLS)}, photo is not null from review_events where item_id = %s "
+                             "order by id desc", (item_id,)).fetchall()
+        out = [{**dict(zip(EVENT_COLS, r[:-1])), "has_photo": r[-1]} for r in rows]
+        undone = {e["undoes"]: e["id"] for e in out if e["undoes"]}
+        for e in out:
+            e["created_at"] = e["created_at"].isoformat() if e["created_at"] else None
+            e["undone_by"] = undone.get(e["id"])
+        return out
     return {"offline": False, "events": D.write(fn)}
+
+
+@router.get("/review/{item_id}/events/{event_id}/photo")
+def review_event_photo(item_id: int, event_id: int, request: Request, D: Data = Depends(get_data)):
+    """Short-lived signed URL (10 min) for the photo uploaded with one decision. The bucket is private."""
+    def fn(s):
+        with s.pool.connection() as c:
+            return c.execute("select photo from review_events where id = %s and item_id = %s", (event_id, item_id)).fetchone()
+    row = D.write(fn)
+    if not row or not row[0]:
+        raise HTTPException(404, "no photo for this decision")
+    return {"offline": False, "url": storage.signed_url(request.app.state.settings, row[0]), "expires_in": 600}
 
 
 @router.get("/review/{item_id}/photo")
@@ -199,4 +239,3 @@ def review_photo(item_id: int, request: Request, D: Data = Depends(get_data)):
     if not item.get("appeal_photo_path"):
         raise HTTPException(404, "no photo for this item")
     return {"offline": False, "url": storage.signed_url(request.app.state.settings, item["appeal_photo_path"]), "expires_in": 600}
-

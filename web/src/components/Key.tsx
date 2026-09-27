@@ -47,7 +47,7 @@ export function Key() {
                 <>
                   <Item sw={<span className="dot" style={{ background: c.noRecord }} />}>Not in the register</Item>
                   <Item sw={<span className="dot" style={{ background: c.discrepancy }} />}>Differs from the register</Item>
-                  {near && <Item sw={<span className="dot" style={{ background: c.matched }} />}>Matches the register</Item>}
+                  {near && <Item sw={<span className="dot" style={{ background: c.matched }} />}>In the register, no difference found</Item>}
                   {near && <Item sw={<span className="h-3 w-4" style={{ backgroundImage: `repeating-linear-gradient(135deg, ${c.ink3} 0 1.5px, transparent 1.5px 5px)`, boxShadow: `inset 0 0 0 1px ${c.ink3}` }} />}>Floors not known (flat)</Item>}
                   {near && !flat && <li className="t-small ink3 py-[3px] pl-[30px]">Height = floors × {FLOOR_HEIGHT_M} m (display only); faded = floor estimate</li>}
                 </>

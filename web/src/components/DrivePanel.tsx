@@ -163,7 +163,7 @@ function Passing({ branch, s }: { branch: DriveBranch; s: number }) {
             <motion.li key={b.id} layout initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }}
               className="flex items-center justify-between gap-3 rule-b pb-1">
               <span className="min-w-0 truncate">{b.name ?? (b.use ? useLabel(b.use) : 'Building')} <span className="t-small ink3">· on the {b.side}</span></span>
-              <StatusDot s={b.status} label={matchLabel(b.status)} />
+              <StatusDot s={b.status} label={matchLabel(b.status, false, !!b.use)} />
             </motion.li>
           ))}
           {p.lamps.map((a) => (

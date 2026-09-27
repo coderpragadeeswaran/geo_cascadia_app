@@ -69,6 +69,8 @@ def dashboard(bundle):
     d.pop("cost_panel", None)                      # replaced by cost() below (D1)
     d["kpi"]["unmapped_businesses"] = len(bundle["unmapped_businesses"])
     d["kpi"]["use_not_classified"] = sum(r["obs_use"] is None for r in results)
+    # P5 fix: "Waiting for review" counts only items still waiting; low_confidence_observations stays the queue size
+    d["kpi"]["waiting_for_review"] = sum(q.get("status") == "pending" for q in bundle["review_queue"])
     bu = d["charts"]["building_use"]
     if "not observed" in bu:
         bu[NOT_CLASSIFIED] = bu.pop("not observed")
@@ -483,7 +485,7 @@ def job_estimate(length_m, ref_bundle, model_card):
             "gpu_minutes": round(gpu * length_m / ref_len, 1) if gpu else None,
             "cpu_minutes_full_ocr": _scale(full, k), "cpu_minutes_fast_ocr": _scale(cpu.get("fast_ocr_estimate"), k),
             "basis": (f"scaled by length from the Ward 29 run: {views} planned views and {gpu} GPU minutes over {round(ref_len)} m "
-                      f"of streets; CPU {full} min per street from model_card, per Ward 29 street of {round(per_street_m or 0)} m on "
+                      f"of streets; CPU {full} min per street from the model card, per Ward 29 street of {round(per_street_m or 0)} m on "
                       f"average; ${price} per Street View image. VLM calls not included."),
             "is_estimate": True}
 

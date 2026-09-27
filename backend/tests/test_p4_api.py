@@ -65,7 +65,7 @@ def test_job_estimate_scales_ward29_by_length(online):
 
 def test_cancel_job(online):
     poly = {"type": "Polygon", "coordinates": [[[77.3425, 11.1080], [77.3440, 11.1080], [77.3440, 11.1092], [77.3425, 11.1080]]]}
-    j = online.post("/jobs", json={"polygon": poly, "name": "pytest cancel"}).json()["job"]
+    j = online.post("/jobs", json={"polygon": poly, "name": "pytest cancel", "test": True}).json()["job"]
     try:
         c = online.post(f"/jobs/{j['id']}/cancel").json()["job"]
         assert c["status"] == "failed" and c["message"] == "cancelled by user"

@@ -45,3 +45,23 @@ def offline():
 def client(request):
     """Runs a test against the DB and against the JSON fallback: both must give the same answer."""
     return request.getfixturevalue(request.param)
+
+
+# Review decisions in tests never touch real items (P5): they go to a dedicated test area, a copy of the Tiruppur run
+# loaded under its own slug, removed at the end of the session (its review_items go with it; the append-only
+# review_events rows stay, all written with reviewer='test').
+TEST_AREA = "pytest_review_items"
+TEST_REVIEWER = "test"
+
+
+@pytest.fixture(scope="session")
+def review_area(online):
+    from app import loader
+    D = online.app.state.data
+    with D.pool.connection() as c:
+        loader.load_area(c, os.path.join(ROOT, "data", "areas", "tiruppur_uthukuli_road"), slug=TEST_AREA)
+    D.db.invalidate(TEST_AREA)
+    yield TEST_AREA
+    with D.pool.connection() as c:
+        c.execute("delete from areas where slug = %s", (TEST_AREA,))
+    D.db.invalidate()

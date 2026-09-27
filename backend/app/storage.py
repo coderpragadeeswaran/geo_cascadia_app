@@ -39,3 +39,10 @@ def signed_url(s, path, expires_in=600):
         raise StorageError(f"could not sign photo URL (HTTP {r.status_code})")
     signed = r.json().get("signedURL") or r.json().get("signedUrl")
     return f"{s.supabase_url}/storage/v1{signed}"
+
+
+def delete_object(s, path):
+    """Remove one object (used by tests to clean up their own uploads). Missing objects are ignored."""
+    r = httpx.request("DELETE", f"{s.supabase_url}/storage/v1/object/{s.supabase_bucket}/{path}", headers=_headers(s), timeout=15)
+    if r.status_code >= 300 and r.status_code not in (400, 404):
+        raise StorageError(f"could not delete photo (HTTP {r.status_code})")

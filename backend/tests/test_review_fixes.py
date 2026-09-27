@@ -10,7 +10,7 @@ from app import gaps, loader, queryparse, views
 from app.db import DbUnavailable
 from app.settings import ROOT, Settings
 from app.store import Data, JsonStore
-from conftest import AREAS, BAD_DB_URL
+from conftest import AREAS, BAD_DB_URL, TEST_REVIEWER
 
 
 def q(client, text, area="ward29", **kw):
@@ -183,58 +183,59 @@ def test_loose_street_reported_and_ambiguous_not_guessed(offline):
 
 
 # ------------------------------------------------------------------ 12. review: one decision per press, fast, undo
-def _statuses(online):
-    return {r["id"]: (r["status"], r["note"]) for r in online.get("/review?area=ward29&page_size=500").json()["rows"]}
+# P5: these write only to the dedicated test area (conftest review_area), with reviewer='test'
+def _statuses(online, area):
+    return {r["id"]: (r["status"], r["note"]) for r in online.get(f"/review?area={area}&page_size=500").json()["rows"]}
 
 
 def _undo(online, iid, event):
-    return online.post(f"/review/{iid}/undo", json={"item_id": iid, "event_id": event})
+    return online.post(f"/review/{iid}/undo", json={"item_id": iid, "event_id": event, "reviewer": TEST_REVIEWER})
 
 
-def test_rapid_decisions_each_apply_to_one_item(online):
-    rows = [r for r in online.get("/review?area=ward29&status=pending&page_size=500").json()["rows"]][:4]
+def test_rapid_decisions_each_apply_to_one_item(online, review_area):
+    rows = [r for r in online.get(f"/review?area={review_area}&status=pending&page_size=500").json()["rows"]][:4]
     assert len(rows) == 4
     ids = [r["id"] for r in rows]
-    before = _statuses(online)
+    before = _statuses(online, review_area)
     events = []
     try:
         times = []
         for iid in ids:                                              # four "A" presses = four saves, one item each
             t = time.perf_counter()
-            r = online.patch(f"/review/{iid}", data={"action": "approve", "reviewer": "pytest"})
+            r = online.patch(f"/review/{iid}", data={"action": "approve", "reviewer": TEST_REVIEWER})
             times.append(time.perf_counter() - t)
             assert r.status_code == 200 and r.json()["id"] == iid and r.json()["status"] == "approved"
             events.append((iid, r.json()["event_id"]))
-        after = _statuses(online)
+        after = _statuses(online, review_area)
         assert {k for k in after if after[k] != before.get(k)} == set(ids)   # exactly those four, none skipped, no others
         ref = rows[0]["ref_id"]
         kind = "buildings" if rows[0]["item_type"] == "building" else "assets"
-        rec = online.get(f"/{kind}/ward29/{ref}").json()
+        rec = online.get(f"/{kind}/{review_area}/{ref}").json()
         assert (rec.get("building") or rec.get("asset"))["review"]["status"] == "approved"   # cache patched in place
         assert max(times) < 3.0, times
     finally:
         for iid, ev in reversed(events):                             # Undo each of OUR decisions, newest first
             assert _undo(online, iid, ev).status_code == 200
-    assert _statuses(online) == before
+    assert _statuses(online, review_area) == before
 
 
-def test_undo_reverts_exactly_one_decision(online):
+def test_undo_reverts_exactly_one_decision(online, review_area):
     """Review fix 1: decide 3 items, undo the last: the other 2 keep their decisions; the undone one is back to exactly
     what it was (status + note); the history has one event per change."""
-    rows = online.get("/review?area=ward29&status=pending&page_size=500").json()["rows"][:3]
+    rows = online.get(f"/review?area={review_area}&status=pending&page_size=500").json()["rows"][:3]
     ids = [r["id"] for r in rows]
-    before = _statuses(online)
+    before = _statuses(online, review_area)
     events = []
     try:
         for iid, action in zip(ids, ("approve", "reject", "appeal")):
-            r = online.patch(f"/review/{iid}", data={"action": action, "reviewer": "pytest", "note": "pytest appeal" if action == "appeal" else None})
+            r = online.patch(f"/review/{iid}", data={"action": action, "reviewer": TEST_REVIEWER, "note": "pytest appeal" if action == "appeal" else None})
             assert r.status_code == 200, r.text
             events.append((iid, r.json()["event_id"]))
-        mid = _statuses(online)
+        mid = _statuses(online, review_area)
         u = _undo(online, *events[-1])
         assert u.status_code == 200 and u.json()["status"] == before[ids[2]][0]
         events.pop()
-        now = _statuses(online)
+        now = _statuses(online, review_area)
         assert now[ids[0]][0] == "approved" and now[ids[1]][0] == "rejected"          # the other two unchanged
         assert now[ids[2]] == before[ids[2]]                                            # the undone one: exactly as before
         assert {k for k in now if now[k] != mid[k]} == {ids[2]}                         # nothing else moved
@@ -243,17 +244,17 @@ def test_undo_reverts_exactly_one_decision(online):
     finally:
         for iid, ev in reversed(events):
             assert _undo(online, iid, ev).status_code == 200
-    assert _statuses(online) == before
+    assert _statuses(online, review_area) == before
 
 
-def test_undo_needs_explicit_item_and_decision(online):
-    iid = online.get("/review?area=ward29&status=pending&page_size=1").json()["rows"][0]["id"]
+def test_undo_needs_explicit_item_and_decision(online, review_area):
+    iid = online.get(f"/review?area={review_area}&status=pending&page_size=1").json()["rows"][0]["id"]
     assert online.post(f"/review/{iid}/undo", json={}).status_code == 422                              # no ids
     assert online.post(f"/review/{iid}/undo", json={"event_id": 1}).status_code == 422                 # no item id
     assert online.post(f"/review/{iid}/undo", json={"item_id": iid + 1, "event_id": 1}).status_code == 422  # mismatch
-    assert online.patch(f"/review/{iid}", data={"action": "reset"}).status_code == 422               # old bulk-able reset is gone
-    r1 = online.patch(f"/review/{iid}", data={"action": "approve"}).json()
-    r2 = online.patch(f"/review/{iid}", data={"action": "reject"}).json()
+    assert online.patch(f"/review/{iid}", data={"action": "reset", "reviewer": TEST_REVIEWER}).status_code == 422   # old bulk-able reset is gone
+    r1 = online.patch(f"/review/{iid}", data={"action": "approve", "reviewer": TEST_REVIEWER}).json()
+    r2 = online.patch(f"/review/{iid}", data={"action": "reject", "reviewer": TEST_REVIEWER}).json()
     try:
         assert _undo(online, iid, r1["event_id"]).status_code == 409                   # not the latest decision
         assert online.post(f"/review/{iid}/undo", json={"item_id": iid, "event_id": 10**12}).status_code == 422
@@ -272,7 +273,7 @@ def test_history_is_append_only(online):
 
 
 def test_review_write_offline_is_read_only(offline):
-    r = offline.patch("/review/1", data={"action": "approve"})
+    r = offline.patch("/review/1", data={"action": "approve", "reviewer": TEST_REVIEWER})
     assert r.status_code == 503
 
 

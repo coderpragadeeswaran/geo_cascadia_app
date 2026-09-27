@@ -786,3 +786,109 @@ plausibility check (`predict_positions(min_cameras=2)` is the default, so live P
 - The Trust page adds: "The pass rate rose mainly because implausible points (>10 m from the wall) were rejected, and
   the check and the score use the same wall, so this is a comparison, not accuracy."
 
+
+## 2026-09-27 — P5 (Review, Under the Hood, Trust, Jobs)
+
+### D29. P5 pages and rules
+**Numbers.**
+- `backend/app/hood.py` (`GET /areas/{slug}/hood`, `/hood/examples?key=`) computes every Hood number from the records and
+  the run files (panos, plan, plan_anomalies, _views_done, detections, ocr, building_views, vlm_unmapped); each value has
+  its source in `src`. pytest recounts them from the raw files independently.
+- **Story sentences** are rebuilt from computed numbers (same template as `build_run_report.py`); the stored text is kept
+  and every change is listed (Hood › story, Trust › Stored vs computed). Corrected:
+  - Ward 29 "29 triangulated / 239 approximate" → **20 / 248** (29 = seen by 2+ cameras).
+  - Ward 29 "266 had a usable view, 0 had no building box" → **221 / 43**; Trichy 44 / 7 → **41 / 13**. The report counted
+    building_views.json rows, which include footprints that are not registered buildings (80 in Ward 29, 6 in Trichy).
+  - Tiruppur: singular/plural only ("1 user photosphere", "1 building registered", "1 building named").
+- `backend/app/trust.py` (`GET /trust`): result cards and experiments quote **only** model_card.json; every number
+  carries its dotted path (`src`), resolved by pytest. `confusion_matrix` is null: model_card has per-class P/R only.
+  `GET /trust/consistency` lists stored-vs-computed rows for all areas with a jump target.
+- Timings/run cost counters stay greyed with "resumed run, not representative" (D1). Cost lines: Street View =
+  photos fetched × model_card price (computed); VLM = model_card (Ward 29, Trichy) or "not recorded"; Places "not recorded".
+
+**Review.**
+- `reviewer` is **required** on every decision (asked once in the browser, `gc.reviewer`); Undo records who pressed it.
+- A **note or photo is accepted only with an appeal** (422 otherwise). The item's note/photo now reflect the current
+  decision only (history keeps earlier ones). Photo type/size checked before upload (415 / 413).
+- Migration 005: `review_events.photo` (photo uploaded with that decision; `GET /review/{id}/events/{event_id}/photo` →
+  10-min signed URL) and `jobs.is_test`.
+- `dashboard.kpi.waiting_for_review` = pending only; the Explore KPI "Waiting for review" uses it
+  (`low_confidence_observations` stays the queue size).
+- Live 360° on Review: the page overlay turns see-through and the evidence column transparent (one map instance).
+- **Tests never touch real items:** review tests use a copy of the Tiruppur run loaded as area `pytest_review_items`
+  (deleted after the session) and `reviewer='test'`. Note: before this change, the P4 test suite ran once more on Ward 29
+  items (≈160 events, reviewer `pytest`/null, 26 Sep 17:56 UTC, all undone). #94 (approved, reviewer `pytest`, note
+  "1 floor", 08:30 UTC) and #97 predate review_events; left as they are.
+
+**Jobs.**
+- `display_status` adds **cancelled** (failed + "cancelled by user", grey) and **interrupted** (running, no heartbeat 10 min).
+- `POST /jobs/clear-test {dry_run, ids}` removes only jobs that ended without a result (failed / no_street_view, no area)
+  **and** are `is_test` or were cancelled before any worker started them. The UI lists them first, then removes exactly
+  those ids. `GET /jobs/{id}` adds the length-scaled estimate.
+
+**Explore wording.** A matched building whose use is not known reads "Register entry exists — use not compared"
+(`matchLabel(status, long, useKnown)`), everywhere the status appears; the legend says "In the register, no difference found".
+
+## 2026-09-27 — P5 browser round
+
+### D30. One-time review reset; P5 browser-round fixes
+**Reset (owner request, run once on 27 Sep):** `tools/reset_review_history.py --yes` (refuses without `--yes`).
+- In one transaction: disables the append-only trigger, deletes every `review_events` row, **re-enables the trigger**;
+  sets every review item to waiting (reviewer, note and photo cleared); sets `buildings/assets.review_status` back to
+  pending. Then deletes every file in the private `appeal-photos` bucket. Prints counts only.
+- Result: 485 events deleted, 7 items and 5 map objects reset, 1 photo deleted; afterwards 350 of 350 items waiting and
+  clean (Ward 29 260, Trichy 77, Tiruppur 13), 0 events, trigger enabled, 0 photos.
+- A script, not a migration: a migration would run again on any new database.
+- Tests write only to the test area `pytest_review_items`, always with reviewer `test` (after the reset: 42 test
+  events, none on real areas).
+
+**Review.** The selection is an item, not a list position. Every filter is strict: a decided item leaves
+"Waiting for review" at once, so "N shown" = the list = the header count. Undo is a button in the confirmation (never
+clipped) and "Undo this decision" on the item's latest live decision in History. U undoes the confirmation's decision,
+or else the current item's latest live decision. Each decision and undo is written into History at once (then
+refetched). A waiting item shows no reviewer. No horizontal overflow on the right column.
+
+**Hood.** Skipped panoramas are split by the planner's own rules (`plan.py`): more than 15 m from every analysed street
+(Ward 29: 443), or on the street but thinned: stops ≥ 12 m apart along the road / ≥ 6 m apart, or a street piece
+shorter than 25 m (74). P5's first version said "another stop already covers that frontage" for all 517; that was a
+guess, now replaced.
+- Example maps draw what their sentence says:
+  - camera stops: view wedges and the faced building outlines;
+  - dropped stops: the outline the camera stands in;
+  - poles and lights: the cameras and their sight lines;
+  - dark stretches: the lights and poles around them;
+  - "no building box": the outline and the cameras that looked at it.
+- Developer facts (panorama ids, bearings, OCR confidence, ids) are Technical only.
+- Plain shows one line for time and cost and "N sentences corrected — see Technical". Technical shows a fixed-column
+  cost table and the greyed stage timings.
+- Counters always show their final value.
+- 156 vs 116: Hood counts buildings given **any** name from a sign (156). Explore counts names **read clearly**
+  (quality "good", 116). The Explore label is now "Shop names read clearly", and Hood says both.
+
+**Layout.** Every topic on Hood, Trust and Jobs is its own panel (heading, divider, spacing). Hood and Trust have a
+sticky section nav that follows the scroll.
+
+**Jobs.** Stages are listed one per row with short names. The end time is labelled "Cancelled at", "Failed at" or
+"Finished". The estimate shows one short line; the method is behind "How is this estimated?".
+
+### D31. P5 last items (owner, 27 Sep)
+- **H7: evidence box for buildings with no matched box.**
+  - The orange "This building" box on "No building box in any photo" was a real detection, not a projected outline.
+    For buildings with no stored box, `evidence.py` fell back to "the most confident building box in a photo planned
+    to face this outline". The pipeline never matched that box to the building.
+  - Now only the pipeline's own box-to-outline match (`building_views.json`) is marked:
+    - A match that failed the quality gate is shown first as "Best photo", with the reason.
+    - With no match, no building box is marked, and a sentence says so.
+    - A marked sign box is labelled "This building's sign".
+  - Ward 29: 117 buildings show their rejected box with the reason; 31 have no match and no marked box. Trichy: 12 and 5.
+    pytest checks every such building in all areas. This also corrects Explore and Review.
+- **H6:** "Photos where the map has no building outline". Each photo example has a small plan beside it: the camera,
+  the photo's direction as a wedge, and the outlines around it (none inside the wedge for these).
+- **H8:** the example sheet shows the explanation sentence under the title, then the tabs (underline style), then the
+  photo, sized to fit the sheet.
+- **H9:** Hood and Trust are plain-only; the Plain / Technical toggle is removed. Hood shows only the correct story
+  sentences, and time and cost as one line. The corrections are listed only on Trust › Stored vs computed, with plain
+  sources ("the saved run summary", "the model card", …). Trust cards say "Source: the team's model card, checked by
+  hand on n examples".
+- **J4 / J5:** one "Estimate" heading on Jobs. Developer terms removed from visible text: model_card → "model card";
+  worker stage text: "Progress appears here once a worker runs the analysis."

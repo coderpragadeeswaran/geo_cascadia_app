@@ -149,5 +149,7 @@ export interface EvidenceViewData {
   /** exact = the pipeline's own view; projected = an aimed asset view with boxes projected from the same panorama */
   source: 'exact' | 'projected' | 'none'; projected_from?: number[]
   boxes: EvidenceBox[]; target: 'box' | 'record_box' | 'crosshair' | 'none'; note: string | null; aim_offset_deg?: number
+  /** a plain sentence shown under the photo (e.g. why no box is marked as this building) */
+  user_note?: string | null
 }
 export interface JobFull extends Job { message: string | null; created_at: string | null; started_at: string | null; finished_at: string | null }

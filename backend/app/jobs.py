@@ -27,14 +27,19 @@ from . import loader, streetpick, views
 from .store import Data, OfflineError
 
 router = APIRouter()
-JOB_COLS = """j.id, j.kind, j.input, j.status, j.stage, j.done, j.total, j.message, a.slug, j.created_at, j.started_at,
-              j.finished_at, j.heartbeat_at, j.worker_id"""
+STALE_RUNNING = "10 minutes"      # a running job with no heartbeat for this long can be claimed again (worker died)
+JOB_COLS = f"""j.id, j.kind, j.input, j.status, j.stage, j.done, j.total, j.message, a.slug, j.created_at, j.started_at,
+              j.finished_at, j.heartbeat_at, j.worker_id, j.is_test,
+              (j.status = 'running' and (j.heartbeat_at is null or j.heartbeat_at < now() - interval '{STALE_RUNNING}'))"""
 FAIL_CODES = {"NO_STREET_VIEW": "no_street_view", "NO_STREETS": "no_street_view", "NO_CAMERAS": "no_street_view",
               "AWS_TOKEN_EXPIRED": "expired_token", "EXPIRED_TOKEN": "expired_token"}
 FILE_OK = re.compile(r"^[A-Za-z0-9_.-]{1,80}\.(json|geojson|csv)$")
 MAX_FILE = 40 * 1024 * 1024
-STALE_RUNNING = "10 minutes"
-CANCELLED = "cancelled by user"   # a running job with no heartbeat for this long can be claimed again (worker died)
+CANCELLED = "cancelled by user"
+# "Clear test jobs" removes ONLY jobs that ended without a result and were either made by automated tests (is_test) or
+# cancelled before any worker picked them up (nothing was analysed, so nothing is lost). Never done / queued / running.
+TEST_JOB_SQL = f"""select j.id from jobs j where j.area_id is null and j.status in ('failed', 'no_street_view')
+                    and (j.is_test or (j.status = 'failed' and j.message = '{CANCELLED}' and j.started_at is null))"""
 
 
 def get_data(request: Request) -> Data:
@@ -46,9 +51,20 @@ def worker_online(app):
     return any(time.monotonic() - t < win for t in app.state.workers.values())
 
 
+def display_status(status, message, stale):
+    """What people see: cancelled (stored as failed + "cancelled by user") and interrupted (running, no heartbeat for
+    10 min: the worker stopped; it resumes when a worker claims it again) are shown as their own states."""
+    if status == "failed" and message == CANCELLED:
+        return "cancelled"
+    if status == "running" and stale:
+        return "interrupted"
+    return status
+
+
 def _job(r):
     inp = dict(r[2] or {})
     return {"id": str(r[0]), "kind": r[1], "input": inp, "street": inp.get("street") or inp.get("name"), "status": r[3],
+            "display_status": display_status(r[3], r[7], r[15]), "is_test": bool(r[14]),
             "stage": r[4], "done": r[5], "total": r[6], "message": r[7], "area_slug": r[8],
             "created_at": r[9].isoformat() if r[9] else None, "started_at": r[10].isoformat() if r[10] else None,
             "finished_at": r[11].isoformat() if r[11] else None, "heartbeat_at": r[12].isoformat() if r[12] else None,
@@ -108,6 +124,8 @@ class JobIn(BaseModel):
     name: Optional[str] = Field(None, max_length=120)
     lines: Optional[dict] = Field(None, description="with {lat, lon}: the trimmed stretch of the clicked street (GeoJSON "
                                   "LineString / MultiLineString, lon/lat); the job polygon is rebuilt from it")
+    test: bool = Field(False, description="made by an automated test (only such jobs, and jobs cancelled before any worker "
+                                          "started them, are removed by 'clear test jobs')")
 
 
 class EstimateIn(BaseModel):
@@ -169,8 +187,8 @@ def job_create(body: JobIn, request: Request, D: Data = Depends(get_data)):
 
     def fn(s):
         with s.pool.connection() as c:
-            c.execute("insert into jobs (id, kind, input, status) values (%s, %s, %s, 'queued')",
-                      (job_id, kind, json.dumps(inp)))
+            c.execute("insert into jobs (id, kind, input, status, is_test) values (%s, %s, %s, 'queued', %s)",
+                      (job_id, kind, json.dumps(inp), body.test))
             return _get_job(c, job_id)
     job = D.write(fn)
     online = worker_online(request.app)
@@ -191,13 +209,39 @@ def job_list(request: Request, active: bool = False, limit: int = 50, D: Data = 
     return {"offline": off, "jobs": jobs, "worker_online": worker_online(request.app)}
 
 
+class ClearIn(BaseModel):
+    dry_run: bool = Field(True, description="true: only list what would be removed")
+    ids: Optional[List[str]] = Field(None, description="remove only these (from the dry run the person confirmed)")
+
+
+@router.post("/jobs/clear-test", tags=["jobs"])
+def job_clear_test(body: ClearIn, D: Data = Depends(get_data)):
+    """Remove test jobs: cancelled before any worker started them, or made by automated tests, and ended without a result.
+    Done, queued and running jobs and real worker failures are never removed. Call with dry_run first; send the listed
+    ids back to remove exactly what was confirmed."""
+    def fn(s):
+        with s.pool.connection() as c:
+            ids = [str(r[0]) for r in c.execute(TEST_JOB_SQL)]
+            if body.ids is not None:
+                ids = [i for i in ids if i in set(body.ids)]
+            jobs = [_get_job(c, i) for i in ids]
+            if not body.dry_run and ids:
+                c.execute("delete from jobs where id = any(%s::uuid[])", (ids,))
+            return jobs
+    jobs = D.write(fn)
+    return {"offline": False, "dry_run": body.dry_run, "removed": [] if body.dry_run else [j["id"] for j in jobs], "jobs": jobs}
+
+
 @router.get("/jobs/{job_id}", tags=["jobs"])
 def job_get(job_id: str, request: Request, D: Data = Depends(get_data)):
+    """One job, with the estimate for its street length (same rule as the confirm sheet; an estimate, not a measurement)."""
     def fn(s):
         with s.pool.connection() as c:
             return _get_job(c, job_id)
     job = D.write(fn)
-    return {"offline": False, "job": job, "worker_online": worker_online(request.app)}
+    length = (job["input"] or {}).get("length_m")
+    return {"offline": False, "job": job, "worker_online": worker_online(request.app),
+            "estimate": _estimate(request, D, length) if length else None}
 
 
 @router.post("/jobs/{job_id}/cancel", tags=["jobs"])

@@ -11,7 +11,11 @@ export const MATCH: Record<string, { short: string; long: string }> = {
   discrepancy: { short: 'Differs', long: 'Differs from the register' },
   no_record: { short: 'Not in register', long: 'Not in the register' },
 }
-export const matchLabel = (s: string | null | undefined, long = false) => (s && MATCH[s] ? MATCH[s][long ? 'long' : 'short'] : pretty(s))
+/** P5 fix: a "matched" building whose use is not known was never compared on use, so it is not "Matches the register"
+ *  but "Register entry exists — use not compared". Pass useKnown wherever the building's use is at hand. */
+export const MATCHED_USE_UNKNOWN = { short: 'Entry exists', long: 'Register entry exists — use not compared' }
+export const matchLabel = (s: string | null | undefined, long = false, useKnown = true) =>
+  (s === 'matched' && !useKnown ? MATCHED_USE_UNKNOWN[long ? 'long' : 'short'] : s && MATCH[s] ? MATCH[s][long ? 'long' : 'short'] : pretty(s))
 
 /** asset register status (synthetic register) */
 export const ASSET_REG: Record<string, { short: string; long: string; status: 'matched' | 'discrepancy' | 'no_record' | null }> = {
@@ -130,9 +134,13 @@ const JOB_STATUS: Record<string, [string, string]> = {
   queued: ['Queued', 'var(--ns-sodium)'], running: ['Running', 'var(--ns-sodium)'], done: ['Done', 'var(--ns-matched)'],
   failed: ['Failed', 'var(--ns-no-record)'], cancelled: ['Cancelled', 'var(--ns-ink3)'],
   no_street_view: ['No Street View', 'var(--ns-discrepancy)'], expired_token: ['Paused: key expired', 'var(--ns-sodium)'],
+  interrupted: ['Interrupted', 'var(--ns-sodium-glow)'],
 }
-export function jobStatus(j: { status: string; message?: string | null }) {
-  const k = j.status === 'failed' && j.message === CANCELLED_MESSAGE ? 'cancelled' : j.status
+/** the pipeline's stages in order (what the P6 worker reports as job.stage) */
+export const JOB_STAGES = ['panoramas', 'area', 'plan', 'detect', 'geometry', 'ocr', 'vlm', 'reference', 'match', 'export']
+/** P5: the API's display_status adds "interrupted" (running, no heartbeat for 10 min) and "cancelled" */
+export function jobStatus(j: { status: string; message?: string | null; display_status?: string }) {
+  const k = j.display_status ?? (j.status === 'failed' && j.message === CANCELLED_MESSAGE ? 'cancelled' : j.status)
   const [label, color] = JOB_STATUS[k] ?? [pretty(k), 'var(--ns-ink2)']
   return { key: k, label, color }
 }

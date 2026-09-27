@@ -46,6 +46,8 @@ export interface Dive { pano: string; heading: number; pitch: number; fov: numbe
 export interface ReviewFocus { area: string; ids: number[]; label: string }
 export type DriveView = 'forward' | 'left' | 'right'
 export interface Drive { street: string; branch: number; i: number; view: DriveView }
+/** Hood / Trust reading level (P5): same numbers, plain sentences or method names + sources */
+export type Detail = 'plain' | 'technical'
 
 const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 const stored = <T,>(k: string, d: T): T => {
@@ -96,6 +98,10 @@ interface UiState {
   /** anchor inside a verifier page (#/trust/detector) */
   section: string | null
   reviewFocus: ReviewFocus | null
+  /** who is reviewing: asked once, remembered in this browser, saved with every decision (no login) */
+  reviewer: string | null
+  /** Plain / Technical on Under the Hood and Trust, remembered in this browser */
+  detail: Detail
   /** bumps when something asks the map to frame the current filter/query/street */
   frameTick: number
   setArea: (slug: string) => void
@@ -124,6 +130,8 @@ interface UiState {
   setPaletteOpen: (o: boolean) => void
   go: (page: Page, section?: string | null) => void
   sendToReview: (f: ReviewFocus) => void
+  setReviewer: (name: string | null) => void
+  setDetail: (d: Detail) => void
 }
 
 const DEFAULT_LAYERS: Record<LayerKey, boolean> = {
@@ -159,6 +167,8 @@ export const useUi = create<UiState>((set, get) => ({
   paletteOpen: false,
   ...routeFromHash(),
   reviewFocus: null,
+  reviewer: stored<string | null>('reviewer', null),
+  detail: stored<string>('detail', 'plain') === 'technical' ? 'technical' : 'plain',
   frameTick: 0,
   setArea: (area) => {
     persist('area', area)
@@ -217,6 +227,8 @@ export const useUi = create<UiState>((set, get) => ({
     history.pushState(null, '', '#/review')
     set({ reviewFocus, page: 'review', section: null, dive: null })
   },
+  setReviewer: (name) => { const reviewer = name?.trim().slice(0, 120) || null; persist('reviewer', reviewer); set({ reviewer }) },
+  setDetail: (detail) => { persist('detail', detail); set({ detail }) },
 }))
 
 if (typeof window !== 'undefined') {

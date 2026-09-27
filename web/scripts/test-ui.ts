@@ -1,7 +1,9 @@
 /** Pure UI helpers (review fixes 10, 11, 13, 14), no browser: `npm run test:ui`. Exits 1 on the first failure. */
 import { strict as assert } from 'node:assert'
 import { placeLabels, type Rect } from '../src/lib/labelLayout'
-import { jobStatus } from '../src/lib/labels'
+import { jobStatus, matchLabel } from '../src/lib/labels'
+import { kpis, type Records } from '../src/lib/derive'
+import { photoProblem, saveDecision } from '../src/lib/review'
 import { costText, noun, plural, usd } from '../src/lib/utils'
 import { mainLine, pointAt, project, slice } from '../src/map/trim'
 
@@ -68,5 +70,44 @@ t('usd: tiny positive costs never show $0.0000', () => {
   assert.equal(costText(2, 0.00002), '< $0.0001')
   assert.equal(costText(2, 0.0012), '$0.0012')
 })
+
+t('P5: "Waiting for review" counts only items still waiting', () => {
+  const q = (status: string, street = 'A') => ({ status, street }) as unknown as Records['review'][number]
+  const r: Records = { buildings: [], assets: [], unmapped: [], gaps: [], review: [q('pending'), q('approved'), q('rejected'), q('pending', 'B'), q('appealed')] }
+  assert.equal(kpis(r, null).waiting_for_review, 2)
+  assert.equal(kpis(r, 'A').waiting_for_review, 1)
+  assert.equal(kpis(r, null).low_confidence_observations, 5)                 // the queue size stays available
+})
+
+t('P5: a matched building with unknown use says "Register entry exists — use not compared"', () => {
+  assert.equal(matchLabel('matched', true, false), 'Register entry exists — use not compared')
+  assert.equal(matchLabel('matched', true, true), 'Matches the register')
+  assert.equal(matchLabel('discrepancy', true, false), 'Differs from the register')
+  assert.equal(matchLabel('no_record', false, false), 'Not in register')
+})
+
+t('P5: appeal photo limits (JPEG / PNG / WebP, ≤ 8 MB)', () => {
+  const f = (type: string, size: number) => ({ type, size }) as File
+  assert.equal(photoProblem(f('image/png', 1000)), null)
+  assert.ok(photoProblem(f('image/gif', 1000)))
+  assert.ok(photoProblem(f('image/jpeg', 8 * 1024 * 1024 + 1)))
+})
+
+async function sent(action: 'approve' | 'reject' | 'appeal') {
+  let body: FormData | null = null
+  globalThis.fetch = (async (_u: string, init: RequestInit) => { body = init.body as FormData; return new Response('{"offline":false}', { status: 200 }) }) as typeof fetch
+  await saveDecision(1, action, { reviewer: 'test', note: 'typed in the appeal box', photo: new File(['x'], 'p.png', { type: 'image/png' }) })
+  return body! as FormData
+}
+for (const action of ['approve', 'reject'] as const) {
+  const fd = await sent(action)
+  assert.equal(fd.get('note'), null, `${action} must not send the appeal note`)
+  assert.equal(fd.get('photo'), null, `${action} must not send the appeal photo`)
+  assert.equal(fd.get('reviewer'), 'test')
+}
+const ap = await sent('appeal')
+assert.equal(ap.get('note'), 'typed in the appeal box')
+assert.ok(ap.get('photo'))
+n++; console.log('ok P5: a typed note / photo is sent only with Appeal; the reviewer name with every decision')
 
 console.log(`${n} UI tests passed`)

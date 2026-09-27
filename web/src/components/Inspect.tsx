@@ -29,7 +29,7 @@ function Body({ p }: { p: AnyProps }) {
     case 'building':
       return (<>
         <Title eyebrow="Building" title={p.name ?? `${p.use ? useLabel(p.use) : 'Building'} on ${p.street}`} />
-        <StatusDot wrap s={p.match_status} label={matchLabel(p.match_status, true)} />
+        <StatusDot wrap s={p.match_status} label={matchLabel(p.match_status, true, !!p.use)} />
         <Line>{p.use ? useLabel(p.use) : 'Use not known'} · {floorsText(p.floors, p.floors_status)}</Line>
       </>)
     case 'pole':

@@ -36,7 +36,7 @@ const B_COLS: Col<Building>[] = [
     const f = b.attributes?.floors
     return f?.value != null ? <span className="t-data">{f.value}{f.status === 'low_confidence' ? '?' : ''}</span> : <span className="ink3">—</span>
   } },
-  { id: 'reg', head: 'Register', p: 1, w: '118px', sort: (b) => b.match_status, cell: (b) => <StatusDot s={b.match_status} label={matchLabel(b.match_status)} /> },
+  { id: 'reg', head: 'Register', p: 1, w: '118px', sort: (b) => b.match_status, cell: (b) => <StatusDot s={b.match_status} label={matchLabel(b.match_status, false, !!b.attributes?.use?.value)} /> },
   { id: 'review', head: 'Review', p: 3, w: '76px', sort: (b) => b.review?.status ?? '', cell: (b) => <span className={cn('t-small', b.review?.status !== 'pending' && 'ink3')}>{b.review?.status === 'pending' ? 'waiting' : b.review?.status ?? '—'}</span> },
   { id: 'id', head: 'ID', p: 3, w: '96px', sort: (b) => b.id, cell: (b) => <span className="t-data ink3 truncate">{b.id}</span> },
 ]

@@ -65,7 +65,7 @@ export function PanoPins() {
       if (!sel && (b.match_status === 'matched' || !near(b.lat, b.lon))) continue
       const fl = b.attributes?.floors?.value
       out.push({ id: b.id, lat: b.lat, lon: b.lon, h: fl && fl > 1 ? 4 : 3, kind: sel ? 'selected' : b.match_status === 'no_record' ? 'no_record' : 'discrepancy',
-        label: sel ? 'This building' : matchLabel(b.match_status) })
+        label: sel ? 'This building' : matchLabel(b.match_status, false, !!b.attributes?.use?.value) })
     }
     for (const a of records.assets) {
       const sel = a.id === selId

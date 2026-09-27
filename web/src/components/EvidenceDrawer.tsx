@@ -12,7 +12,7 @@ import { assetRegLabel, ASSET_REG, diffLabel, floorsStatusPlain, floorsText, goo
 import { RouteLine } from '@/lib/routes'
 import { useAreaData } from '@/lib/useAreaData'
 import { cn, costText, fmt, fmt1, plural } from '@/lib/utils'
-import { DONE_LABEL, patchReviewCaches, saveDecision, undoDecision, type Decision } from '@/lib/review'
+import { DONE_LABEL, patchReviewCaches, PHOTO_TYPES, photoProblem, saveDecision, undoDecision, type Decision } from '@/lib/review'
 import { useUi } from '@/store/ui'
 import { EvidenceViews } from './EvidenceViews'
 import { PositionMini } from './PositionMini'
@@ -20,6 +20,7 @@ import { StatusDot } from './FindingsTable'
 import { GapHow } from './GapList'
 import { Fact, HowWeKnow } from './HowWeKnow'
 import { PanelHead } from './Panel'
+import { ReviewerForm } from './ReviewerName'
 
 export function EvidenceDrawer({ sel }: { sel: AnyProps }) {
   const { records } = useAreaData()
@@ -103,7 +104,7 @@ function BuildingBody({ b }: { b: Building }) {
   const title = name?.quality === 'good' && name.value ? name.value : `${useLabel(use) === 'Use not known' ? 'Building' : useLabel(use)} on ${b.street}`
   return (
     <>
-      <PanelHead eyebrow="Building" title={title} sub={<StatusDot s={b.match_status} label={matchLabel(b.match_status, true)} />} />
+      <PanelHead eyebrow="Building" title={title} sub={<StatusDot s={b.match_status} label={matchLabel(b.match_status, true, !!b.attributes?.use?.value)} />} />
       <Body>
         <EvidenceViews kind="building" id={b.id} at={{ lat: b.lat, lng: b.lon }} target="building" />
         <Section title="What we saw">
@@ -137,7 +138,7 @@ function BuildingBody({ b }: { b: Building }) {
             <Fact k="Record number"><span className="t-data">{reg?.property_id ?? '—'}</span></Fact>
             <Fact k="Record says">{reg?.record_use?.replace(/_/g, ' ') ?? '—'} · {reg?.record_floors != null ? plural(reg.record_floors, 'floor') : '— floors'} · {reg?.record_area_m2 != null ? `${fmt.format(Math.round(reg.record_area_m2))} m²` : '—'}</Fact>
             <Fact k="Record's map pin">{reg?.record_dist_m != null ? `${fmt1.format(reg.record_dist_m)} m from the building outline` : '—'}</Fact>
-            <Fact k="Result" hint={b.match_status}>{matchLabel(b.match_status, true)}{b.discrepancies?.length ? `: ${b.discrepancies.map(diffLabel).join(', ')}` : ''}</Fact>
+            <Fact k="Result" hint={b.match_status}>{matchLabel(b.match_status, true, !!b.attributes?.use?.value)}{b.discrepancies?.length ? `: ${b.discrepancies.map(diffLabel).join(', ')}` : ''}</Fact>
             <Fact k="Register" hint="SYNTHETIC">Made-up demo data with planted mistakes: no open property records were available</Fact>
           </HowWeKnow>
         </Section>
@@ -261,6 +262,7 @@ function PlaceName({ id }: { id: string }) {
 
 function ReviewActions({ item, loading, finding }: { item: ReviewItem | null; loading: boolean; finding?: string | null }) {
   const offline = useUi((s) => s.offline)
+  const reviewer = useUi((s) => s.reviewer)
   const qc = useQueryClient()
   const [mode, setMode] = useState<'idle' | 'appeal'>('idle')
   const [note, setNote] = useState('')
@@ -271,10 +273,13 @@ function ReviewActions({ item, loading, finding }: { item: ReviewItem | null; lo
   if (loading) return null
   if (!item) return <Section title="Review"><p className="t-small ink3">Not waiting for review.</p></Section>
   const send = async (action: Decision) => {
-    if (!item.id || busy) return
+    if (!item.id || busy || !reviewer) return
+    const bad = action === 'appeal' ? photoProblem(photo) : null
+    if (bad) { setMsg(bad); return }
     setBusy(action); setMsg(null); setLast(null)
     try {
-      const row = await saveDecision(item.id, action, { note, photo })
+      // a note / photo belongs to an appeal only (P5 fix); saveDecision drops them for approve / reject
+      const row = await saveDecision(item.id, action, { reviewer, note, photo })
       patchReviewCaches(qc, row)
       setMode('idle'); setNote(''); setPhoto(null)
       setLast({ id: item.id, eventId: row.event_id })               // Undo = exactly this item + this decision (D24)
@@ -285,7 +290,7 @@ function ReviewActions({ item, loading, finding }: { item: ReviewItem | null; lo
     if (!last || busy) return
     setBusy('undo'); setMsg(null)
     try {
-      patchReviewCaches(qc, await undoDecision(last.id, last.eventId))
+      patchReviewCaches(qc, await undoDecision(last.id, last.eventId, reviewer))
       setLast(null); setMsg('Undone: back to how it was.')
     } catch (e) { setMsg(e instanceof ApiError ? e.message : 'Could not undo') } finally { setBusy(null) }
   }
@@ -295,6 +300,8 @@ function ReviewActions({ item, loading, finding }: { item: ReviewItem | null; lo
       {item.note && <p className="t-small ink3 mt-1">Note: {item.note}</p>}
       {offline || item.id == null ? (
         <p className="t-small mt-2" style={{ color: 'var(--ns-sodium)' }}>Offline — read-only. Decisions can’t be saved until the database is back.</p>
+      ) : !reviewer ? (
+        <div className="mt-2"><p className="t-small ink2 mb-1.5">Your name is saved with each decision (asked once, no login).</p><ReviewerForm compact /></div>
       ) : (
         <>
           <div className="mt-2 flex gap-1.5">
@@ -309,7 +316,7 @@ function ReviewActions({ item, loading, finding }: { item: ReviewItem | null; lo
                   className="t-small mt-2 w-full resize-none rounded-[var(--ns-r-control)] border border-line-strong bg-bg0 px-2.5 py-2 outline-none focus:border-sodium" />
                 <div className="mt-1.5 flex items-center gap-2">
                   <label className="link t-small cursor-pointer">
-                    <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
+                    <input type="file" accept={PHOTO_TYPES.join(',')} className="hidden" onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
                     {photo ? photo.name : '+ Photo (optional)'}
                   </label>
                   <div className="flex-1" />

@@ -1,6 +1,6 @@
 import { useUi } from '@/store/ui'
 
-export const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || 'http://localhost:8000'
+export const API_URL = (import.meta.env?.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || 'http://localhost:8000'
 
 export class ApiError extends Error {
   constructor(message: string, public status: number, public offline?: boolean) {

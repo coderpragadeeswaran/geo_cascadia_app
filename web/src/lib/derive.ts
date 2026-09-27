@@ -53,6 +53,8 @@ export function kpis(r: Records, street: string | null) {
     sign_text_unverified: B.filter((b) => ['tamil_unverified', 'fragment'].includes(nameOf(b)?.quality ?? '')).length,
     names_confirmed_by_google: B.filter((b) => !!nameOf(b)?.google_confirmed).length,
     low_confidence_observations: r.review.filter((q) => onStreet(q.street, street)).length,
+    /** P5 fix: "Waiting for review" counts only items still waiting (decided items drop out) */
+    waiting_for_review: r.review.filter((q) => q.status === 'pending' && onStreet(q.street, street)).length,
     unmapped_businesses: r.unmapped.filter((u) => onStreet(u.street, street)).length,
   }
 }
@@ -73,10 +75,10 @@ export const KPI_DEFS: KpiDef[] = [
   { key: 'use_not_classified', label: 'Use not known', main: true, tone: 'unclassified', apply: { use: '__none' } },
   { key: 'streetlights', label: 'Streetlights', one: 'Streetlight', apply: { subject: 'assets', assetType: 'streetlight' } },
   { key: 'poles', label: 'Poles, no lamp seen', one: 'Pole, no lamp seen', apply: { subject: 'assets', assetType: 'pole' } },
-  { key: 'named_businesses', label: 'Shop names read', one: 'Shop name read', apply: { nameQ: 'good' } },
+  { key: 'named_businesses', label: 'Shop names read clearly', one: 'Shop name read clearly', apply: { nameQ: 'good' } },
   { key: 'names_confirmed_by_google', label: 'Also on Google Maps', apply: { google: true } },
   { key: 'sign_text_unverified', label: 'Signs to double-check', one: 'Sign to double-check', apply: { nameQ: 'unverified' } },
-  { key: 'low_confidence_observations', label: 'Waiting for review', tone: 'review', apply: { review: true } },
+  { key: 'waiting_for_review', label: 'Waiting for review', tone: 'review', apply: { review: true } },
   { key: 'unmapped_businesses', label: 'Businesses with no mapped building', one: 'Business with no mapped building', apply: { subject: 'unmapped' } },
   { key: 'streets_covered', label: 'Streets', one: 'Street', overview: true },
 ]

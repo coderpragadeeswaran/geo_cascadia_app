@@ -1,21 +1,31 @@
-/** Trust (VERIFIER page, D16): every measured number with its n, from model_card.json only (D2); what we tried and
- *  dropped; stored-vs-computed mismatches; gap-length checks; the limits of this data; how questions are answered (no
- *  LLM); cost & accuracy routed vs all-VLM (§10 test 6). Section anchors (#/trust/<id>) are the targets of "How do we
- *  know?" links. P5 extends this page (benchmark chart, per-class detail). */
-import { useEffect, useMemo } from 'react'
-import { useAreas, useBuildings, useModelCard } from '@/api/queries'
+/** Trust (VERIFIER page, D16; P5 / D29): why you can, and can't, trust each result.
+ *  - Result cards (use, floors, names, streetlight seen / not seen, building position): what was measured, the sample
+ *    size, the result vs the baseline, and a one-line verdict. Served by GET /trust, where every number carries `src`,
+ *    its path in data/model_card.json (pytest resolves each one). Accuracy numbers come from nowhere else.
+ *  - Production vs tried-and-dropped experiments as a timeline per topic.
+ *  - No confusion matrix: model_card has per-class precision/recall only, so none is invented.
+ *  - Stored vs computed, for all areas, with a jump to where each number appears.
+ *  - Gate 1 (building position) with the same numbers as before, the detector benchmark, cost (§10 test 6), gap checks,
+ *    limits and how questions are answered. Anchors: #/trust/<id> (results, use, floors, names, streetlights, detector,
+ *    positions, gate1, matching, cost, rejected, consistency, gap-checks, limits, questions). */
+import { ArrowRight, CircleCheck, CircleX, Minus } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useConsistency, useTrust, type ConsistencyRow, type Experiment, type TrustCard, type TrustNum } from '@/api/p5'
+import { useAreas, useModelCard } from '@/api/queries'
 import type { GapProps } from '@/api/types'
 import { CostPanel } from '@/components/CostPanel'
+import { Badge, Card as Panel, jumpTo, REDUCED, SectionNav, Src, T, useDetail, useScrollSpy } from '@/components/Detail'
 import { SYNONYM_HINTS } from '@/components/QueryHelp'
-import { kpis } from '@/lib/derive'
+import { AlignedBars } from '@/components/viz'
+import { KPI_DEFS, kpiFilter, kpis } from '@/lib/derive'
 import { shortArea } from '@/lib/labels'
 import { useAreaData } from '@/lib/useAreaData'
-import { fmt, plural } from '@/lib/utils'
+import { cn, fmt, plural } from '@/lib/utils'
 import { useUi } from '@/store/ui'
 
 type Any = any // eslint-disable-line @typescript-eslint/no-explicit-any
 const pct = (v: unknown) => (typeof v === 'number' ? `${Math.round(v * 100)}%` : String(v ?? '—'))
-/** a stored / computed value as readable text: objects (e.g. counts per model route) become "local 193 / VLM 73" */
+/** a stored / computed value as readable text: objects (counts per model route) become "local 193 / VLM 73" */
 const ROUTE_WORD: Record<string, string> = { tier1_local_clip: 'local', tier3_vlm: 'VLM', tier3_vlm_fewshot: 'VLM few-shot', tier2_ocr: 'OCR',
   'tier3_vlm+ocr_gate': 'VLM + OCR gate', tier3_vlm_unverified: 'VLM only' }
 const ROUTE_ORDER = ['tier1_local_clip', 'tier2_ocr', 'tier3_vlm', 'tier3_vlm_fewshot', 'tier3_vlm+ocr_gate', 'tier3_vlm_unverified']
@@ -30,122 +40,90 @@ export function readable(v: unknown): string {
   }
   return String(v)
 }
-const REDUCED = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+const val = (x: TrustNum) => x.kind === 'pct' ? pct(x.value) : x.kind === 'pctn' ? `${x.value}%` : x.kind === 'm' ? `${x.value} m` : typeof x.value === 'number' ? fmt.format(x.value) : String(x.value)
+const frac = (x: TrustNum | null) => !x || typeof x.value !== 'number' ? null : x.kind === 'pct' ? x.value : x.kind === 'pctn' ? x.value / 100 : null
 
 const NAV: [string, string][] = [
-  ['questions', 'How questions are answered'], ['detector', 'Detector'], ['use', 'Building use'], ['floors', 'Floors'], ['names', 'Shop names'],
-  ['positions', 'Positions'], ['gate1', 'Building position (Gate 1)'], ['matching', 'Register matching'], ['cost', 'Cost: routed vs all-VLM'], ['rejected', 'Tried and dropped'],
-  ['consistency', 'Stored vs computed'], ['gap-checks', 'Gap length checks'], ['limits', 'Limits of this data'],
+  ['results', 'What each result is worth'], ['rejected', 'Tried and dropped'], ['detector', 'Detector'], ['positions', 'Pole & light positions'],
+  ['gate1', 'Building position (Gate 1)'], ['matching', 'Register matching'], ['cost', 'Cost: routed vs all-VLM'],
+  ['consistency', 'Stored vs computed'], ['gap-checks', 'Gap length checks'], ['limits', 'Limits of this data'], ['questions', 'How questions are answered'],
 ]
 
+/** L1: every topic is its own panel with a heading, a divider and space around it */
 function Sec({ id, title, children, lead }: { id: string; title: string; lead?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <section id={id} className="scroll-mt-6 rule-t pb-10 pt-6">
-      <h2 className="t-title" style={{ fontSize: 22 }}>{title}</h2>
-      {lead && <p className="t-small ink2 mt-1 max-w-[680px]">{lead}</p>}
-      <div className="mt-4">{children}</div>
-    </section>
-  )
+  return <Panel id={id} title={title} lead={lead} className="mb-8">{children}</Panel>
 }
-const Figure = ({ k, v, s }: { k: string; v: React.ReactNode; s?: React.ReactNode }) => (
-  <div><div className="t-micro">{k}</div><div className="t-figure mt-1">{v}</div>{s && <div className="t-data ink3 mt-1">{s}</div>}</div>
-)
 const Tr = ({ cells, head }: { cells: React.ReactNode[]; head?: boolean }) => (
   <tr className="rule-b">{cells.map((c, i) => head ? <th key={i} className="t-micro py-1.5 pr-4 text-left font-[600]">{c}</th> : <td key={i} className={i ? 't-data py-1.5 pr-4' : 't-small py-1.5 pr-4'}>{c}</td>)}</tr>
 )
 
 export default function Trust() {
-  const { data } = useModelCard()
-  const m = data as Any
+  const { data: mcRaw, isError: mcError } = useModelCard()
+  const m = mcRaw as Any
+  const trust = useTrust()
   const section = useUi((s) => s.section)
-  const area = useUi((s) => s.area)
-  const { records, detail, gaps } = useAreaData()
-  // D2: counts come from the export, not the model_card counter (the accuracy figures are model_card's)
-  const { data: w29 } = useBuildings('ward29')
-  const w29Routes = useMemo(() => w29 ? { local: w29.filter((b) => b.attributes?.use?.route === 'tier1_local_clip').length,
-    vlm: w29.filter((b) => b.attributes?.use?.route === 'tier3_vlm').length } : null, [w29])
+  const scroller = useRef<HTMLDivElement>(null)
+  const detail = useDetail()
+  const { records, detail: area, gaps } = useAreaData()
   const { data: areas } = useAreas()
   useEffect(() => {
-    if (!m || !section) return
-    const t = setTimeout(() => document.getElementById(section)?.scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'start' }), 80)
+    if (!m || !trust.data || !section) return
+    const t = setTimeout(() => document.getElementById(section)?.scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'start' }), 100)
     return () => clearTimeout(t)
-  }, [m, section])
+  }, [m, trust.data, section])
+  const active = useScrollSpy(NAV.map(([id]) => id), scroller, [!!m, !!trust.data])
   const gapRows = useMemo(() => gaps.map((g) => g.props as GapProps).filter((g) => g.length_differs || g.display_mode === 'check').sort((a, b) => b.length_m - a.length_m), [gaps])
-  if (!m) return <p className="t-small ink3 p-10">Loading the model card…</p>
-  const cls = m.detector.per_class as Record<string, { P: number; R: number; n: number }>
+  if (mcError || trust.isError) return <p className="t-small ink2 p-10">Couldn’t load the model card from the API. <button className="link" onClick={() => trust.refetch()}>Try again</button></p>
+  if (!m || !trust.data) return <div className="space-y-4 p-10" aria-busy="true">{[0, 1].map((i) => <div key={i} className="h-40 animate-pulse rounded-[var(--ns-r-sheet)] bg-line" />)}<p className="t-small ink3">Loading the model card…</p></div>
   const k = records ? kpis(records, null) : null
-  const lr = m.building_use.local_router
+  const cls = m.detector.per_class as Record<string, { P: number; R: number; n: number }>
   return (
     <div className="grid h-full grid-cols-[220px_minmax(0,1fr)]">
-      <nav className="min-h-0 overflow-y-auto px-5 py-8" style={{ borderRight: '1px solid var(--ns-line)' }} aria-label="Trust sections">
-        <div className="t-micro mb-2">On this page</div>
-        {NAV.map(([id, label]) => (
-          <button key={id} onClick={() => useUi.getState().go('trust', id)} className="t-small block w-full cursor-pointer py-1 text-left hover:text-ink"
-            style={{ color: section === id ? 'var(--ns-sodium)' : 'var(--ns-ink2)' }}>{label}</button>
-        ))}
-      </nav>
-      <div className="min-h-0 overflow-y-auto px-10 py-8">
-        <div className="mx-auto max-w-[900px]">
-          <div className="t-micro">Trust · every number from model_card.json</div>
-          <h1 className="t-display mt-2 mb-3">What we measured, what we dropped, and the limits</h1>
-          <p className="t-small ink2 mb-6 max-w-[680px]">{m._note} Registers are SYNTHETIC with planted errors: no open municipal data exists.</p>
+      <div className="min-h-0 overflow-y-auto" style={{ borderRight: '1px solid var(--ns-line)' }}><SectionNav items={NAV} active={active} onJump={jumpTo} /></div>
+      <div ref={scroller} className="min-h-0 overflow-y-auto px-10 py-8">
+        <div className="mx-auto max-w-[920px]">
+          <div className="t-micro">Trust · every accuracy figure comes from the team’s model card</div>
+          <h1 className="t-display mt-2 mb-3">Why you can, and can’t, trust each result</h1>
+          <p className="t-small ink2 mb-6 max-w-[700px]"><T plain="Each result below was checked against hand-labelled examples. The small numbers (n) say how many examples were checked: the fewer, the less certain. Registers are synthetic: no open municipal data exists."
+            tech={<>{m._note} Every figure on this page is read from <span className="t-data">data/model_card.json</span> (GET /trust carries each value’s path; pytest resolves them). Registers are SYNTHETIC with planted errors.</>} /></p>
 
-          <Sec id="questions" title="How questions are answered: rules, not an AI model"
-            lead="The ask bar uses the pipeline’s own rule-based QueryEngine plus a short list of synonyms. There is no LLM in this step.">
-            <ul className="t-small space-y-1.5">
-              <li><b>Deterministic:</b> the same question always gives the same answer.</li>
-              <li><b>Offline:</b> no model or internet call is made to read a question.</li>
-              <li><b>Explainable:</b> every filter it read is shown as a chip; an empty answer shows the step that removed the last result; words no rule uses are listed as ignored, and nothing is applied until you confirm.</li>
-            </ul>
-            <div className="t-micro mt-4">Synonyms (docs/QUERY.md has the full list and the patterns)</div>
-            <table className="mt-1"><tbody>{SYNONYM_HINTS.map(([a, b]) => <Tr key={b} cells={[a, `→ ${b}`]} />)}</tbody></table>
+          <Sec id="results" title="What each result is worth" lead={<T plain="One card per kind of result: what we checked, how many examples, how often it was right, and what it is compared with." tech="cards(): result vs baseline, n and src paths into model_card.json." />}>
+            <div className="grid gap-4 md:grid-cols-2">{trust.data.cards.map((c) => <Card key={c.id} c={c} />)}</div>
           </Sec>
 
-          <Sec id="detector" title={`Detector · ${m.detector.production.split(' (')[0]}`} lead={`Test set: ${m.detector.test_set}. Weighted F1 ${m.detector.weighted_F1}.`}>
-            <table className="w-full max-w-[640px]"><tbody>
-              <Tr head cells={['class', 'precision', 'recall', 'n']} />
-              {Object.entries(cls).map(([c, v]) => <Tr key={c} cells={[c.replace('_', ' '), pct(v.P), pct(v.R), v.n]} />)}
-            </tbody></table>
-            <div className="t-micro mt-5">Benchmark · decision: {m.detector.decision}</div>
-            <table className="mt-1 w-full max-w-[720px]"><tbody>
-              <Tr head cells={['model', 'F1', 'pole recall', 'lamp recall', 'CPU ms / view']} />
-              {(m.detector.benchmark as Any[]).map((b) => <Tr key={b.model} cells={[b.model, b.F1, pct(b.pole_R), pct(b.lamp_R), b.cpu_ms]} />)}
-            </tbody></table>
-            {(m.detector.benchmark as Any[]).filter((b) => b.downstream).map((b) => <p key={b.model} className="t-small ink2 mt-2">Why {b.model} was not adopted: {b.downstream}.</p>)}
+          <Sec id="rejected" title="Tried and dropped" lead={<T plain="What we tried, what it scored, and why the version in use won. Filled dots are in use; crossed ones were rejected."
+            tech="experiments(): one lane per topic, in the order tried; statuses production / replaced / tried / rejected / withheld; numbers with model_card paths (D5: floors production shown apart from the rejected variants)." />}>
+            <Experiments items={trust.data.experiments} />
           </Sec>
 
-          <Sec id="use" title="Building use">
-            <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
-              <Figure k="VLM accuracy" v={pct(m.building_use.vlm_accuracy.value)} s={`n ${m.building_use.vlm_accuracy.n} · ${m.building_use.vlm_accuracy.metric}`} />
-              <Figure k="Routed (held-out)" v={pct(lr.ward29_heldout.routed)} s={`local ${pct(lr.ward29_heldout.local_only)} · VLM ${pct(lr.ward29_heldout.vlm_only)} · n ${lr.ward29_heldout.n}`} />
-              <Figure k="Trichy (unseen)" v={pct(lr.trichy_unseen.routed)} s={`n ${lr.trichy_unseen.n} · escalated ${pct(lr.trichy_unseen.escalated)}`} />
-              <Figure k="Full Ward 29 run" v={w29Routes ? `${w29Routes.local} / ${w29Routes.vlm}` : '…'}
-                s={<>local / VLM, counted from the export · accuracy {pct(lr.full_ward29_run.use_accuracy_after)} (n {lr.full_ward29_run.n})<br />model_card counter: {lr.full_ward29_run.local} / {lr.full_ward29_run.vlm} (VLM-stage records, see Stored vs computed)</>} />
+          <Sec id="detector" title={`Detector · ${m.detector.production.split(' (')[0]}`} lead={<T plain={`Checked on ${m.detector.test_set.split(' (')[0]}. Recall = how many of the real objects it found; precision = how many of its boxes were right.`} tech={<>Test set: {m.detector.test_set}. Weighted F1 {m.detector.weighted_F1}. GPU {m.detector.gpu_ms_per_view} ms / CPU {m.detector.cpu_ms_per_view} ms per view.</>} />}>
+            <div className="grid gap-6 md:grid-cols-2">
+              <div>
+                <div className="t-micro mb-2">Per class · found (recall) and right (precision)</div>
+                {Object.entries(cls).map(([c, v]) => (
+                  <div key={c} className="mb-3">
+                    <div className="t-small mb-1">{c.replace('_', ' ')} <span className="ink3">· n={v.n}</span></div>
+                    <AlignedBars fmtV={(x) => `${Math.round(x * 100)}%`} rows={[{ key: 'R', label: 'found', value: v.R }, { key: 'P', label: 'right', value: v.P, tone: 'var(--ns-sodium-glow)' }]} />
+                  </div>
+                ))}
+                <Src>model_card.detector.per_class.&lt;class&gt;.P / R / n</Src>
+              </div>
+              <div>
+                <div className="t-micro mb-2">Benchmark · decision: {m.detector.decision}</div>
+                {(['F1', 'pole_R', 'lamp_R', 'cpu_ms'] as const).map((key) => (
+                  <div key={key} className="mb-3">
+                    <div className="t-small mb-1">{{ F1: 'F1 (overall)', pole_R: 'poles found', lamp_R: 'lamp heads found', cpu_ms: 'CPU time per photo (lower is better)' }[key]}</div>
+                    <AlignedBars fmtV={(x) => (key === 'F1' ? x.toFixed(3) : key === 'cpu_ms' ? `${x} ms` : `${Math.round(x * 100)}%`)}
+                      rows={(m.detector.benchmark as Any[]).map((b) => ({ key: b.model, label: b.model.replace(' (production)', ' ★'), value: b[key], tone: /production/.test(b.model) ? 'var(--ns-sodium)' : 'var(--ns-ink3)' }))} />
+                  </div>
+                ))}
+                {(m.detector.benchmark as Any[]).filter((b) => b.downstream).map((b) => <p key={b.model} className="t-small ink2">Why {b.model} was not adopted: {b.downstream}.</p>)}
+              </div>
             </div>
-            <p className="t-small ink2 mt-3">Local router: {lr.method}.</p>
+            <p className="t-small ink3 mt-3">{trust.data.confusion_note}</p>
           </Sec>
 
-          <Sec id="floors" title="Floors" lead={`Production method: ${m.floors.method}.`}>
-            <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
-              <Figure k="Ward 29 exact" v={pct(m.floors.ward29.exact)} s={`±1 floor ${pct(m.floors.ward29.within_1)} · n ${m.floors.ward29.n}`} />
-              <Figure k="Baseline exact" v={pct(m.floors.ward29.baseline_exact)} s="before the few-shot prompt" />
-              <Figure k="Trichy exact" v={pct(m.floors.trichy_unseen.exact)} s={`±1 ${pct(m.floors.trichy_unseen.within_1)} · n ${m.floors.trichy_unseen.n}`} />
-            </div>
-            {m.floors.trichy_unseen.note && <p className="t-small ink2 mt-3">Trichy: {m.floors.trichy_unseen.note}.</p>}
-            <p className="t-small ink3 mt-1">Rejected variants are listed under “Tried and dropped”, separate from production.</p>
-          </Sec>
-
-          <Sec id="names" title="Shop names">
-            <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
-              <Figure k="Routed OCR → VLM" v={pct(m.names.crop_level_n31.routed_ocr_then_vlm)} s={`OCR only ${pct(m.names.crop_level_n31.ocr_only)} · all-VLM ${pct(m.names.crop_level_n31.all_vlm)} · n 31`} />
-              <Figure k="Full views" v={pct(m.names.full_view_n16.routed)} s={`all-VLM ${pct(m.names.full_view_n16.all_vlm_per_view)} · n 16 · cost ${m.names.full_view_n16.cost_ratio}`} />
-              <Figure k="On Google (Ward 29)" v={m.names.google_confirmed.ward29} s={`Trichy ${m.names.google_confirmed.trichy_unseen} · chance ${pct(m.names.google_confirmed.chance_rate)}`} />
-            </div>
-            <p className="t-small ink2 mt-3">{m.names.vlm_only_names_confirmed}. VLM invented names on non-business crops: {m.names.vlm_invented_names_on_non_business_crops}.</p>
-            <p className="t-small ink2 mt-1">OCR: {m.ocr.engine}; fast CPU mode {m.ocr.cpu_fast_mode.sec_per_crop} s/crop, routed {pct(m.ocr.cpu_fast_mode.routed_accuracy)} (n {m.ocr.cpu_fast_mode.n}); {m.ocr.cpu_fast_mode.crop_cap}.</p>
-          </Sec>
-
-          <Sec id="positions" title="Positions of poles and streetlights">
+          <Sec id="positions" title="Positions of poles and streetlights" lead={<T plain="How close a pole or lamp is placed to where it really stands." tech="model_card.positions" />}>
             <table className="w-full max-w-[720px]"><tbody>
               <Tr cells={['Triangulation error (synthetic test)', m.positions.synthetic_triangulation_error_m + ' m']} />
               <Tr cells={['Independent camera check: triangulated on or near', m.positions.independent_camera_check_n30.triangulated_on_or_near]} />
@@ -156,6 +134,7 @@ export default function Trust() {
           </Sec>
 
           {m.gate1_position && <Gate1 g={m.gate1_position} names={Object.fromEntries((areas ?? []).map((a) => [a.slug, shortArea(a.name)]))} />}
+
           <Sec id="matching" title="Register matching (planted errors)" lead={m.matching_planted_errors.note}>
             <table className="w-full max-w-[640px]"><tbody>
               <Tr head cells={['what', 'precision', 'recall']} />
@@ -166,27 +145,12 @@ export default function Trust() {
 
           <Sec id="cost" title="Cost and accuracy: routed vs all-VLM"><CostPanel /></Sec>
 
-          <Sec id="rejected" title="What we tried and dropped">
-            <table className="w-full"><tbody>
-              {[['VLM lamp check', m.streetlights.vlm_lamp_check], ['Detector “no lamp” verdicts', m.streetlights.detector_no_lamp_verdict],
-                ...(m.floors.rejected_variants as string[]).map((v, i) => [i ? '' : 'Floors: other prompts', v]),
-                ['Facade condition', m.withheld.facade_condition], ['Door numbers', m.withheld.door_numbers],
-                ['Google Places as a use signal', `${pct(m.building_use.google_places_as_use_signal.value)} (n ${m.building_use.google_places_as_use_signal.n}) → ${m.building_use.google_places_as_use_signal.decision}`],
-                ...(m.detector.benchmark as Any[]).filter((b) => b.downstream).map((b) => [b.model, b.downstream])].map(([a, b], i) => <Tr key={i} cells={[a, <span key="v" className="t-small">{b}</span>]} />)}
-            </tbody></table>
+          <Sec id="consistency" title="Stored vs computed" lead={<T plain="Where a number saved by the pipeline disagrees with a fresh count of the results, both are listed here, and the app shows the counted one."
+            tech="D2: countable facts are computed from export.json records (backend/app/derived.py, hood.py); stored counters, run_report fields and story[] sentences that differ are listed for every area (GET /trust/consistency)." />}>
+            <Consistency detail={detail} />
           </Sec>
 
-          <Sec id="consistency" title={`Stored vs computed · ${detail ? shortArea(detail.name) : ''}`}
-            lead="Counts are computed from the records. Where a stored counter or sentence differs, both are listed here instead of hiding one (D2).">
-            {detail?.consistency?.length ? (
-              <table className="w-full"><tbody>
-                <Tr head cells={['field', 'stored', 'computed', 'note']} />
-                {detail.consistency.map((c, i) => <Tr key={i} cells={[c.field, readable(c.stored), readable(c.computed), <span key="n" className="t-small ink2">{c.note}</span>]} />)}
-              </tbody></table>
-            ) : <p className="t-small ink3">No differences for this area.</p>}
-          </Sec>
-
-          <Sec id="gap-checks" title={`Gap length checks · ${detail ? shortArea(detail.name) : ''}`}
+          <Sec id="gap-checks" title={`Gap length checks · ${area ? shortArea(area.name) : ''}`}
             lead="The pipeline records each dark stretch’s length with a straight-line fit. The app measures it again along the street line; where they differ by more than 10 %, or lit camera stops lie inside the stretch, it is listed here. The recorded length stays the value shown everywhere (D13).">
             {gapRows.length ? (
               <table className="w-full"><tbody>
@@ -199,7 +163,7 @@ export default function Trust() {
 
           <Sec id="limits" title="Limits of this data">
             <ul className="t-small space-y-2">
-              {k && <li><b>Use not classified:</b> {fmt.format(k.use_not_classified)} of {plural(k.buildings_analysed, 'building')} in {detail ? shortArea(detail.name) : 'this area'} had no usable view for use (shown as “use not known”, never hidden).</li>}
+              {k && <li><b>Use not classified:</b> {fmt.format(k.use_not_classified)} of {plural(k.buildings_analysed, 'building')} in {area ? shortArea(area.name) : 'this area'} had no usable view for use (shown as “use not known”, never hidden). Where a register entry exists for them, the app says “Register entry exists — use not compared”.</li>}
               {areas?.filter((a) => a.coverage.share_views_no_mapped_building != null).map((a) => (
                 <li key={a.slug}><b>{shortArea(a.name)}:</b> {pct(a.coverage.share_views_no_mapped_building)} of camera views face frontage with no OpenStreetMap building outline; buildings are checked only where an outline exists ({fmt.format(a.counts.buildings)}), lights and signs everywhere.</li>
               ))}
@@ -207,9 +171,19 @@ export default function Trust() {
               <li><b>Streetlights:</b> the detector finds lamp heads in photos; it cannot tell whether a lamp works. A VLM check was rejected ({m.streetlights.vlm_lamp_check}).</li>
               <li><b>Registers:</b> synthetic, with planted errors; real municipal registers were not available.</li>
               <li><b>Withheld:</b> facade condition and door numbers are not shown as findings (see “Tried and dropped”).</li>
-              <li><b>Timings:</b> the stored runs were resumed, so their stage times are not representative and are not shown; Ward 29’s full-run GPU time comes from the model card.</li>
+              <li><b>Timings:</b> the stored runs were resumed, so their stage times are not representative; they are shown greyed on Under the Hood. Ward 29’s full-run GPU time comes from the model card.</li>
             </ul>
-            <p className="t-small ink3 mt-4">Area: {area}. Switch areas from the Explore top bar.</p>
+          </Sec>
+
+          <Sec id="questions" title="How questions are answered: rules, not an AI model"
+            lead="The ask bar uses the pipeline’s own rule-based QueryEngine plus a short list of synonyms. There is no LLM in this step.">
+            <ul className="t-small space-y-1.5">
+              <li><b>Deterministic:</b> the same question always gives the same answer.</li>
+              <li><b>Offline:</b> no model or internet call is made to read a question.</li>
+              <li><b>Explainable:</b> every filter it read is shown as a chip; an empty answer shows the step that removed the last result; words no rule uses are listed as ignored, and nothing is applied until you confirm.</li>
+            </ul>
+            <div className="t-micro mt-4">Synonyms (docs/QUERY.md has the full list and the patterns)</div>
+            <table className="mt-1"><tbody>{SYNONYM_HINTS.map(([a, b]) => <Tr key={b} cells={[a, `→ ${b}`]} />)}</tbody></table>
           </Sec>
         </div>
       </div>
@@ -217,8 +191,163 @@ export default function Trust() {
   )
 }
 
+function Card({ c }: { c: TrustCard }) {
+  const detail = useDetail()
+  const r = frac(c.result), b = frac(c.baseline)
+  const n = c.result.n ?? c.baseline?.n
+  const ids: Record<string, string> = { use: 'use', floors: 'floors', names: 'names', streetlights: 'streetlights', position: 'position-card' }
+  return (
+    <article id={ids[c.id]} className="scroll-mt-6 flex flex-col rounded-[var(--ns-r-sheet)] p-4" style={{ boxShadow: 'inset 0 0 0 1px var(--ns-line-strong)' }}>
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="t-title">{c.title}</h3>
+        {n != null && <Badge tone={n < 20 ? 'warn' : 'muted'}>n={n}</Badge>}
+      </div>
+      <p className="t-small ink3 mt-0.5">{c.measured}</p>
+      <div className="mt-3 flex items-baseline gap-2">
+        <span className="t-figure" style={{ fontSize: 36, color: 'var(--ns-sodium)' }}>{val(c.result)}</span>
+        <span className="t-small ink2">{c.result.label}</span>
+      </div>
+      {c.baseline && (r != null && b != null ? (
+        <div className="mt-2">
+          <AlignedBars fmtV={(x) => `${Math.round(x * 100)}%`} rows={[{ key: 'r', label: 'this method', value: r }, { key: 'b', label: 'compared with', value: b, tone: 'var(--ns-ink3)' }]} />
+          <p className="t-small ink3 mt-0.5">compared with: {c.baseline.label}</p>
+        </div>
+      ) : <p className="t-small ink2 mt-1">Compared with: {c.baseline.label} — {val(c.baseline)}</p>)}
+      <p className="t-body mt-3">{c.verdict}</p>
+      {c.caveat && <p className="t-small ink3 mt-1">{c.caveat}</p>}
+      {!!c.more.length && (
+        <dl className="t-small mt-3 space-y-0.5">
+          {c.more.map((x) => (
+            <div key={x.src + x.label} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
+              <dt className="ink2">{x.label}{x.n != null ? <span className="ink3"> (n={x.n})</span> : null}</dt><dd className={x.kind === 'text' ? 't-small text-right' : 't-data text-right'}>{val(x)}</dd>
+              {detail === 'technical' && <dd className="col-span-2"><Src>{x.src}</Src></dd>}
+            </div>
+          ))}
+        </dl>
+      )}
+      <p className="t-small ink3 mt-2">Source: the team’s model card, checked by hand{n != null ? ` on ${plural(n, 'example')}` : ''}. Method: {c.method}.</p>
+      {detail === 'technical' && <div className="mt-2"><Src>method: {c.method}</Src><Src>result: {c.result.src}{c.result.n_src ? ` · n: ${c.result.n_src}` : ''}</Src>{c.baseline && <Src>baseline: {c.baseline.src}</Src>}</div>}
+      <div className="flex-1" />
+      <button className="link t-small mt-3 inline-flex items-center gap-1 self-start" onClick={() => useUi.getState().go('trust', c.section)}>More detail <ArrowRight className="size-3.5" /></button>
+    </article>
+  )
+}
+
+const STATUS_ICON: Record<Experiment['status'], React.ReactNode> = {
+  production: <CircleCheck className="size-5" style={{ color: 'var(--ns-sodium)' }} />,
+  rejected: <CircleX className="size-5" style={{ color: 'var(--ns-no-record)' }} />,
+  replaced: <Minus className="size-5 ink3" />, tried: <Minus className="size-5 ink3" />, withheld: <CircleX className="size-5 ink3" />,
+}
+const STATUS_WORD: Record<Experiment['status'], string> = { production: 'in use', rejected: 'rejected', replaced: 'replaced', tried: 'tried, not adopted', withheld: 'withheld' }
+
+function Experiments({ items }: { items: Experiment[] }) {
+  const detail = useDetail()
+  const lanes = [...new Set(items.map((x) => x.lane))]
+  const [open, setOpen] = useState<string | null>(null)
+  return (
+    <div className="space-y-6">
+      {lanes.map((lane) => {
+        const xs = items.filter((x) => x.lane === lane)
+        return (
+          <div key={lane}>
+            <div className="t-micro mb-2">{lane}</div>
+            <ol className="relative grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.max(xs.length, 1)}, minmax(0, 1fr))` }}>
+              <span className="absolute left-[10px] right-4 top-[10px] h-px" style={{ background: 'var(--ns-line-strong)' }} aria-hidden />
+              {xs.map((x) => {
+                const id = `${lane}:${x.name}`
+                return (
+                  <li key={id} className="relative min-w-0">
+                    <button className="flex cursor-pointer items-center gap-1.5 rounded-full pr-2 text-left" style={{ background: 'var(--ns-bg1)' }} onClick={() => setOpen(open === id ? null : id)} aria-expanded={open === id}>
+                      {STATUS_ICON[x.status]}<span className="t-micro" style={{ color: x.status === 'production' ? 'var(--ns-sodium)' : 'var(--ns-ink3)' }}>{STATUS_WORD[x.status]}</span>
+                    </button>
+                    <div className={cn('t-small mt-1.5', x.status === 'production' ? 'text-ink' : 'ink2')} style={{ fontWeight: x.status === 'production' ? 600 : 400 }}>{x.name}</div>
+                    <div className="mt-0.5 space-y-0.5">{x.numbers.map((nn) => nn.kind === 'text'
+                      ? <div key={nn.src} className="t-small ink2">{x.numbers.length > 1 ? `${nn.label}: ` : ''}{String(nn.value).replace(`${x.name} `, '')}</div>
+                      : <div key={nn.src} className="t-small"><span className="ink3">{nn.label}</span> <span className="t-data">{val(nn)}</span></div>)}</div>
+                    {x.why && !x.numbers.some((nn) => String(nn.value).includes(x.why!)) && (open === id || detail === 'technical' || x.status === 'rejected') && <p className="t-small ink3 mt-0.5">{x.why}</p>}
+                    {detail === 'technical' && x.src && <Src>{x.src}</Src>}
+                  </li>
+                )
+              })}
+            </ol>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function Consistency({ detail }: { detail: string }) {
+  const { data, isPending, isError } = useConsistency()
+  const setArea = useUi((s) => s.setArea)
+  if (isPending) return <p className="t-small ink3">Checking every area…</p>
+  if (isError || !data) return <p className="t-small ink2">Couldn’t load the list.</p>
+  if (!data.length) return <p className="t-small ink3">No differences in any area.</p>
+  const jump = (r: ConsistencyRow) => {
+    setArea(r.area)
+    const ui = useUi.getState()
+    if (r.jump.page === 'explore') {
+      const street = /\(([^)]+)\)\s*$/.exec(r.field)?.[1] ?? null
+      ui.go('explore')
+      ui.setFilter(kpiFilter(KPI_DEFS.find((d) => d.key === 'streetlight_gaps')!, street), { kpi: 'streetlight_gaps', frame: true })
+    } else ui.go(r.jump.page, r.jump.section)
+  }
+  const where = (r: ConsistencyRow) => r.jump.page === 'hood' ? `Under the hood › ${r.jump.section}` : r.jump.page === 'trust' ? `Trust › ${r.jump.section}` : 'on the map'
+  const areas = [...new Set(data.map((r) => r.area))]
+  return (
+    <div className="space-y-6">
+      {areas.map((a) => {
+        const rows = data.filter((r) => r.area === a)
+        return (
+          <div key={a}>
+            <div className="t-micro mb-1">{shortArea(rows[0].area_name)} · {plural(rows.length, 'difference')}</div>
+            <ul>
+              {rows.map((r, i) => {
+                const story = r.field.startsWith('run_report.story')
+                return (
+                  <li key={i} className="rule-t py-2.5">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <span className="t-small" style={{ fontWeight: 560 }}>{detail === 'technical' ? <span className="t-data">{r.field}</span> : plainField(r.field)}</span>
+                      <button className="link t-small inline-flex items-center gap-1" onClick={() => jump(r)}>Show {where(r)} <ArrowRight className="size-3.5" /></button>
+                    </div>
+                    <div className={cn('mt-1 grid gap-x-4 gap-y-0.5', story ? 'grid-cols-1' : 'grid-cols-2 max-w-[640px]')}>
+                      <div className="t-small"><span className="ink3">stored: </span><span className={story ? 'line-through ink3' : 't-data'}>{readable(r.stored)}</span></div>
+                      <div className="t-small"><span className="ink3">{story ? 'now: ' : 'counted: '}</span><span className={story ? '' : 't-data sodium'}>{readable(r.computed)}</span></div>
+                    </div>
+                    {r.note && <p className="t-small ink3 mt-0.5">{r.note}</p>}
+                    <p className="t-small ink3 mt-0.5">Stored in: {plainSource(r.source)}</p>
+                    {detail === 'technical' && <Src>{r.source}</Src>}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function plainSource(src: string) {
+  if (/story/.test(src)) return 'the saved run summary'
+  if (/run_report/.test(src)) return 'the saved run report'
+  if (/meta\.run|meta/.test(src)) return 'the run’s saved counters'
+  if (/model_card/.test(src)) return 'the model card'
+  if (/streets/.test(src)) return 'the saved results and the street map'
+  return 'the saved results'
+}
+
+function plainField(f: string) {
+  if (f.startsWith('run_report.story')) return `A sentence of the run summary (${/\(([^)]+)\)/.exec(f)?.[1] ?? 'story'})`
+  if (/buildings_use_local|use_route|full_ward29_run/.test(f)) return 'Buildings decided by the local model vs the cloud model'
+  if (/triangulated_2plus|single_camera/.test(f)) return 'Poles and lights pinpointed vs approximate'
+  if (/floors\.validated/.test(f)) return 'Floor accuracy quoted inside the records'
+  if (f.startsWith('streetlight_gaps')) return `Length of a dark stretch (${/\(([^)]+)\)/.exec(f)?.[1] ?? ''})`
+  return f
+}
+
 /** D27: building position accuracy vs the FarmwiseAI Gate 1 target. Every number from model_card.json "gate1_position"
- *  (written by tools/eval_gate1.py); nothing computed here. */
+ *  (written by tools/eval_gate1.py); nothing computed here. Same numbers as before P5. */
 const M = (v: unknown) => (typeof v === 'number' ? `${v} m` : '—')
 const P = (v: unknown) => (typeof v === 'number' ? `${v}%` : '—')
 const METHOD_ROWS: [string, string][] = [['triangulated', 'Triangulated'], ['wall_hit (uses map footprint)', 'Wall hit (uses map footprint: on the wall by construction)'],
@@ -231,10 +360,10 @@ function Gate1({ g, names }: { g: Any; names: Record<string, string> }) {
   return (
     <Sec id="gate1" title={`Position accuracy — target ≤ ${g.target_m} m (FarmwiseAI Gate 1)`}
       lead={<>Where each building is, predicted from the camera rays; the building&apos;s map position stays its footprint centre.</>}>
-      <p className="flex flex-wrap items-center gap-2">
-        <span className="chip px-2.5 text-[14.5px]" style={{ borderColor: 'var(--ns-discrepancy)', color: 'var(--ns-discrepancy)' }}>Status: {g.status === 'not verified' ? 'Not verified' : g.status}</span>
-        <span className="t-small ink2">{g.status_note}</span>
-      </p>
+      <div className="flex flex-wrap items-start gap-3 rounded-[var(--ns-r-sheet)] px-4 py-3" style={{ boxShadow: 'inset 0 0 0 1px var(--ns-discrepancy)' }}>
+        <Badge tone="ok">Status: {g.status === 'not verified' ? 'Not verified' : g.status}</Badge>
+        <span className="t-small ink2 min-w-0 flex-1">{g.status_note}</span>
+      </div>
       <ul className="t-small ink2 mt-3 space-y-0.5">
         <li><b className="text-ink">Triangulated:</b> {g.rule?.triangulated}</li>
         <li><b className="text-ink">Wall hit:</b> {g.rule?.wall_hit}</li>
@@ -243,11 +372,26 @@ function Gate1({ g, names }: { g: Any; names: Record<string, string> }) {
         {g.rule?.plausibility && <li><b className="text-ink">Plausibility:</b> {g.rule.plausibility}</li>}
       </ul>
 
-      <h3 className="t-micro mt-6 mb-1">Method per building</h3>
-      <table className="w-full"><tbody>
-        <Tr head cells={['area', 'buildings', 'triangulated', 'wall hit', 'footprint centre', 'triangulation rejected (> 10 m off)']} />
-        {slugs.map((s) => { const c = g.method_counts[s]; return <Tr key={s} cells={[nm(s), fmt.format(c.buildings), fmt.format(c.triangulated), fmt.format(c.wall_hit), fmt.format(c.footprint_centre), fmt.format(c.triangulation_rejected ?? 0)]} /> })}
-      </tbody></table>
+      <h3 className="t-micro mt-6 mb-2">Method per building</h3>
+      <div className="space-y-2">
+        {slugs.map((s) => {
+          const c = g.method_counts[s]
+          const tot = c.buildings || 1
+          return (
+            <div key={s} className="grid grid-cols-[150px_minmax(0,1fr)] items-center gap-3">
+              <span className="t-small">{nm(s)} <span className="t-data ink3">{fmt.format(c.buildings)}</span></span>
+              <div>
+                <div className="flex h-3 gap-[2px] overflow-hidden" style={{ borderRadius: 3 }}>
+                  <span title={`triangulated ${c.triangulated}`} style={{ width: `${(100 * c.triangulated) / tot}%`, background: 'var(--ns-sodium)' }} />
+                  <span title={`wall hit ${c.wall_hit}`} style={{ width: `${(100 * c.wall_hit) / tot}%`, background: 'var(--ns-sodium-glow)' }} />
+                  <span title={`footprint centre ${c.footprint_centre}`} style={{ width: `${(100 * c.footprint_centre) / tot}%`, background: 'var(--ns-line-strong)' }} />
+                </div>
+                <div className="t-data ink2 mt-0.5 text-[13px]">triangulated {fmt.format(c.triangulated)} · wall hit {fmt.format(c.wall_hit)} · footprint centre {fmt.format(c.footprint_centre)} · triangulation rejected (&gt; 10 m off) {fmt.format(c.triangulation_rejected ?? 0)}</div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
 
       <h3 className="t-micro mt-6 mb-1">Self-consistency (precision, triangulated only)</h3>
       <p className="t-small ink3 mb-1">Each camera pair that sees both wall corners gives its own estimate; the spread is its distance from the final point. It measures precision, not accuracy.</p>
@@ -284,4 +428,3 @@ function Gate1({ g, names }: { g: Any; names: Record<string, string> }) {
     </Sec>
   )
 }
-

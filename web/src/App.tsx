@@ -59,10 +59,12 @@ export default function App() {
 
 function Pages() {
   const page = useUi((s) => s.page)
+  // P5 fix: Live 360° on Review shows through the page (the evidence column turns transparent); the map stays one instance
+  const see = useUi((s) => s.page === 'review' && !!s.dive)
   if (page === 'explore') return null
   const P = page === 'review' ? ReviewPage : page === 'hood' ? HoodPage : page === 'trust' ? TrustPage : JobsPage
   return (
-    <div className="surface absolute inset-0 z-40">
+    <div className={see ? 'pointer-events-none absolute inset-0 z-40' : 'surface absolute inset-0 z-40'}>
       <Suspense fallback={<p className="t-small ink3 p-10">Loading…</p>}><P /></Suspense>
     </div>
   )

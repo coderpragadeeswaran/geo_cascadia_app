@@ -24,7 +24,7 @@ def test_offline_mode_serves_json_read_only(offline):
         assert res.json()["offline"] is True, path
     assert offline.post("/query", json={"area": "ward29", "text": Q[0]}).json()["offline"] is True
     # writes are refused with a clear read-only error
-    r = offline.patch("/review/1", data={"action": "approve"})
+    r = offline.patch("/review/1", data={"action": "approve", "reviewer": "test"})
     assert r.status_code == 503 and r.json() == {"detail": "offline data mode — read only", "offline": True}
     r = offline.post("/jobs", json={"polygon": {"type": "Polygon", "coordinates": [[[76.97, 11.03], [76.971, 11.03], [76.971, 11.031], [76.97, 11.03]]]}})
     assert r.status_code == 503 and r.json()["offline"] is True
@@ -32,6 +32,7 @@ def test_offline_mode_serves_json_read_only(offline):
 
 
 LIVE_REVIEW = ("status", "reviewer", "note", "appeal_note", "appeal_photo_path")
+LIVE_KPI = ("waiting_for_review",)          # P5: counts live decisions (DB only)
 
 
 def _strip(x, parent=None):
@@ -41,7 +42,7 @@ def _strip(x, parent=None):
         live = parent == "review" or "reviewer" in x
         return {k: _strip(v, k) for k, v in x.items()
                 if (k not in ("offline", "id", "updated_at", "polygon", "bbox", "review_status") or (k == "id" and isinstance(v, str)))
-                and not (live and k in LIVE_REVIEW)}
+                and not (live and k in LIVE_REVIEW) and not (parent == "kpi" and k in LIVE_KPI)}
     if isinstance(x, list):
         return [_strip(v, parent) for v in x]
     return x

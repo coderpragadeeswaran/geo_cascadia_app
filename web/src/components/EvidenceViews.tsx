@@ -19,7 +19,7 @@ export const CLS_LABEL: Record<EvidenceBox['cls'], string> = { building: 'buildi
 const TARGET = '#ffa23a'
 const TARGET_NAME = { building: 'This building', pole: 'This pole', lamp: 'This streetlight', sign: 'This sign' } as const
 
-function Boxes({ boxes, all, hidden, targetName }: { boxes: EvidenceBox[]; all: boolean; hidden: Set<string>; targetName: string }) {
+export function Boxes({ boxes, all, hidden, targetName }: { boxes: EvidenceBox[]; all: boolean; hidden: Set<string>; targetName: string }) {
   // targets last so they sit on top
   const shown = boxes.filter((b) => b.target || (all && !hidden.has(b.cls))).sort((a, b) => Number(a.target) - Number(b.target))
   // "building 43%": how sure the detector was (confidence 0.43)
@@ -82,11 +82,12 @@ export function EvidenceViews({ kind, id, at, target }: {
   return (
     <div>
       <EvidencePhoto view={v} label={`${v.label} · ${Math.round(v.heading)}°`}>
-        <Boxes boxes={v.boxes} all={all} hidden={hidden} targetName={name} />
+        <Boxes boxes={v.boxes} all={all} hidden={hidden} targetName={target === 'building' && v.boxes.some((x) => x.target && x.cls === 'signboard') ? 'This building’s sign' : name} />
         {v.target === 'crosshair' && <Crosshair />}
       </EvidencePhoto>
       {v.target === 'crosshair' && <p className="t-small ink2 mt-1.5">No box was found in the aimed direction: the cross marks where the camera was aimed, not a detection.</p>}
-      {v.target === 'none' && <p className="t-small ink3 mt-1.5">No box for this {kind === 'asset' ? 'object' : 'building'} in this view.</p>}
+      {v.user_note ? <p className="t-small ink2 mt-1.5">{v.user_note}</p>
+        : v.target === 'none' && <p className="t-small ink3 mt-1.5">No box for this {kind === 'asset' ? 'object' : 'building'} in this view.</p>}
       <div className="mt-2 flex flex-wrap items-center gap-1">
         {(views?.length ?? 0) > 1 && views!.map((x, k) => (
           <button key={x.key} onClick={() => setI(k)} aria-pressed={k === i} className="btn h-7">{x.label}</button>

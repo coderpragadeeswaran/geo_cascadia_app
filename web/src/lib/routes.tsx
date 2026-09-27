@@ -45,7 +45,7 @@ export function RouteLine({ route }: { route: string | null | undefined }) {
   return (
     <span>
       <b className="font-[560]">{r?.plain ?? route}</b>{r && mc ? <span className="ink2">. {r.note(mc as MC)}</span> : null}
-      <span className="ink3 text-[13px]"> · {r?.label ?? route}{r && mc ? ' (model_card)' : ''}</span>
+      <span className="ink3 text-[13px]"> · {r?.label ?? route}{r && mc ? ' (model card)' : ''}</span>
     </span>
   )
 }
