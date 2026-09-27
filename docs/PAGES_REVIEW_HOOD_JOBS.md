@@ -119,7 +119,7 @@ flowchart LR
 | **model_card** | `data/model_card.json`: the only source of measured accuracy and cost figures (shown on the Trust page, not on these three pages). |
 | **Offline mode** | The backend cannot reach Supabase and serves read-only data from the JSON files (D4). The UI shows "Offline — read-only". |
 | **Job** | A request to analyse a new street or area. Table `jobs`. |
-| **Worker** | A process on Google Colab (GPU) that would claim jobs and run the pipeline. **Not built yet (P6).** |
+| **Worker** | `worker/colab_worker.py`: one notebook cell (Colab / Kaggle GPU or laptop CPU) that claims jobs and runs the pipeline (P6, D34; steps in `worker/README.md`). |
 | **USER / VERIFIER pages** | D16: Explore, Review and Analyse use plain language. Under the Hood and Trust are for checking the method. |
 
 ## Shared plumbing
@@ -613,7 +613,7 @@ It is read-only. Jobs are created and cancelled from Explore's Analyse panel.
 | Element | Shows | Source |
 |---|---|---|
 | Header | "Jobs", "Analyses" | — |
-| Worker line | "Analysis worker: **online** / **offline**". When offline: "— new streets stay queued until the Colab worker is running". When the API is in offline mode: "Offline data mode: jobs need the database." | `GET /jobs` → `worker_online` (a worker id seen within the last **90 s** in memory: `jobs.py` `worker_online`, `Settings.worker_online_s`); `offline` |
+| Worker line | "Analysis worker: **online** / **offline**". When offline: "— new streets stay queued until the Colab worker is running". When the API is in offline mode: "Offline data mode: jobs need the database." | `GET /jobs` → `worker_online` (a worker id seen within the last **45 s** in memory (P6: plus `worker` = device and current job, D34): `jobs.py` `worker_online`, `Settings.worker_online_s`); `offline` |
 | "Pre-computed runs" list | Per area: short name; "N building(s) · N pole(s) & lights · N dark stretch(es)", and "· few buildings on the map here" when coverage is partial. Buttons **Open on the map** (Explore) and **Under the hood**. | `GET /areas` → `views.area_card`: `counts.buildings`, `counts.assets`, `counts.streetlight_gaps_60m` (computed from records); `coverage.level` (from `meta.run.coverage.verdict`) |
 | "Started from this app" list | Per job: street name (or "New street"); created time (Indian locale), stage and message; the status label in its colour; **Open** for done jobs. | `GET /jobs` (most recent first, up to 50) → table `jobs` joined to `areas` for `area_slug` |
 | Empty state | "No analyses started from this app yet. Use Analyse on the map to pick a street." | — |
@@ -636,7 +636,8 @@ Stored in `jobs.status`. The column only allows `queued`, `running`, `done`, `fa
 | **Cancelled** | `failed` **+** `message = 'cancelled by user'` | `POST /jobs/{id}/cancel` (allowed from queued, running, expired_token) | grey (neutral) |
 | **No Street View** | `no_street_view` | `/worker/fail` with `NO_STREET_VIEW`, `NO_STREETS` or `NO_CAMERAS` | amber |
 | **Paused: key expired** | `expired_token` | `/worker/fail` with `AWS_TOKEN_EXPIRED`; the job can be claimed again after the keys are refreshed | accent |
-| *interrupted* | **no such status** | A `running` job whose heartbeat is older than **10 minutes** (`STALE_RUNNING`) can be claimed again by `/worker/next`. Until then it stays "Running". | — |
+| *interrupted* | **no such status** | A `running` job whose heartbeat is older than **2 minutes** (`STALE_RUNNING`, P6) is shown as Interrupted and can be claimed again by `/worker/next`. | sodium glow |
+| **Needs approval** | `needs_approval` | `/worker/fail` with `NEEDS_APPROVAL` (cost cap, before any photo is bought); Approve → queued with `approved = true`, or Cancel (D34) | accent |
 
 ```mermaid
 stateDiagram-v2

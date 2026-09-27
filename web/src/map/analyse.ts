@@ -5,6 +5,7 @@
 import { create } from 'zustand'
 import { ApiError, api } from '@/api/client'
 import { post } from '@/api/queries'
+import type { JobEstimate } from '@/api/p5'
 import type { JobFull, JobPreview } from '@/api/types'
 import { useUi } from '@/store/ui'
 import { mainLine, slice } from './trim'
@@ -25,11 +26,15 @@ interface AnalyseState {
   trim: { a: number; b: number } | null
   setTrim: (t: { a: number; b: number } | null) => void
   job: JobFull | null
+  /** the job's length-scaled estimate (GPU / CPU minutes) for the honest time-left line */
+  estimate: JobEstimate | null
   workerOnline: boolean
   pick: (lat: number, lng: number) => Promise<void>
   cancelPick: () => void
   start: () => Promise<void>
   cancelJob: () => Promise<void>
+  /** cost cap: a person accepts the estimate; the job goes back to the queue with the cap lifted for it */
+  approveJob: () => Promise<void>
   reset: () => void
   poll: () => Promise<void>
 }
@@ -37,7 +42,7 @@ interface AnalyseState {
 let ctrl: AbortController | null = null
 
 export const useAnalyse = create<AnalyseState>((set, get) => ({
-  clickAt: null, preview: null, loading: false, startedAt: null, error: null, anyway: false, job: null, workerOnline: false, trim: null,
+  clickAt: null, preview: null, loading: false, startedAt: null, error: null, anyway: false, job: null, estimate: null, workerOnline: false, trim: null,
   setTrim: (trim) => set({ trim }),
   pick: async (lat, lng) => {
     ctrl?.abort('replaced')                                       // one request at a time: a new click wins
@@ -76,7 +81,8 @@ export const useAnalyse = create<AnalyseState>((set, get) => ({
     const lines = m && trim ? { type: 'LineString', coordinates: slice(m, trim.a, trim.b) } : undefined
     try {
       const r = await post<{ job: JobFull; worker_online: boolean }>('/jobs', { lat: at.lat, lon: at.lng, ...(lines ? { lines } : {}) })
-      set({ job: r.job, workerOnline: r.worker_online, loading: false, preview: null })
+      set({ job: r.job, workerOnline: r.worker_online, loading: false, preview: null, estimate: null })
+      get().poll()
       useUi.getState().setAnalyse(false)
     } catch (e) {
       const offline = e instanceof ApiError && e.offline
@@ -93,13 +99,21 @@ export const useAnalyse = create<AnalyseState>((set, get) => ({
       set({ job: r.job })
     } catch (e) { set({ error: { kind: 'other', message: e instanceof ApiError ? e.message : 'Could not cancel' } }) }
   },
+  approveJob: async () => {
+    const j = get().job
+    if (!j) return
+    try {
+      const r = await post<{ job: JobFull; worker_online: boolean }>(`/jobs/${j.id}/approve`, {})
+      set({ job: r.job, workerOnline: r.worker_online, error: null })
+    } catch (e) { set({ error: { kind: 'other', message: e instanceof ApiError ? e.message : 'Could not approve' } }) }
+  },
   reset: () => { ctrl?.abort('cancelled'); ctrl = null; set({ clickAt: null, preview: null, loading: false, startedAt: null, error: null, anyway: false, trim: null }) },
   poll: async () => {
     const j = get().job
     if (!j) return
     try {
-      const r = await api<{ job: JobFull; worker_online: boolean }>(`/jobs/${j.id}`)
-      set({ job: r.job, workerOnline: r.worker_online })
+      const r = await api<{ job: JobFull; worker_online: boolean; estimate: JobEstimate | null }>(`/jobs/${j.id}`)
+      set({ job: r.job, workerOnline: r.worker_online, estimate: r.estimate })
     } catch { /* keep last state */ }
   },
 }))

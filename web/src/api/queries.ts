@@ -1,7 +1,8 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useRef } from 'react'
 import type { ModelCard } from '@/types/modelCard'
 import { api } from './client'
-import type { AreaCard, AreaDetail, AreaGeoJSON, Asset, Building, EvidenceViewData, Job, PublicConfig, ReviewItem, ReviewRow, UnmappedBusiness } from './types'
+import type { AreaCard, AreaDetail, AreaGeoJSON, Asset, Building, EvidenceViewData, Job, PublicConfig, ReviewItem, ReviewRow, UnmappedBusiness, WorkerStatus } from './types'
 
 export const useConfig = () =>
   useQuery({ queryKey: ['config'], queryFn: () => api<PublicConfig>('/config/public'), staleTime: Infinity, retry: 1 })
@@ -52,10 +53,30 @@ export const useModelCard = () =>
 export const useActiveJobs = () =>
   useQuery({
     queryKey: ['jobs', 'active'],
-    queryFn: () => api<{ jobs: Job[]; worker_online: boolean }>('/jobs?active=1'),
-    refetchInterval: 15_000,
-    staleTime: 10_000,
+    queryFn: () => api<{ jobs: Job[]; worker_online: boolean; worker: WorkerStatus }>('/jobs?active=1'),
+    // P6: live progress and the worker light: every 5 s while a street is being analysed, else 10 s
+    refetchInterval: (q) => (q.state.data?.jobs.some((j) => j.status === 'running') ? 5_000 : 10_000),
+    staleTime: 4_000,
   })
 
 export const post = <T,>(path: string, body: unknown, signal?: AbortSignal) =>
   api<T>(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal })
+
+/** D35 (F5): when an analysis leaves the active list (done, failed, cancelled — started here, from another tab or by a
+ *  worker), the area list, jobs and review counts refresh, so a new area appears in the dropdown without a reload. */
+export function useFollowJobs() {
+  const { data } = useActiveJobs()
+  const qc = useQueryClient()
+  const prev = useRef<Set<string> | null>(null)
+  useEffect(() => {
+    if (!data) return
+    const ids = new Set(data.jobs.map((j) => j.id))
+    const gone = prev.current && [...prev.current].some((id) => !ids.has(id))
+    prev.current = ids
+    if (gone) {
+      qc.invalidateQueries({ queryKey: ['areas'] })
+      qc.invalidateQueries({ queryKey: ['jobs'] })
+      qc.invalidateQueries({ queryKey: ['review'] })
+    }
+  }, [data, qc])
+}

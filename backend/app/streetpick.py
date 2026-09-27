@@ -15,6 +15,7 @@ extension and 1.2 km cap; the pipeline itself is not modified) with the reliabil
 """
 import hashlib
 import json
+import re
 import os
 import time
 
@@ -199,7 +200,7 @@ def pick_overpass(cache_dir, lat, lon, deadline):
         street, src = name, "osm"
     else:
         near = sorted((geom(w).distance(Point(0, 0)), w["tags"]["name"]) for w in ways if (w.get("tags") or {}).get("name"))
-        street = f"Unnamed {tags.get('highway', 'road').replace('_', ' ')} road" + (f" near {near[0][1]}" if near else "")
+        street = "Unnamed road" + (f" near {near[0][1]}" if near else "")
         src = "unnamed"
     return _result(F, line, [w["id"] for w in group], street, src, name, source), complete
 
@@ -237,6 +238,15 @@ def annotate(res, bundles, lat, lon):
     return res
 
 
+UNNAMED_TYPED = re.compile(r"^Unnamed [a-z_ ]+? road\b")
+
+
+def plain_name(name):
+    """D35 (F4): no OpenStreetMap road classes in names: "Unnamed residential road near X" -> "Unnamed road near X".
+    Also applied to names cached or stored before this rule."""
+    return UNNAMED_TYPED.sub("Unnamed road", name) if isinstance(name, str) else name
+
+
 def pick(cache_dir, bundles, lat, lon):
     """Resolve a click. Raises NoRoad (422) or OverpassBusy (503)."""
     res = pick_local(bundles, lat, lon)
@@ -254,4 +264,6 @@ def pick(cache_dir, bundles, lat, lon):
                 if res is None:
                     raise
                 res["note"] = "OpenStreetMap is busy, so this is the nearest street that was already analysed."
-    return annotate(res, bundles, lat, lon)
+    res = annotate(res, bundles, lat, lon)
+    res["street"] = plain_name(res["street"])
+    return res

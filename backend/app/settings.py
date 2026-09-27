@@ -25,7 +25,7 @@ class Settings:
     cors_origins: list = field(default_factory=lambda: [o.strip() for o in _env("CORS_ORIGINS", "http://localhost:5173").split(",") if o.strip()])
     data_dir: str = field(default_factory=lambda: _env("GEO_DATA_DIR") or os.path.join(ROOT, "data"))
     offline_retry_s: float = 30.0      # after a DB failure, serve JSON for this long before trying the DB again
-    worker_online_s: float = 90.0      # a worker seen within this window counts as online
+    worker_online_s: float = 45.0      # a worker seen within this window counts as online (heartbeat ~15 s, P6)
     max_polygon_km2: float = 1.5       # job size cap for drawn areas (a street click is capped by the picker at 1.2 km)
 
     @property

@@ -25,9 +25,12 @@ def _print_progress(stage, done, total):
 
 
 def run_area(polygon, out_dir, cfg=None, area_name="area", street_filter=None, progress=None, resume=True, panos=None,
-             way_ids=None, ms_fill=True):
+             way_ids=None, ms_fill=True, on_stage=None, plan_check=None):
     """polygon: shapely (lon/lat) or GeoJSON geometry. street_filter: OSM street names to restrict to.
-    panos: optional pre-discovered panorama list (skips discovery)."""
+    panos: optional pre-discovered panorama list (skips discovery).
+    on_stage(name, seconds): called when a stage finishes (P6 worker: live progress).
+    plan_check(plan): called after the capture plan, BEFORE any Street View photo is fetched; it may raise to stop
+    the run (P6 worker: cost cap -> "needs approval"). The plan is saved first, so a resumed run reuses it."""
     cfg = (cfg or Config()).resolve()
     progress = progress or _print_progress
     os.makedirs(out_dir, exist_ok=True)
@@ -39,6 +42,7 @@ def run_area(polygon, out_dir, cfg=None, area_name="area", street_filter=None, p
     sv = StreetView(cfg.maps_key)
     def stage(name):
         T[name] = round(time.time() - stage.t, 1); stage.t = time.time(); print(f"✓ {name} ({T[name]} s)")
+        if on_stage: on_stage(name, T[name])
     stage.t = time.time()
 
     # 1. panoramas
@@ -75,6 +79,7 @@ def run_area(polygon, out_dir, cfg=None, area_name="area", street_filter=None, p
                            f"partial: {100*frac:.0f}% of views face no mapped building (assets and signs still analysed)")
     save("coverage", coverage); print("coverage:", coverage)
     if not plan: raise RuntimeError("NO_CAMERAS: Street View exists nearby but none on the selected road")
+    if plan_check: plan_check(plan)
     stage("plan")
     # 4. detection
     dets, det_stats = run_detection(plan, sv, cfg, out_dir, progress)

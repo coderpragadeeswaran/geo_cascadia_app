@@ -35,6 +35,11 @@ def build_export(area_name, cfg, buildings, results, views, vlm_bld, ocr_res, as
     for m in results:
         bid = m["building_id"]; b = B.get(bid, {}); v = V.get(bid); vb = VB.get(bid, {}); se = sign_ev.get(bid); rq = qb.get(bid, [])
         vcalls = (1 if vb.get("in") else 0) + (1 if vb.get("floors_a") is not None else 0)
+        # P6: runs that record the floors call's tokens get an exact cost (use call + floors call); older runs keep the
+        # old approximation (use-call price x calls), which the app shows as "cost not recorded" when it is 0
+        exact = "floors_in" in vb
+        vusd = (price(vb.get("in"), vb.get("out")) + price(vb.get("floors_in"), vb.get("floors_out")) if exact else
+                price(vb.get("in"), vb.get("out")) * max(vcalls, 1) if vcalls else 0)
         blds.append({
             "id": bid, "type": "building", "lat": m["lat"], "lon": m["lon"], "street": m["street"],
             "footprint": {"source": "OSM", "osm_id": bid, "area_m2": m["area_m2"], "frontage_m": m["frontage_m"],
@@ -66,7 +71,7 @@ def build_export(area_name, cfg, buildings, results, views, vlm_bld, ocr_res, as
             # D27/D33: predicted position (triangulated / wall_hit / wall_centre / footprint_centre); lat/lon stay the centroid
             **({"predicted_position": {k: positions[bid][k] for k in PREDICTED_KEYS} if bid in positions else None}
                if positions is not None else {}),
-            "cost": {"vlm_calls": vcalls, "vlm_usd": round(price(vb.get("in"), vb.get("out")) * max(vcalls, 1) if vcalls else 0, 6)}})
+            "cost": {"vlm_calls": vcalls, "vlm_usd": round(vusd, 6), **({"recorded": True} if exact else {})}})
     ast = []
     for i, a in enumerate(assets):
         ev = [{"pano_id": pid, "heading": round(bearing_between(P[pid]["camera_lat"], P[pid]["camera_lon"], a["lat"], a["lon"]), 1),

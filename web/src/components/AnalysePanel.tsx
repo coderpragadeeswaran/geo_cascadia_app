@@ -1,7 +1,9 @@
 /** "Analyse a street" sheet (CLAUDE.md §9.4.1, design pass B §3): a live "asking OpenStreetMap…" state with elapsed
  *  seconds and Cancel; a clear busy message; the confirm sheet with the street's display name, "Already analysed in …"
  *  (Open / Analyse anyway) and an estimate scaled by length; then the job card with honest states (no worker online is
- *  "queued", not an error). The exact snapped street is drawn on the map while the sheet is open. */
+ *  "queued, waiting for a worker", never a spinner). While it runs: the stage in plain words, time so far and an honest
+ *  time left (the device's estimate minus elapsed); a cost-cap pause offers Approve / Cancel; when done the map flies to
+ *  the new area. The exact snapped street is drawn on the map while the sheet is open. */
 import { useQueryClient } from '@tanstack/react-query'
 import { useMap } from '@vis.gl/react-google-maps'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -9,7 +11,7 @@ import { Loader2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { post, useAreas } from '@/api/queries'
 import type { JobPreview } from '@/api/types'
-import { JOB_STAGES, jobStatus, shortArea } from '@/lib/labels'
+import { deviceWord, JOB_STAGES, jobStatus, shortArea, STAGE_PLAIN, stageLine, timeLeft } from '@/lib/labels'
 import { fmt, noun } from '@/lib/utils'
 import { useAnalyse } from '@/map/analyse'
 import { flyToBounds } from '@/map/MapView'
@@ -54,11 +56,23 @@ export function AnalysePanel() {
   const { data: areas } = useAreas()
   const status = a.job?.status
   useEffect(() => {
-    if (!status || !['queued', 'running'].includes(status)) return
+    if (!status || !['queued', 'running', 'needs_approval', 'expired_token'].includes(status)) return
     const t = setInterval(() => useAnalyse.getState().poll(), 4000)
     return () => clearInterval(t)
   }, [status])
-  useEffect(() => { if (status === 'done') qc.invalidateQueries({ queryKey: ['areas'] }) }, [status, qc])
+  // done: the new area joins the list, the map flies there and the job card closes (the area's own card takes over)
+  const doneSlug = status === 'done' ? a.job?.area_slug ?? null : null
+  useEffect(() => {
+    if (!doneSlug) return
+    let off = false
+    qc.invalidateQueries({ queryKey: ['jobs'] })
+    qc.refetchQueries({ queryKey: ['areas'] }).then(() => {
+      if (off) return
+      useUi.getState().setArea(doneSlug)
+      useAnalyse.setState({ job: null, preview: null, clickAt: null, estimate: null })
+    })
+    return () => { off = true }
+  }, [doneSlug, qc])
 
   const leave = () => { useUi.getState().setAnalyse(false); a.reset() }
   const { est, busy: estBusy } = useStretchEstimate()
@@ -143,7 +157,12 @@ export function AnalysePanel() {
                     ))}
                   </dl>
                 ) : <p className="t-small ink3 mt-3">No estimate available (reference run missing).</p>}
-                {est && <p className="t-small ink3 mt-2">Estimate{a.trim ? ' for the trimmed stretch' : ''}: {est.basis}</p>}
+                {est && (
+                  <details className="mt-2">
+                    <summary className="t-small ink3 cursor-pointer">An estimate{a.trim ? ' for the trimmed stretch' : ''}, scaled by length from an earlier run. <span className="link">How is this estimated?</span></summary>
+                    <p className="t-small ink3 mt-1">{est.basis}</p>
+                  </details>
+                )}
                 {a.error && <p className="t-small mt-2" style={{ color: 'var(--ns-no-record)' }}>{a.error.message}</p>}
                 <div className="mt-4 flex justify-end gap-2">
                   <button className="btn" onClick={leave}>Cancel</button>
@@ -160,37 +179,60 @@ export function AnalysePanel() {
 }
 
 function JobCard() {
-  const { job, workerOnline, cancelJob, error } = useAnalyse()
-  const setArea = useUi((s) => s.setArea)
+  const { job, workerOnline, cancelJob, approveJob, error, estimate } = useAnalyse()
+  const [, tick] = useState(0)
+  useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 1000); return () => clearInterval(t) }, [])
   if (!job) return null
-  const close = () => useAnalyse.setState({ job: null, preview: null, clickAt: null })
+  const close = () => useAnalyse.setState({ job: null, preview: null, clickAt: null, estimate: null })
+  const st = jobStatus(job)
   const stageIdx = job.stage ? STAGES.indexOf(job.stage) : -1
+  const elapsed = job.started_at ? Math.max(0, (Date.now() - new Date(job.started_at).getTime()) / 1000) : null
+  const pe = job.plan_estimate
   const message = {
-    queued: workerOnline ? 'Queued. The analysis worker will pick it up shortly.' : 'Queued — the analysis worker is offline. It starts when the Colab worker comes online.',
-    running: `Running: ${job.stage ?? 'starting'}${job.total ? ` (${job.done ?? 0} of ${job.total})` : ''}.`,
-    done: 'Done. The new area is ready.',
-    failed: jobStatus(job).key === 'cancelled' ? 'Cancelled. Nothing was analysed.' : `Failed: ${job.message ?? 'unknown error'}`,
-    no_street_view: `No usable Street View here: ${job.message ?? ''}`,
-    expired_token: 'Paused: the worker’s AWS token expired. Refresh the keys in Colab and re-run the worker cell; it resumes.',
-  }[job.status] ?? job.status
+    queued: workerOnline ? 'Queued. The analysis worker picks it up in a few seconds.' : 'Queued, waiting for a worker. Nothing is running yet; it starts when a worker connects.',
+    running: stageLine(job.stage, job.done, job.total),
+    interrupted: 'Interrupted: the worker stopped responding. It continues from where it stopped when a worker connects again.',
+    needs_approval: `This street needs about ${pe?.photos != null ? fmt.format(pe.photos) : 'more'} Street View photos${pe?.usd != null ? ` (about $${pe.usd.toFixed(2)})` : ''}, above the limit of ${pe?.cap_photos ?? '—'} photos or $${pe?.cap_usd ?? '—'} per street. Nothing has been bought yet.`,
+    done: 'Done. Opening the new area…',
+    failed: `Failed: ${job.message ?? 'unknown error'}`,
+    cancelled: 'Cancelled. Nothing was analysed.',
+    no_street_view: `No usable Street View here${job.message ? `: ${job.message}` : ''}.`,
+    expired_token: 'Paused: the cloud-AI keys expired. Enter new keys in the worker; it continues where it stopped.',
+    cancelling: 'Cancelling… the worker stops within about 15 seconds and deletes what it saved.',
+  }[st.key] ?? st.label
+  const active = ['queued', 'running', 'needs_approval', 'expired_token'].includes(job.status)
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className={card} role="status" aria-live="polite">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0"><div className="t-micro">Analysis</div><div className="t-title mt-1 truncate">{job.street ?? 'New street'}</div></div>
-        <span className="t-small" style={{ color: jobStatus(job).color }}>{jobStatus(job).label}</span>
+        <span className="t-small shrink-0" style={{ color: st.color }}>{st.label}</span>
       </div>
       <p className="t-small ink2 mt-1">{message}</p>
-      {(job.status === 'running' || job.status === 'queued') && (
-        <div className="mt-3 flex gap-1" aria-label="Pipeline stages">
-          {STAGES.map((s, i) => <span key={s} title={s} className="h-1 flex-1 rounded-full" style={{ background: i < stageIdx ? 'var(--ns-sodium)' : i === stageIdx ? 'var(--ns-sodium-glow)' : 'var(--ns-line-strong)' }} />)}
+      {job.note && ['running', 'interrupted'].includes(st.key) && <p className="t-small mt-0.5" style={{ color: 'var(--ns-sodium)' }}>{job.note}</p>}
+      {st.key === 'running' && (
+        <p className="t-small ink3 mt-0.5">
+          {elapsed != null && <><span className="t-data">{fmtDuration(elapsed)}</span> so far</>}
+          {job.device && <> · on a {deviceWord(job.device)}</>}
+          {elapsed != null && timeLeft(elapsed, job.device, estimate) && <> · {timeLeft(elapsed, job.device, estimate)}</>}
+        </p>
+      )}
+      {(st.key === 'running' || st.key === 'interrupted') && (
+        <div className="mt-3 flex gap-1" aria-label={`Stage ${stageIdx + 1} of ${STAGES.length}`}>
+          {STAGES.map((s, i) => <span key={s} title={STAGE_PLAIN[s]} className="h-1 flex-1 rounded-full" style={{ background: i < stageIdx ? 'var(--ns-sodium)' : i === stageIdx ? 'var(--ns-sodium-glow)' : 'var(--ns-line-strong)' }} />)}
         </div>
       )}
       {error && <p className="t-small mt-1.5" style={{ color: 'var(--ns-no-record)' }}>{error.message}</p>}
       <div className="mt-3 flex justify-end gap-2">
-        {['queued', 'running', 'expired_token'].includes(job.status) && <button className="btn btn-line" onClick={() => cancelJob()}>Cancel job</button>}
-        {job.status === 'done' && job.area_slug && <button className="btn btn-solid" onClick={() => { setArea(job.area_slug!); close() }}>Open the new area</button>}
-        <button className="btn" onClick={close}>{['queued', 'running'].includes(job.status) ? 'Hide' : 'Close'}</button>
+        {st.key === 'needs_approval' && <button className="btn btn-solid" onClick={() => approveJob()}>Approve and run</button>}
+        {active && st.key !== 'cancelling' && <button className="btn btn-line" onClick={() => cancelJob()}>{st.key === 'needs_approval' ? 'Cancel' : 'Cancel job'}</button>}
+        <button className="btn" onClick={close}>{active ? 'Hide' : 'Close'}</button>
       </div>
     </motion.div>
   )
+}
+
+/** 75 s → "1 min 15 s"; 3,700 s → "1 h 2 min" */
+function fmtDuration(sec: number) {
+  const s = Math.floor(sec), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60)
+  return h ? `${h} h ${m} min` : m ? `${m} min ${s % 60} s` : `${s} s`
 }

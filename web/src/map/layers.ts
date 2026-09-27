@@ -19,6 +19,7 @@ import type { Focus } from '@/lib/derive'
 import type { LayerKey } from '@/store/ui'
 import { HATCH_MAPPING, ICONS, hatchAtlas } from './icons'
 import { plural } from '@/lib/utils'
+import { mainLine, pointAt, slice } from './trim'
 
 /** Display scale for extrusion only: observed floors × 3.2 m. Not a measured height. */
 export const FLOOR_HEIGHT_M = 3.2
@@ -102,6 +103,8 @@ export interface LayerCtx {
   activeArea: string | null
   split: Split | null
   jobs: Job[]
+  /** D35 (F1): each running job's overall progress as drawn (0..1, eased toward the API value, never backwards) */
+  jobShown?: Record<string, number>
   pulse: number
   selectedId: string | null
   /** filter / query emphasis: everything outside these ids is dimmed (one global store, CLAUDE.md §9.4) */
@@ -192,7 +195,28 @@ export function buildLayers(ctx: LayerCtx): Layer[] {
     }))
   }
 
-  // running jobs: pulsing sodium dot (city + area)
+  // P6 jobs: the clicked street itself. Running = the stage sweeps along the street (done of total) with a camera head;
+  // queued / paused = a still, dashed chalk line (nothing pretends to run). The pulsing dot marks it from the city view.
+  for (const t of jobTracks(ctx.jobs, ctx.jobShown)) {
+    const running = t.state === 'running'
+    L.push(new PathLayer({ id: `job-street-${t.id}`, data: t.paths, getPath: (d) => d, widthUnits: 'pixels', getWidth: running ? 6 : 4,
+      getColor: running ? rgba(c.sodium, 70) : rgba(c.ink2, 200), capRounded: true, jointRounded: true,
+      ...(running ? {} : { extensions: [dash], ...({ getDashArray: [3, 2.5], dashJustified: true } as object) }),
+      updateTriggers: { getColor: [mode, running] } }))
+    if (!running) continue
+    L.push(new PathLayer({ id: `job-lit-${t.id}`, data: t.lit, getPath: (d) => d, widthUnits: 'pixels', getWidth: 5,
+      getColor: rgba(c.sodiumGlow, 235), capRounded: true, jointRounded: true,
+      updateTriggers: { getColor: mode }, ...(mode === 'night' ? ADD : {}) }))
+    if (t.head) {
+      const k = ctx.pulse
+      L.push(
+        new ScatterplotLayer({ id: `job-head-halo-${t.id}`, data: [t.head], getPosition: (d) => d, radiusUnits: 'pixels',
+          getRadius: 7 + 12 * k, getFillColor: rgba(c.sodium, Math.round(130 * (1 - k))), updateTriggers: { getRadius: k, getFillColor: [k, mode] } }),
+        new ScatterplotLayer({ id: `job-head-${t.id}`, data: [t.head], getPosition: (d) => d, radiusUnits: 'pixels', getRadius: 5,
+          getFillColor: rgba(c.sodium), stroked: true, getLineColor: rgba(c.bg0), lineWidthUnits: 'pixels', getLineWidth: 2 }),
+      )
+    }
+  }
   const jobPts = ctx.jobs
     .map((j) => j.input.click ? [j.input.click.lon, j.input.click.lat] : j.input.polygon ? (j.input.polygon.coordinates[0][0] as Position) : null)
     .filter(Boolean) as Position[]
@@ -406,3 +430,20 @@ export function buildLayers(ctx: LayerCtx): Layer[] {
 }
 
 export type Picked = { p: AnyProps } | AreaCard | null
+
+/** P6 / D35 (F1): a job's street for the progress animation. The lit part runs from the street's start to the job's
+ *  OVERALL progress (all ten stages), so it only moves forward; `shown` is the eased value MapView draws. */
+export function jobTracks(jobs: Job[], shown?: Record<string, number>) {
+  return jobs.flatMap((j) => {
+    const g = j.input.lines
+    const paths = (g ? (g.type === 'LineString' ? [g.coordinates] : g.coordinates)
+      : j.input.polygon ? [j.input.polygon.coordinates[0]] : []) as Position[][]
+    if (!paths.length) return []
+    const state = j.status === 'running' && j.display_status === 'running' ? 'running' : 'waiting'
+    const m = mainLine({ type: 'MultiLineString', coordinates: paths as [number, number][][] })
+    const frac = Math.min(1, Math.max(0, shown?.[j.id] ?? j.progress ?? 0))
+    const lit = m && frac > 0.001 ? [slice(m, 0, frac * m.length) as Position[]] : []
+    const head = m ? (pointAt(m, frac * m.length) as Position) : null
+    return [{ id: j.id, paths, state, frac, lit, head }]
+  })
+}

@@ -145,6 +145,21 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         res, off = D.read(lambda s: views.area_detail(need(s, slug), mc()))
         return {"offline": off, **res}
 
+    @app.delete("/areas/{slug}", tags=["areas"])
+    def area_delete(slug: str, confirm: str = Query(..., description="must repeat the slug"), D: Data = Depends(get_data)):
+        """Delete an area analysed from the app (demo cleanup): its database rows (review items included), its job and its
+        folder. The original areas are never deleted. `confirm` must repeat the slug. Review history rows stay (append-only)."""
+        from .jobs import ORIGINAL_AREAS
+        if confirm != slug:
+            raise HTTPException(422, "confirm must repeat the area slug")
+        if slug in ORIGINAL_AREAS:
+            raise HTTPException(403, "the original areas can't be deleted")
+
+        from .jobs import delete_area
+        D.write(lambda s: delete_area(s, settings, slug))
+        D.json._cache.pop(slug, None)
+        return {"offline": False, "deleted": slug}
+
     @app.get("/areas/{slug}/geojson", tags=["areas"])
     def area_geojson(slug: str, layers: str = Query("buildings,assets,gaps,unmapped", description=f"any of {', '.join(LAYERS)}"),
                      bbox: Optional[str] = Query(None, description="minLon,minLat,maxLon,maxLat"), D: Data = Depends(get_data)):

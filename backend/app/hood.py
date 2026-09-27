@@ -46,7 +46,8 @@ def _slug_key(s):
 
 class RunFiles:
     """The run files of each area, loaded once per file change (small slices only)."""
-    NAMES = ("panos", "plan", "plan_anomalies", "_views_done", "detections", "ocr", "building_views", "vlm_unmapped")
+    NAMES = ("panos", "plan", "plan_anomalies", "_views_done", "detections", "ocr", "building_views", "vlm_unmapped",
+             "live_run")
 
     def __init__(self, areas_dir):
         self.dir = areas_dir
@@ -368,7 +369,7 @@ def story(n, verdict, stored):
     return out
 
 
-def cost(bundle, n, model_card):
+def cost(bundle, n, model_card, live_run=None):
     """D1: the stored runs' timings and cost counters are from resumed runs. What can be stated: model_card figures
     (Ward 29; Trichy's VLM spend), and counts from the records (VLM calls per building; calls with no recorded cost)."""
     run = bundle["meta"].get("run") or {}
@@ -381,6 +382,31 @@ def cost(bundle, n, model_card):
     unrecorded = sum(1 for b in B if ((b.get("cost") or {}).get("vlm_calls") or 0) > 0 and not (b.get("cost") or {}).get("vlm_usd"))
     ward = bundle["slug"] == "ward29"
     gen = ((mc.get("generalisation") or {}).get(bundle["slug"]) or {})
+    if bundle.get("live"):
+        # P6: a fresh run from the app — its counters, timings and cloud-AI cost are real (no "resumed run" badge).
+        # Exception: a job that stopped and resumed from its saved files on the same machine; its counters then cover
+        # only the last part, and say so.
+        resumed = bool((live_run or {}).get("resumed_from_saved_files"))
+        badge = ("a test replay of an earlier run: its times and counts are not this analysis's" if (live_run or {}).get("replay_of")
+                 else "resumed after a pause: times and photo count cover only the last part" if resumed else None)
+        sv = run.get("street_view_requests") or 0
+        lines = [
+            {"key": "street_view", "label": "Street View photos", "value": round(sv * price, 2) if price else None,
+             "detail": f"{sv:,} photos × ${price} per image", "source": "run counter × model_card price", "status": "measured"},
+            {"key": "vlm", "label": "Cloud AI calls", "value": run.get("vlm_cost_usd"),
+             "detail": f"{run.get('vlm_calls') or 0:,} calls", "source": "run counter", "status": "measured"},
+            {"key": "places", "label": "Google look-ups", "value": None,
+             "detail": f"{run.get('places_calls') or 0:,} look-ups (price not in the model card)", "source": "run counter",
+             "status": "not recorded"},
+        ]
+        return {"lines": lines, "model_card": None, "live": True,
+                "records": {"vlm_calls": calls, "vlm_usd_recorded": round(usd, 6), "buildings_cost_not_recorded": unrecorded,
+                            "source": "export.json buildings[].cost"},
+                "run_counters": {"vlm_calls": run.get("vlm_calls"), "vlm_cost_usd": run.get("vlm_cost_usd"),
+                                 "street_view_requests": sv, "places_calls": run.get("places_calls"),
+                                 "representative": not resumed, "badge": badge},
+                "timings": {"stage_seconds": run.get("stage_seconds") or {}, "total_minutes": run.get("total_minutes"),
+                            "device": run.get("device"), "representative": not resumed, "badge": badge}}
     lines = [
         {"key": "street_view", "label": "Street View photos", "value": round(n["views_fetched"] * price, 2) if price else None,
          "detail": f"{n['views_fetched']:,} photos × ${price} per image", "source": "computed: _views_done.json × model_card price",
@@ -394,7 +420,7 @@ def cost(bundle, n, model_card):
         {"key": "places", "label": "Google Places look-ups", "value": None, "detail": "cost not recorded",
          "source": None, "status": "not recorded"},
     ]
-    return {"lines": lines,
+    return {"lines": lines, "live": False,
             "model_card": {"gpu_minutes": ct.get("ward29_full_run_gpu_minutes"), "source": "model_card.cost_time"} if ward else None,
             "records": {"vlm_calls": calls, "vlm_usd_recorded": round(usd, 6), "buildings_cost_not_recorded": unrecorded,
                         "source": "export.json buildings[].cost"},
@@ -413,7 +439,7 @@ def hood(bundle, F, model_card=None):
     stored_story = (bundle.get("run_report") or {}).get("story") or []
     st = story(n, verdict, stored_story)
     return {"area": bundle["slug"], "name": bundle["name"], "files": F.get("present", []), "n": n, "src": src,
-            "pipeline": bundle["meta"].get("pipeline") or {},
+            "pipeline": bundle["meta"].get("pipeline") or {}, "live": bool(bundle.get("live")),
             "coverage": {"level": "full" if (verdict or "").startswith("full") else "partial" if verdict else None,
                          "verdict": verdict, "share_views_unmapped": share, "views": n["views"], "views_unmapped": n["views_unmapped"],
                          "buildings": n["buildings"], "unmapped_kept": n["unmapped_kept"]},
@@ -422,7 +448,7 @@ def hood(bundle, F, model_card=None):
                        "names": {"ocr": n["name_route_tier2_ocr"], "vlm_gate": n["name_route_tier3_vlm_ocr_gate"],
                                  "vlm_only": n["name_route_tier3_vlm_unverified"]}},
             "streets": per_street(bundle, F), "story": st,
-            "corrections": [s for s in st if s["changed"]], "cost": cost(bundle, n, model_card)}
+            "corrections": [s for s in st if s["changed"]], "cost": cost(bundle, n, model_card, F.get("live_run"))}
 
 
 # ------------------------------------------------------------------------------------------------------ examples

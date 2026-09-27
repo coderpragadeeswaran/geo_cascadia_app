@@ -10,6 +10,8 @@ export interface AreaCard {
   slug: string
   name: string
   polygon_source: string
+  /** P6: analysed from the app by a worker (can be deleted); false for the three original areas */
+  live?: boolean
   polygon: Polygon | MultiPolygon
   bbox: [number, number, number, number]
   coverage_verdict: string | null
@@ -60,7 +62,25 @@ export type AreaGeoJSON = FeatureCollection<Geometry, AnyProps> & { offline: boo
 
 export interface Job {
   id: string; kind: string; status: string; stage: string | null; done: number | null; total: number | null
-  street: string | null; area_slug: string | null; input: { click?: { lat: number; lon: number }; polygon?: Polygon }
+  street: string | null; area_slug: string | null
+  input: { click?: { lat: number; lon: number }; polygon?: Polygon; lines?: import('geojson').MultiLineString | import('geojson').LineString; length_m?: number }
+  /** P6 */
+  display_status?: string; message?: string | null; started_at?: string | null; created_at?: string | null
+  /** D35: the stage's number of stage_count (null before the first stage) and overall progress 0..1, from the API */
+  stage_no?: number | null; stage_count?: number; progress?: number
+  /** a cancel was asked while a worker runs it (shown as "Cancelling…" until the worker stops) */
+  cancel_requested?: boolean
+  /** the worker's note for people, e.g. "Continuing from the saved progress" */
+  note?: string | null
+  approved?: boolean; device?: 'gpu' | 'cpu' | null
+  /** the worker's plan-time estimate when the job paused for approval (cost cap) */
+  plan_estimate?: { photos?: number; usd?: number; cameras?: number; buildings?: number; cap_photos?: number; cap_usd?: number } | null
+}
+
+/** P6: the most recently seen analysis worker (GET /worker/status, also in GET /jobs) */
+export interface WorkerStatus {
+  connected: boolean; device: 'gpu' | 'cpu' | null; seconds_ago: number | null
+  job: { id: string; street: string | null; stage: string | null; done: number | null; total: number | null } | null
 }
 
 // ------------------------------------------------------------------ P4 responses

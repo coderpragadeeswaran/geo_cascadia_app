@@ -1,7 +1,7 @@
 /** Pure UI helpers (review fixes 10, 11, 13, 14), no browser: `npm run test:ui`. Exits 1 on the first failure. */
 import { strict as assert } from 'node:assert'
 import { placeLabels, type Rect } from '../src/lib/labelLayout'
-import { jobStatus, matchLabel } from '../src/lib/labels'
+import { JOB_STAGES, jobStatus, matchLabel, stageLine, stageProgress, stageShort, timeLeft } from '../src/lib/labels'
 import { kpis, type Records } from '../src/lib/derive'
 import { photoProblem, saveDecision } from '../src/lib/review'
 import { article, costText, noun, plural, usd, withArticle } from '../src/lib/utils'
@@ -117,5 +117,26 @@ const ap = await sent('appeal')
 assert.equal(ap.get('note'), 'typed in the appeal box')
 assert.ok(ap.get('photo'))
 n++; console.log('ok P5: a typed note / photo is sent only with Appeal; the reviewer name with every decision')
+
+t('P6: job stages, progress and an honest time left', () => {
+  assert.deepEqual(JOB_STAGES, ['panoramas', 'area', 'plan', 'detect', 'geometry', 'ocr', 'vlm', 'reference', 'match', 'export'])
+  assert.equal(stageProgress(null), 0)
+  assert.equal(stageProgress('detect', 20, 40), 0.35)                 // 3 stages done + half of the 4th, of 10
+  assert.equal(stageProgress('done'), 1)
+  // D35 (F2): the real stage number out of the real total; counts only where they mean something to people
+  assert.equal(stageLine('detect', 12, 40), 'Stage 4 of 10 · Looking at photos · 12 of 40 photos')
+  assert.equal(stageLine('plan', 5, 5), 'Stage 3 of 10 · Planning camera stops')
+  assert.equal(stageLine('area', 5, 5), 'Stage 2 of 10 · Reading the map')
+  assert.equal(stageLine(null), 'Starting')
+  assert.equal(stageShort('plan'), '3/10')
+  const est = { gpu_minutes: 6, cpu_minutes_fast_ocr: '2–3', cpu_minutes_full_ocr: 11 }
+  assert.equal(timeLeft(120, 'gpu', est), 'about 4 min left (estimate for a GPU)')
+  assert.equal(timeLeft(60, 'cpu', est), 'about 2 min left (estimate for a CPU)')      // upper end of the fast range
+  assert.equal(timeLeft(600, 'gpu', est), 'taking longer than the GPU estimate of 6 min')   // never a fake countdown
+  assert.equal(timeLeft(10, 'gpu', null), null)
+  assert.deepEqual(jobStatus({ status: 'needs_approval', display_status: 'needs_approval' }).label, 'Needs approval')
+  assert.equal(jobStatus({ status: 'running', display_status: 'interrupted' }).label, 'Interrupted')
+  assert.equal(jobStatus({ status: 'running', display_status: 'cancelling' }).label, 'Cancelling…')
+})
 
 console.log(`${n} UI tests passed`)

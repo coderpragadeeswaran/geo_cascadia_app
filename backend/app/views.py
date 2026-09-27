@@ -91,6 +91,7 @@ def cost(bundle, model_card):
 def area_card(bundle):
     s = summary(bundle)
     return {"slug": bundle["slug"], "name": bundle["name"], "polygon_source": bundle["polygon_source"],
+            "live": bool(bundle.get("live")),
             "polygon": bundle["polygon"], "bbox": bundle["bbox"],
             "coverage_verdict": ((bundle["meta"].get("run") or {}).get("coverage") or {}).get("verdict"),
             "coverage": coverage(bundle, s),

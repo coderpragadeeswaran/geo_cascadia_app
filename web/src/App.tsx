@@ -2,7 +2,7 @@ import { APIProvider } from '@vis.gl/react-google-maps'
 import { motion } from 'framer-motion'
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { API_URL } from '@/api/client'
-import { useConfig } from '@/api/queries'
+import { useConfig, useFollowJobs } from '@/api/queries'
 import { CommandPalette } from '@/components/CommandPalette'
 import { Explore } from '@/components/Explore'
 import { Rail } from '@/components/Rail'
@@ -20,6 +20,7 @@ const JobsPage = lazy(() => import('@/pages/Jobs'))
 const MAPS_VERSION = 'quarterly'
 
 export default function App() {
+  useFollowJobs()
   const cfg = useConfig()
 
   if (cfg.isPending) return <Splash />

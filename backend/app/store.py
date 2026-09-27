@@ -98,7 +98,8 @@ class JsonStore:
     def slugs(self):
         if not os.path.isdir(self.dir):
             return []
-        return sorted(d for d in os.listdir(self.dir) if os.path.isfile(os.path.join(self.dir, d, "export.json")))
+        return sorted(d for d in os.listdir(self.dir) if ".upload-" not in d     # a worker upload being unpacked (P6)
+                      and os.path.isfile(os.path.join(self.dir, d, "export.json")))
 
     def bundle(self, slug):
         folder = os.path.join(self.dir, slug)
@@ -138,6 +139,7 @@ class JsonStore:
         b = assemble(slug, exp["meta"].get("area") or slug, poly_src, _geojson(poly), [round(x, 7) for x in bb],
                      exp["meta"], exp.get("dashboard") or {}, rr, streets, B, A, exp.get("streetlight_gaps", []), U,
                      exp.get("missing_asset_records", []), queue, gap_display(exp, named, plan, names), "json")
+        b["live"] = os.path.isfile(os.path.join(folder, "live_run.json"))    # P6: analysed from the app, a fresh run
         with self._lock:
             self._cache[slug] = (stamp, b)
         return b
@@ -224,7 +226,8 @@ class DbStore:
 
     def _load(self, c, area_id, slug):
         a = c.execute("""select name, polygon_source, ST_AsGeoJSON(polygon, 7)::json,
-                                array[ST_XMin(bbox), ST_YMin(bbox), ST_XMax(bbox), ST_YMax(bbox)], meta, dashboard, run_report
+                                array[ST_XMin(bbox), ST_YMin(bbox), ST_XMax(bbox), ST_YMax(bbox)], meta, dashboard, run_report,
+                                source_job_id is not null
                          from areas where id = %s""", (area_id,)).fetchone()
         recs = lambda t: [r[0] for r in c.execute(f"select record from {t} where area_id = %s order by ord nulls last, id",
                                                    (area_id,))]
@@ -247,7 +250,9 @@ class DbStore:
              for r in c.execute("""select id, item_type, ref_id, street, ST_Y(geom), ST_X(geom), priority, reasons, discrepancies,
                                           status, reviewer, note, appeal_photo_url, updated_at
                                    from review_items where area_id = %s order by ord nulls last, id""", (area_id,))]
-        return assemble(slug, a[0], a[1], a[2], [round(x, 7) for x in a[3]], a[4], a[5], a[6], S, B, A, G, U, M, Q, GD, "db")
+        b = assemble(slug, a[0], a[1], a[2], [round(x, 7) for x in a[3]], a[4], a[5], a[6], S, B, A, G, U, M, Q, GD, "db")
+        b["live"] = bool(a[7])                                # P6: made by a worker job (a fresh, non-resumed run)
+        return b
 
     def ids_in_bbox(self, bundle, layer, bb):
         table, key, geom = LAYER_TABLES[layer]

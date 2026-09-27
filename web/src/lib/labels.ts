@@ -137,11 +137,54 @@ const JOB_STATUS: Record<string, [string, string]> = {
   queued: ['Queued', 'var(--ns-sodium)'], running: ['Running', 'var(--ns-sodium)'], done: ['Done', 'var(--ns-matched)'],
   failed: ['Failed', 'var(--ns-no-record)'], cancelled: ['Cancelled', 'var(--ns-ink3)'],
   no_street_view: ['No Street View', 'var(--ns-discrepancy)'], expired_token: ['Paused: key expired', 'var(--ns-sodium)'],
-  interrupted: ['Interrupted', 'var(--ns-sodium-glow)'],
+  interrupted: ['Interrupted', 'var(--ns-sodium-glow)'], needs_approval: ['Needs approval', 'var(--ns-sodium)'],
+  cancelling: ['Cancelling…', 'var(--ns-ink3)'],
 }
-/** the pipeline's stages in order (what the P6 worker reports as job.stage) */
+/** the pipeline's stages in order: exactly what the worker reports as job.stage (run_area's own stage names) */
 export const JOB_STAGES = ['panoramas', 'area', 'plan', 'detect', 'geometry', 'ocr', 'vlm', 'reference', 'match', 'export']
-/** P5: the API's display_status adds "interrupted" (running, no heartbeat for 10 min) and "cancelled" */
+/** the same stages in plain words (short: one per row on Jobs, one line on the job card) */
+export const STAGE_PLAIN: Record<string, string> = {
+  panoramas: 'Finding Street View', area: 'Reading the map', plan: 'Planning camera stops', detect: 'Looking at photos',
+  geometry: 'Placing objects', ocr: 'Reading signs', vlm: 'Cloud model', reference: 'Google check', match: 'Register check',
+  export: 'Saving results', done: 'Done',
+}
+/** what each stage's "done of total" counts */
+const STAGE_UNIT: Record<string, string> = { detect: 'photos', ocr: 'signs', vlm: 'items', reference: 'look-ups' }
+/** D35 (F2): "Stage 3 of 10 · Planning camera stops" — the stage's real number out of the real total, the same on the job
+ *  card, Jobs and the top bar. A count ("12 of 40 photos") only for stages that count something people understand. */
+export const stageLine = (stage: string | null | undefined, done?: number | null, total?: number | null) => {
+  const i = stage ? JOB_STAGES.indexOf(stage) : -1
+  if (i < 0) return 'Starting'
+  const unit = STAGE_UNIT[stage!]
+  return `Stage ${i + 1} of ${JOB_STAGES.length} · ${STAGE_PLAIN[stage!]}${unit && total ? ` · ${done ?? 0} of ${total} ${unit}` : ''}`
+}
+/** "3/10" for the top bar */
+export const stageShort = (stage: string | null | undefined) => {
+  const i = stage ? JOB_STAGES.indexOf(stage) : -1
+  return i < 0 ? null : `${i + 1}/${JOB_STAGES.length}`
+}
+/** progress through the run, 0..1: finished stages + the share of the current one (equal shares per stage; this is a
+ *  position in the stage list, not a time estimate) */
+export function stageProgress(stage: string | null | undefined, done?: number | null, total?: number | null) {
+  const i = stage ? JOB_STAGES.indexOf(stage) : -1
+  if (stage === 'done') return 1
+  if (i < 0) return 0
+  const within = total ? Math.min(1, Math.max(0, (done ?? 0) / total)) : 0
+  return (i + within) / JOB_STAGES.length
+}
+/** Honest time left: the length-scaled estimate for this device minus the time already spent. Never a countdown past
+ *  the estimate: over it, it says so. `est` is the job's estimate from the API (GPU minutes, CPU fast-OCR range). */
+export function timeLeft(elapsedS: number, device: string | null | undefined, est: { gpu_minutes: number | null; cpu_minutes_fast_ocr: string | null; cpu_minutes_full_ocr: number | string | null } | null | undefined) {
+  if (!est) return null
+  const hi = (v: unknown) => { const m = String(v ?? '').match(/(\d+(?:\.\d+)?)\s*$/); return m ? Number(m[1]) : null }
+  const total = device === 'cpu' ? hi(est.cpu_minutes_fast_ocr) ?? hi(est.cpu_minutes_full_ocr) : est.gpu_minutes
+  if (total == null) return null
+  const left = total - elapsedS / 60
+  return left > 0.5 ? `about ${Math.ceil(left)} min left (estimate for a ${device === 'cpu' ? 'CPU' : 'GPU'})`
+    : `taking longer than the ${device === 'cpu' ? 'CPU' : 'GPU'} estimate of ${total} min`
+}
+export const deviceWord = (d: string | null | undefined) => (d === 'gpu' ? 'GPU' : d === 'cpu' ? 'CPU' : null)
+/** P5/P6: the API's display_status adds "interrupted" (running, worker silent for 2 min) and "cancelled" */
 export function jobStatus(j: { status: string; message?: string | null; display_status?: string }) {
   const k = j.display_status ?? (j.status === 'failed' && j.message === CANCELLED_MESSAGE ? 'cancelled' : j.status)
   const [label, color] = JOB_STATUS[k] ?? [pretty(k), 'var(--ns-ink2)']

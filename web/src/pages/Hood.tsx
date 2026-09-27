@@ -11,7 +11,7 @@ import { useAreas } from '@/api/queries'
 import { Card, CountUp, jumpTo, REDUCED, SectionNav, T, useDetail, useInView, useScrollSpy } from '@/components/Detail'
 import { ExampleSheet } from '@/components/ExampleSheet'
 import { GeoMini } from '@/components/GeoMini'
-import { AlignedBars, Donut, Funnel, SegBar } from '@/components/viz'
+import { AlignedBars, Donut, Funnel, SegBar, StageTimeline } from '@/components/viz'
 import { KPI_DEFS, kpiFilter } from '@/lib/derive'
 import { shortArea } from '@/lib/labels'
 import { useAreaData } from '@/lib/useAreaData'
@@ -383,11 +383,35 @@ function StreetsTable({ h }: { h: HoodData }) {
 function CostTime({ h }: { h: HoodData }) {
   const c = h.cost
   const sv = c.lines.find((l) => l.key === 'street_view')
+  if (c.live) return <LiveCost h={h} />
   const time = c.model_card?.gpu_minutes != null ? `About ${c.model_card.gpu_minutes} min on a Colab GPU` : 'Time: not recorded for this run'
   const money = sv?.value != null ? `about $${Math.round(sv.value)} in Street View photos` : 'Street View cost not recorded'
   return (
     <Section id="cost" title="Time and cost">
       <p className="t-body">{time}; {money}.</p>
+    </Section>
+  )
+}
+
+/** P6: a street analysed from the app is a fresh run, so its clock and counters are its own: shown plainly, with the
+ *  stage timings. Only a run that resumed from saved files after a pause keeps a note (its numbers cover the last part). */
+function LiveCost({ h }: { h: HoodData }) {
+  const c = h.cost, t = c.timings
+  const line = (k: string) => c.lines.find((l) => l.key === k)
+  const sv = line('street_view'), vlm = line('vlm'), pl = line('places')
+  const money = (v: number | null | undefined) => (v == null ? null : `$${v < 0.01 && v > 0 ? v.toFixed(4) : v.toFixed(2)}`)
+  const dev = t.device === 'gpu' ? 'a GPU' : t.device === 'cpu' ? 'a CPU' : 'the worker'
+  return (
+    <Section id="cost" title="Time and cost">
+      <p className="t-body">
+        {t.total_minutes != null ? `Took ${t.total_minutes} min on ${dev}` : 'Time not recorded'}
+        {sv ? `; ${sv.detail.split(' × ')[0]}${money(sv.value) ? `, about ${money(sv.value)}` : ''}` : ''}
+        {vlm ? `; ${vlm.detail} to the cloud model${money(vlm.value) ? `, ${money(vlm.value)}` : ''}` : ''}
+        {pl ? `; ${pl.detail.replace(' (price not in the model card)', '')} on Google (price not recorded)` : ''}.
+      </p>
+      {t.badge ? <p className="t-small mt-1" style={{ color: 'var(--ns-sodium)' }}>This analysis was {t.badge}.</p>
+        : <p className="t-small ink3 mt-1">Measured during this analysis. Photo prices from the team’s model card.</p>}
+      <div className="mt-4"><StageTimeline stages={t.stage_seconds} badge={t.badge} total={t.total_minutes} live /></div>
     </Section>
   )
 }

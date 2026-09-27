@@ -2,7 +2,7 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
 import type { ReviewEvent } from '@/lib/review'
 import { api } from './client'
-import type { JobFull } from './types'
+import type { JobFull, WorkerStatus } from './types'
 
 export interface SankeySeg { id: string; label: string; value: number; kind: 'kept' | 'idle' | 'drop'; examples: string | null; reason: string | null }
 export interface SankeyGroup { id: string; from: string[]; unit: string; segments: SankeySeg[] }
@@ -12,9 +12,11 @@ export interface StreetRow {
   street: string; length_m: number; cameras: number; views: number; buildings: number; no_record: number; discrepancy: number
   use_unknown: number; streetlights: number; poles: number; gaps: number; gap_m: number
 }
-export interface CostLine { key: string; label: string; value: number | null; detail: string; source: string | null; status: 'computed' | 'model_card' | 'not recorded' }
+export interface CostLine { key: string; label: string; value: number | null; detail: string; source: string | null; status: 'computed' | 'model_card' | 'measured' | 'not recorded' }
 export interface Hood {
   area: string; name: string; files: string[]
+  /** analysed from the app by a worker (P6): its timings and costs are this run's own */
+  live: boolean
   pipeline: { detector?: string; ocr?: string; vlm?: string; name_gate?: number; footprints?: string; reference?: string }
   /** every number, computed; its source is src[key] */
   n: Record<string, number> & { use_values: Record<string, number>; discrepancy_types: Record<string, number> }
@@ -27,10 +29,11 @@ export interface Hood {
   story: StorySentence[]
   corrections: StorySentence[]
   cost: {
-    lines: CostLine[]; model_card: { gpu_minutes: number | null; source: string } | null
+    lines: CostLine[]; model_card: { gpu_minutes: number | null; source: string } | null; live: boolean
     records: { vlm_calls: number; vlm_usd_recorded: number; buildings_cost_not_recorded: number; source: string }
-    run_counters: Record<string, unknown> & { representative: false; badge: string }
-    timings: { stage_seconds: Record<string, number>; total_minutes: number | null; device: string | null; representative: false; badge: string }
+    /** representative = this run's own values (a fresh live run); badge = why not (resumed), null when they are */
+    run_counters: Record<string, unknown> & { representative: boolean; badge: string | null }
+    timings: { stage_seconds: Record<string, number>; total_minutes: number | null; device: string | null; representative: boolean; badge: string | null }
   }
 }
 export interface HoodBox { cls: 'building' | 'pole' | 'lamp_head' | 'signboard'; conf: number; x1: number; y1: number; x2: number; y2: number; geom_ok: boolean; target: boolean }
@@ -70,12 +73,13 @@ export const useReviewEvents = (id: number | null | undefined) =>
 export interface JobEstimate { street_view_images: number; street_view_usd: number | null; gpu_minutes: number | null
   cpu_minutes_full_ocr: number | string | null; cpu_minutes_fast_ocr: string | null; basis: string; is_estimate: true }
 export interface JobP5 extends JobFull {
-  display_status: 'queued' | 'running' | 'interrupted' | 'done' | 'failed' | 'cancelled' | 'no_street_view' | 'expired_token'
+  display_status: 'queued' | 'running' | 'interrupted' | 'done' | 'failed' | 'cancelled' | 'no_street_view' | 'expired_token' | 'needs_approval' | 'cancelling'
   is_test: boolean; heartbeat_at: string | null; worker_id: string | null; message: string | null
   input: JobFull['input'] & { length_m?: number; lines?: GeoJSON.MultiLineString | GeoJSON.LineString; name?: string; trimmed?: boolean; slug?: string }
 }
 export const useJobs = () =>
-  useQuery({ queryKey: ['jobs', 'all'], queryFn: () => api<{ jobs: JobP5[]; worker_online: boolean; offline: boolean }>('/jobs'), refetchInterval: 15_000 })
+  useQuery({ queryKey: ['jobs', 'all'], queryFn: () => api<{ jobs: JobP5[]; worker_online: boolean; worker: WorkerStatus; offline: boolean }>('/jobs'),
+    refetchInterval: (q) => (q.state.data?.jobs.some((j) => j.status === 'running') ? 5_000 : 15_000) })
 export const useJob = (id: string | null) =>
   useQuery({ queryKey: ['job', id], queryFn: () => api<{ job: JobP5; worker_online: boolean; estimate: JobEstimate | null }>(`/jobs/${id}`),
-    enabled: !!id, refetchInterval: 15_000 })
+    enabled: !!id, refetchInterval: (q) => (q.state.data?.job.status === 'running' ? 5_000 : 15_000) })

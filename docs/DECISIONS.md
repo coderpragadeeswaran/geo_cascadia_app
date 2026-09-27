@@ -994,3 +994,120 @@ reloaded, keeping review decisions.
 - The Google-pin block was not re-run (it needs Places look-ups). It is kept, labelled "computed before D33 (old
   fallback)".
 - Status stays "not verified": no surveyed reference exists.
+
+## 2026-09-27 — P6 (analysis worker and live jobs)
+
+### D34. Worker protocol, live areas, cost cap
+**Worker** (`worker/colab_worker.py`, one cell; steps in `worker/README.md`).
+- The same cell runs on Colab GPU, Kaggle GPU or a laptop CPU. The device is auto-detected; on a CPU sign reading is
+  **fast** (`CPU_OCR_MODE`), and the cell says so.
+- The pipeline + weights come from the setup cells, a local folder, or a shared Drive folder link (`gdown`). No Drive
+  path is hard-coded.
+- It asks for the tunnel URL, worker token, AWS keys and the Google server key with hidden input; it never prints or
+  stores them.
+- Heartbeat every 15 s; one job at a time. When the tunnel URL changes, the cell asks for the new one and keeps running.
+- It refuses an older package copy: `run_area` must have `on_stage` / `plan_check`.
+
+**Pipeline additions** (owner request; no logic, prompt or threshold changed):
+- `run_area(on_stage=, plan_check=)`: a stage-finished callback and a check after the camera plan, before any Street
+  View photo is bought.
+- `vlm.py` records the floors call's tokens. `export.py` then stores the exact cost per building (use call + floors call,
+  `cost.recorded: true`); older runs keep the old approximation.
+
+**Statuses.** Migration 006 adds `needs_approval` plus `jobs.approved / estimate / device`.
+- Cost cap (default 300 photos or $1 estimated, set in the cell): over it, the job pauses as **needs approval** with the
+  plan-time estimate. A person approves it (back to queued, cap lifted for that job) or cancels it.
+- `AWS_TOKEN_EXPIRED` → `expired_token`. The cell asks for new keys and claims **the same job** by id (`/worker/next
+  {job}`), resuming from its saved files.
+- A running job silent for **2 min** (was 10) is "interrupted" and claimable again. Another worker session resumes it.
+- A worker counts as connected for 45 s after its last call. `GET /worker/status` gives the top bar the device and
+  the current job.
+- `/worker/next` without a job id never claims test jobs, so tests claim only their own jobs.
+
+**Caps.** One real street at a time: `POST /jobs` returns 409 while a non-test job is queued, running, paused or
+waiting for approval. Drawn areas stay ≤ 1.5 km² (D11).
+
+**Results.** `/worker/result` saves the files, builds `run_report.json` and loads through the existing loader. The same
+rules therefore apply as for the original areas: street names from the run's `street_names.json`, gap display,
+coverage banner, D33 positions and the D32 sign-text use, all produced by the same pipeline code.
+- The folder gets `live_run.json`. The area card and Hood mark the area `live`.
+- Hood shows its real time, photo count × model-card price, cloud-AI calls and cost, and the stage timeline
+  **without** the "resumed run" badge. That badge stays for the three original areas (D1).
+- Exception: the cell's `worker_run.json` notes when a run resumed from photos fetched by an earlier attempt, or is a
+  fake-worker replay. Hood then keeps a badge saying so.
+- A pause for approval happens before any photo is bought, so it does not count as resumed.
+- Review items join the queue with the area.
+
+**Delete.** `DELETE /areas/{slug}?confirm=<slug>` removes an area made by a job (rows, review items, folder). The job
+stays in the list as "area deleted". The three original areas return 403. Review history rows are append-only and stay.
+
+**UI.**
+- The top bar shows the worker (connected / not, GPU / CPU, progress).
+- The job card and Jobs use plain stage names that match the worker's stages. They show time so far and an honest
+  time left: the device's length-scaled estimate minus elapsed, saying "taking longer than the estimate" once past it.
+- With no worker, a job reads "Queued, waiting for a worker".
+- A needs-approval job shows Approve / Cancel.
+- On the map, the clicked street sweeps with the current stage's progress; a queued or paused street is a still dashed
+  line.
+- When a job is done, the map flies to the new area.
+- Jobs → a finished job → "Delete this analysed area…" (with confirmation).
+
+**Tests.** `backend/tests/test_p6.py` covers: token required, claim, progress, interrupted → resume, expired keys,
+fail codes, cost-cap pause / approve / cancel, one at a time, result → load (Tiruppur copy) → delete, and originals
+protected. The tests use test jobs only and write no review decisions.
+
+### D35. P6 browser round (F1–F13)
+**Progress (F1, F2).**
+- The API gives every job `stage_no`, `stage_count` (10) and `progress`: finished stages plus the share of the current
+  one.
+- Pipeline sub-steps map onto the ten stages. Within an attempt, progress only moves forward; a late report from an
+  earlier stage keeps the stage.
+- A new claim starts a fresh attempt at stage 0.
+- Everywhere the text reads "Stage 3 of 10 · Planning camera stops". A count is added only for photos, signs, items and
+  look-ups.
+- The map sweep follows overall progress and eases toward each update. With 2D or reduced motion it jumps straight to
+  the value.
+
+**Names (F3–F6).**
+- The Analyse estimate is one line plus "How is this estimated?".
+- Unnamed streets read "Unnamed road near <nearest named street>", with no road class.
+  - The click picker applies this, including to names cached or stored before.
+  - For a new run's streets the pipeline could not name, `/worker/result` adds such names to `street_names.json` and to
+    the export's `street` fields (display only; `jobs.fill_street_names`).
+- The area dropdown shows only names, originals first, with a "new" tag on streets analysed from the app. It refreshes
+  when opened and whenever a job leaves the active list.
+- A fake-worker area is named "<street> (test)".
+
+**Delete and clear (F7–F9).**
+- Deleting an area also deletes its job.
+- The UI removes it from every cached list at once (area dropdown, Explore, Jobs, Hood tabs), moves off it, then
+  refetches. A failure shows a message and nothing is removed.
+- `DELETE /jobs/{id}` ("Remove from list") works for cancelled, failed and no-Street-View jobs without an area.
+- The fake worker claims with `test: true`, which makes the job a test job; a replay result also marks it.
+- "Clear test jobs" removes test jobs with their test areas (not a test job still running) and jobs cancelled before
+  they started. It never removes a real analysis, its area or the originals: `delete_area(require_test=True)` plus the
+  original-area guard.
+
+**Cancel (F10).** Migration 007 adds `jobs.cancel_requested` and `jobs.note`.
+- Cancelling a job a live worker is running sets **cancelling**.
+- Heartbeat and progress responses return it. The worker's heartbeat thread interrupts the running step
+  (`_thread.interrupt_main`), and progress callbacks stop at the next report.
+- The worker deletes the job's files and reports `CANCELLED`, and the job becomes cancelled. Measured with the fake
+  worker: 4 s.
+- A cancelling job with a silent worker finishes as cancelled after 2 min, and one with no live worker is cancelled at
+  once.
+- A cancelling job is never claimed or loaded. A late `/worker/fail` never overwrites a finished job.
+
+**Resume (F11).**
+- With Drive mounted, the cell syncs the job folder (run JSONs and crops) to `MyDrive/gc_worker_jobs/<job id>/` after
+  every stage, and once a minute during long stages. It restores the folder on the next claim and deletes it when the
+  job finishes, fails or is cancelled.
+- `/worker/next` returns `resumed_claim`. When a resumed job has no saved files (another account), the worker leaves
+  the note "Started again from the beginning…", which the job card shows.
+
+**F12.** The fake worker's "480 photos / $3.41" was a fixed constant in `fake_worker.py`, not Tiruppur's plan. The fake
+now computes the estimate like the real worker, from the replayed `plan.json` (Tiruppur: 78 photos, $0.55), and lowers
+its own cap if needed. The real worker always uses the clicked street's plan (`plan_estimate`).
+
+**F13.** The mini-map scale bar and north arrow sit on small plates drawn last (`GeoMini` `ScalePlate` / `NorthPlate`,
+also used by `PositionMini`).

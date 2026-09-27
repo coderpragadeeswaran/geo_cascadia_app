@@ -178,8 +178,11 @@ def run_building_attrs(views, sv, vlm, cfg, out_dir, progress=lambda *a, **k: No
                  {"text": "Example 2. Answer: 2."}, vlm.img(shots[1]),
                  {"text": "Question: how many storeys does the building in the red rectangle of the NEXT photo have, "
                           "counting the ground floor as 1? Reply with only the integer."}, vlm.img(p)]
-            t2, _ = vlm.converse(c, 20)
+            t2, u2 = vlm.converse(c, 20)
             m = re.search(r"\d+", t2); floors_a = int(m.group()) if m else None
+            # P6: the floors call's own tokens are recorded, so its cost is known (was "cost not recorded")
+            return {"fp": q["fp"], "crop": p, "vlm": v, "floors_a": floors_a, **u1,
+                    "floors_in": u2.get("in", 0), "floors_out": u2.get("out", 0)}
         return {"fp": q["fp"], "crop": p, "vlm": v, "floors_a": floors_a, **u1}
 
     for r in _pmap(one, todo, cfg.vlm_workers, progress, "vlm_buildings"): done[r["fp"]] = r

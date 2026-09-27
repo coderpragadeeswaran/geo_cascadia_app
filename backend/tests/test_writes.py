@@ -45,6 +45,7 @@ def test_review_round_trip(online, review_area):
 
 @pytest.fixture
 def job(online):
+    online.app.state.workers.clear()          # no worker seen yet in this app (other test modules act as workers)
     r = online.post("/jobs", json={"polygon": POLY, "name": "pytest area", "test": True})
     assert r.status_code == 201, r.text
     j = r.json()
@@ -64,7 +65,13 @@ def test_job_queue_and_worker_protocol(online, job):
     assert online.post("/worker/next", json={"worker_id": "w"}).status_code == 401                  # token required
     assert online.post("/worker/next", json={"worker_id": "w"}, headers={"X-Worker-Token": "wrong"}).status_code == 401
     h = {"X-Worker-Token": TOKEN}
-    claimed = online.post("/worker/next", json={"worker_id": "pytest-worker"}, headers=h).json()["job"]
+    # P6 (D34): a test job is claimed only by its id; a worker asking without one never takes test jobs
+    anyjob = online.post("/worker/next", json={"worker_id": "pytest-other"}, headers=h).json()["job"]
+    assert anyjob is None or anyjob["id"] != jid
+    if anyjob:                                              # a real queued job was claimed: give it back untouched
+        with _db(online).pool.connection() as c:
+            c.execute("update jobs set status = 'queued', worker_id = null, started_at = null, heartbeat_at = null where id = %s", (anyjob["id"],))
+    claimed = online.post("/worker/next", json={"worker_id": "pytest-worker", "job": jid}, headers=h).json()["job"]
     assert claimed["id"] == jid and claimed["status"] == "running"
     assert claimed["input"]["polygon"]["type"] == "Polygon" and claimed["input"]["slug"].startswith("pytest_area_")
     assert online.get("/jobs?active=1").json()["worker_online"] is True
@@ -74,14 +81,14 @@ def test_job_queue_and_worker_protocol(online, job):
     assert f["status"] == "no_street_view" and f["message"] == "no panoramas"
     f = online.post("/worker/fail", json={"job": jid, "code": "AWS_TOKEN_EXPIRED", "message": "refresh keys"}, headers=h).json()["job"]
     assert f["status"] == "expired_token"
-    again = online.post("/worker/next", json={"worker_id": "pytest-worker"}, headers=h).json()["job"]   # keys refreshed → resume
+    again = online.post("/worker/next", json={"worker_id": "pytest-worker", "job": jid}, headers=h).json()["job"]   # keys refreshed → resume
     assert again["id"] == jid and again["status"] == "running"
 
 
 def test_worker_result_creates_area(online, job):
     jid, slug = job["job"]["id"], job["job"]["input"]["slug"]
     h = {"X-Worker-Token": TOKEN}
-    assert online.post("/worker/next", json={"worker_id": "pytest-worker"}, headers=h).json()["job"]["id"] == jid
+    assert online.post("/worker/next", json={"worker_id": "pytest-worker", "job": jid}, headers=h).json()["job"]["id"] == jid
     src = os.path.join(ROOT, "data", "areas", "tiruppur_uthukuli_road")
     names = [n for n in sorted(os.listdir(src)) if n.endswith(".json") and n != "run_report.json"]
     files = [("files", (n, open(os.path.join(src, n), "rb").read(), "application/json")) for n in names]

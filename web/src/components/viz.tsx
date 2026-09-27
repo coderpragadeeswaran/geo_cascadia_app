@@ -1,7 +1,8 @@
 /** Chart primitives for the verifier pages (P5): pure SVG/CSS in the design tokens, no chart library. Every mark that
  *  has real examples behind it is a button (click or Enter) that opens them. Loaded only with Hood / Trust. */
 import { useState } from 'react'
-import { fmt, plural } from '@/lib/utils'
+import { STAGE_PLAIN } from '@/lib/labels'
+import { cn, fmt, plural } from '@/lib/utils'
 import { Badge } from './Detail'
 
 export interface Seg { key: string; label: string; value: number; kind: 'kept' | 'idle' | 'drop' | 'no_record' | 'discrepancy' | 'matched' | 'unclassified' | 'alt'; examples?: string | null }
@@ -126,29 +127,33 @@ export function Funnel({ rows, onPick, run = true }: { rows: { key: string; labe
 
 const STAGE_ORDER = ['panoramas', 'area', 'plan', 'detect', 'geometry', 'ocr', 'vlm', 'reference', 'match', 'export']
 /** D1: the stored runs were resumed, so their stage timings are not real. Drawn greyed, hatched and badged; never as a
- *  plain Gantt that could be read as the real run. */
-export function StageTimeline({ stages, badge, total }: { stages: Record<string, number>; badge: string; total: number | null }) {
+ *  plain Gantt that could be read as the real run. P6 `live`: a fresh run from the app — its own clock, drawn plainly in
+ *  sodium with plain stage names (a live run that resumed after a pause keeps its badge and the grey). */
+export function StageTimeline({ stages, badge, total, live }: { stages: Record<string, number>; badge: string | null; total: number | null; live?: boolean }) {
   const keys = STAGE_ORDER.filter((k) => k in stages).concat(Object.keys(stages).filter((k) => !STAGE_ORDER.includes(k)))
   const sum = keys.reduce((a, k) => a + (stages[k] || 0), 0)
   if (!keys.length) return <p className="t-small ink3">No stage timings stored for this run.</p>
+  const real = !!live && !badge
   let acc = 0
   return (
-    <figure className="relative max-w-[760px]" aria-label={`Stage timings from a resumed run (${badge}); not the time a full run takes`}>
-      <div className="mb-2 flex flex-wrap items-center gap-2"><Badge tone="warn">{badge}</Badge>
-        <span className="t-small ink3">Recorded while resuming from checkpoints: stages that were already done took ~0 s.</span></div>
-      <div className="relative space-y-1 rounded-[var(--ns-r-control)] p-3" style={{ opacity: 0.5, filter: 'grayscale(1)', boxShadow: 'inset 0 0 0 1px var(--ns-line)' }}>
+    <figure className="relative max-w-[760px]" aria-label={real ? 'Time per stage of this analysis' : `Stage timings from a resumed run (${badge}); not the time a full run takes`}>
+      {!real && <div className="mb-2 flex flex-wrap items-center gap-2"><Badge tone="warn">{badge}</Badge>
+        <span className="t-small ink3">{live ? 'These times are not a full run of this street.' : 'Recorded while resuming from checkpoints: stages that were already done took ~0 s.'}</span></div>}
+      <div className="relative space-y-1 rounded-[var(--ns-r-control)] p-3" style={real ? { boxShadow: 'inset 0 0 0 1px var(--ns-line)' } : { opacity: 0.5, filter: 'grayscale(1)', boxShadow: 'inset 0 0 0 1px var(--ns-line)' }}>
         {keys.map((k) => {
           const v = stages[k] || 0, x = sum ? (acc / sum) * 100 : 0, w = sum ? (v / sum) * 100 : 0
           acc += v
           return (
-            <div key={k} className="grid grid-cols-[92px_minmax(0,1fr)_64px] items-center gap-2">
-              <span className="t-data ink2 text-[13px]">{k}</span>
-              <span className="relative h-2.5"><span className="gc-hatch absolute inset-y-0" style={{ left: `${x}%`, width: `${Math.max(w, 0.4)}%`, boxShadow: 'inset 0 0 0 1px var(--ns-ink3)' }} /></span>
+            <div key={k} className={cn('grid items-center gap-2', live ? 'grid-cols-[170px_minmax(0,1fr)_72px]' : 'grid-cols-[92px_minmax(0,1fr)_64px]')}>
+              <span className={cn(live ? 't-small' : 't-data text-[13px]', 'ink2')}>{live ? STAGE_PLAIN[k] ?? k : k}</span>
+              <span className="relative h-2.5">{real
+                ? <span className="absolute inset-y-0" style={{ left: `${x}%`, width: `${Math.max(w, 0.4)}%`, background: 'var(--ns-sodium)', borderRadius: 2 }} />
+                : <span className="gc-hatch absolute inset-y-0" style={{ left: `${x}%`, width: `${Math.max(w, 0.4)}%`, boxShadow: 'inset 0 0 0 1px var(--ns-ink3)' }} />}</span>
               <span className="t-data ink3 text-right text-[13px]">{fmt.format(v)} s</span>
             </div>
           )
         })}
-        {total != null && <div className="t-data ink3 pt-1 text-right text-[13px]">resumed-run total {total} min</div>}
+        {total != null && <div className="t-data ink3 pt-1 text-right text-[13px]">{real ? `total ${total} min` : live ? `recorded total ${total} min` : `resumed-run total ${total} min`}</div>}
       </div>
     </figure>
   )

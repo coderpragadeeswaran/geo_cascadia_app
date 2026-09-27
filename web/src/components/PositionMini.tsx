@@ -2,6 +2,7 @@
  *  the footprint centre, the predicted point and its uncertainty circle, plus the method badge. Pure SVG in the design
  *  tokens, so it follows Night / Daylight and costs no second map instance (D21 memory). */
 import type { Building } from '@/api/types'
+import { NorthPlate, ScalePlate } from '@/components/GeoMini'
 import { Tip } from '@/components/ui/tooltip'
 import { positionMethodLabel, positionMethodTerm, positionMethodWhy } from '@/lib/labels'
 import { fmt, fmt1 } from '@/lib/utils'
@@ -38,12 +39,8 @@ export function PositionMini({ b }: { b: Building }) {
         {r > 0 && <circle cx={sx(pt[0])} cy={sy(pt[1])} r={r * k} fill="var(--ns-sodium)" fillOpacity=".12" stroke="var(--ns-sodium)" strokeWidth="1.2" strokeDasharray="4 3" />}
         <circle cx={sx(pt[0])} cy={sy(pt[1])} r="5" fill="var(--ns-sodium)" stroke="var(--ns-bg0)" strokeWidth="2" />
         {/* scale bar and north */}
-        <g stroke="var(--ns-ink2)" strokeWidth="1.5">
-          <path d={`M${PAD} ${VH - 10}h${bar * k}M${PAD} ${VH - 14}v8M${PAD + bar * k} ${VH - 14}v8`} />
-        </g>
-        <text x={PAD + bar * k + 6} y={VH - 6} fill="var(--ns-ink2)" fontSize="11" fontFamily="var(--ns-mono)">{bar} m</text>
-        <text x={VW - 16} y={18} fill="var(--ns-ink2)" fontSize="11" fontFamily="var(--ns-mono)" textAnchor="middle">N</text>
-        <path d={`M${VW - 16} 22v12`} stroke="var(--ns-ink2)" strokeWidth="1.5" />
+        <ScalePlate x={6} y={VH - 25} barPx={bar * k} label={`${bar} m`} />
+        <NorthPlate x={VW - 25} y={5} />
       </svg>
       <figcaption className="t-small mt-1.5 space-y-0.5">
         <div>

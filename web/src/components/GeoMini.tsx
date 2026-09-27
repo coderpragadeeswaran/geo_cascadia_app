@@ -104,12 +104,31 @@ export function GeoMini({ streets, highlight, points = [], lines = [], polygons 
           </g>
         )
       })}
-      <g stroke="var(--ns-ink2)" strokeWidth="1.5">
-        <path d={`M14 ${H - 12}h${bar * k}M14 ${H - 16}v8M${14 + bar * k} ${H - 16}v8`} />
-      </g>
-      <text x={20 + bar * k} y={H - 8} fill="var(--ns-ink2)" fontSize="11.5" fontFamily="var(--ns-mono)">{bar >= 1000 ? `${bar / 1000} km` : `${bar} m`}</text>
-      <text x={W - 14} y={18} fill="var(--ns-ink2)" fontSize="11.5" fontFamily="var(--ns-mono)" textAnchor="middle">N</text>
-      <path d={`M${W - 14} 22v12`} stroke="var(--ns-ink2)" strokeWidth="1.5" />
+      {/* F13: scale and north on their own plate, drawn last, so no label or line runs through them */}
+      <ScalePlate x={8} y={H - 26} barPx={bar * k} label={bar >= 1000 ? `${bar / 1000} km` : `${bar} m`} />
+      <NorthPlate x={W - 24} y={6} />
     </svg>
+  )
+}
+
+/** F13: the scale bar with its label on a small plate (page colour, hairline edge): readable over any line or label */
+export function ScalePlate({ x, y, barPx, label }: { x: number; y: number; barPx: number; label: string }) {
+  const w = 6 + barPx + 6 + label.length * 7.4 + 6
+  return (
+    <g aria-hidden>
+      <rect x={x} y={y} width={w} height={20} rx={3} fill="var(--ns-bg0)" fillOpacity=".9" stroke="var(--ns-line)" />
+      <path d={`M${x + 6} ${y + 14}h${barPx}M${x + 6} ${y + 10}v8M${x + 6 + barPx} ${y + 10}v8`} stroke="var(--ns-ink2)" strokeWidth="1.5" />
+      <text x={x + 12 + barPx} y={y + 14.5} fill="var(--ns-ink2)" fontSize="11.5" fontFamily="var(--ns-mono)">{label}</text>
+    </g>
+  )
+}
+
+export function NorthPlate({ x, y }: { x: number; y: number }) {
+  return (
+    <g aria-hidden>
+      <rect x={x} y={y} width={18} height={32} rx={3} fill="var(--ns-bg0)" fillOpacity=".9" stroke="var(--ns-line)" />
+      <text x={x + 9} y={y + 13} fill="var(--ns-ink2)" fontSize="11.5" fontFamily="var(--ns-mono)" textAnchor="middle">N</text>
+      <path d={`M${x + 9} ${y + 16}v12`} stroke="var(--ns-ink2)" strokeWidth="1.5" />
+    </g>
   )
 }

@@ -145,14 +145,33 @@ function DeckLayers({ introDone }: { introDone: boolean }) {
     return () => { window.removeEventListener(LIGHTS_ON, run); clearTimeout(fallback); cancelAnimationFrame(raf) }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // pulse for running jobs (only animates while a job is running and motion is allowed)
+  // pulse for running jobs (only animates while a job is running and motion is allowed; 2D / reduced motion: still)
   const [pulse, setPulse] = useState(0)
-  const animate = jobs.length > 0 && !flat && band !== 'street' && band !== 'object'
+  const animate = jobs.some((j) => j.status === 'running' && j.display_status !== 'interrupted') && !flat && !REDUCED
+  // D35 (F1): the drawn progress eases toward each running job's overall progress and never goes back within an attempt
+  const target = useRef<Record<string, number>>({})
+  const shown = useRef<Record<string, number>>({})
+  const next: Record<string, number> = {}
+  for (const j of jobs) {
+    if (j.status !== 'running') continue
+    const p = j.progress ?? 0
+    next[j.id] = j.stage_no == null ? p : Math.max(target.current[j.id] ?? 0, p)   // a fresh attempt starts again
+  }
+  target.current = next
+  if (!animate) shown.current = { ...next }
   useEffect(() => {
     if (!animate) return
     let raf = 0, last = 0
     const loop = (t: number) => {
-      if (t - last > 50) { setPulse((t % 1600) / 1600); last = t }
+      if (t - last > 50) {
+        const s: Record<string, number> = {}
+        for (const [id, v] of Object.entries(target.current)) {
+          const cur = Math.min(shown.current[id] ?? 0, v)
+          s[id] = v - cur < 0.001 ? v : Math.min(v, cur + Math.max(0.0015, (v - cur) * 0.06))
+        }
+        shown.current = s
+        setPulse((t % 1600) / 1600); last = t
+      }
       raf = requestAnimationFrame(loop)
     }
     raf = requestAnimationFrame(loop)
@@ -175,6 +194,7 @@ function DeckLayers({ introDone }: { introDone: boolean }) {
 
   const layers = useMemo(
     () => buildLayers({ mode, band, flat, layers: layerToggles, areas: areas ?? [], activeArea: area, split, jobs, pulse: animate ? pulse : 0,
+      jobShown: shown.current,
       selectedId: selected && 'id' in selected ? selected.id : null, focus, lightsOn, analyseLines, analysePoly, analyseRest, drive, predicted }),
     [mode, band, flat, layerToggles, areas, area, split, jobs, pulse, animate, selected, focus, lightsOn, analyseLines, analysePoly, analyseRest, drive, predicted],
   )
