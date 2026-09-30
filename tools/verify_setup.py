@@ -270,6 +270,24 @@ if bk:
     report("WARN", "Map ID / Maps JavaScript API",
            "can only be confirmed in the browser - check the 3D tilt works in P3")
 
+# D40: the server key (no referrer), with the worker's own search call. The API uses it for Places / Geocoding only, so a
+# refusal is a WARN here; it matters when the Colab worker is given the same key (every street then fails with it).
+sk = env.get("GOOGLE_PLACES_SERVER_KEY", "")
+if sk:
+    q = urllib.parse.urlencode({"location": "11.0296,76.9752", "radius": 15, "source": "outdoor", "key": sk})
+    try:
+        with urllib.request.urlopen(f"https://maps.googleapis.com/maps/api/streetview/metadata?{q}", timeout=15) as r:
+            data = json.loads(r.read())
+        st = data.get("status")
+        if st in ("OK", "ZERO_RESULTS", "NOT_FOUND"):
+            report("PASS", "server key: Street View Static API allowed (what the worker needs)")
+        else:
+            report("WARN", f"server key: Street View {st}",
+                   f"{data.get('error_message', '')} - if the Colab worker uses this key, every street fails with "
+                   "this; allow Street View Static API on it (worker/README.md, D40)")
+    except Exception as e:
+        report("WARN", "server key check", e)
+
 # ---------------------------------------------------------------- summary
 print(f"\n=== SUMMARY: {counts['PASS']} pass, {counts['WARN']} warn, {counts['FAIL']} fail ===")
 if counts["FAIL"]:

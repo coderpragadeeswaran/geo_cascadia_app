@@ -218,7 +218,7 @@ export function buildLayers(ctx: LayerCtx): Layer[] {
     }
   }
   const jobPts = ctx.jobs
-    .map((j) => j.input.click ? [j.input.click.lon, j.input.click.lat] : j.input.polygon ? (j.input.polygon.coordinates[0][0] as Position) : null)
+    .map((j) => j.input.click ? [j.input.click.lon, j.input.click.lat] : j.input.polygon ? (outerRings(j.input.polygon)[0]?.[0] as Position) : null)
     .filter(Boolean) as Position[]
   if (jobPts.length && !near) {
     const t = ctx.pulse

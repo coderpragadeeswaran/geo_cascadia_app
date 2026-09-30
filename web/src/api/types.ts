@@ -63,7 +63,7 @@ export type AreaGeoJSON = FeatureCollection<Geometry, AnyProps> & { offline: boo
 export interface Job {
   id: string; kind: string; status: string; stage: string | null; done: number | null; total: number | null
   street: string | null; area_slug: string | null
-  input: { click?: { lat: number; lon: number }; polygon?: Polygon; lines?: import('geojson').MultiLineString | import('geojson').LineString; length_m?: number }
+  input: { click?: { lat: number; lon: number }; polygon?: Polygon | MultiPolygon; lines?: import('geojson').MultiLineString | import('geojson').LineString; length_m?: number }
   /** P6 */
   display_status?: string; message?: string | null; started_at?: string | null; created_at?: string | null
   /** D35: the stage's number of stage_count (null before the first stage) and overall progress 0..1, from the API */
@@ -149,7 +149,7 @@ export interface AreaDetail extends AreaCard {
 export interface JobPreview {
   /** display name: street_names for streets of analysed areas, the OSM name outside them, never "(unnamed … #id)" */
   street: string; name_source: 'street_names' | 'osm' | 'unnamed'; osm_name: string | null
-  length_m: number; osm_ways: number; way_ids: number[]; polygon: Polygon
+  length_m: number; osm_ways: number; way_ids: number[]; polygon: Polygon | MultiPolygon
   /** the exact snapped street geometry (lon/lat) */
   lines: import('geojson').MultiLineString
   /** where the street geometry came from: an analysed area's streets.json, the Overpass cache, or a live Overpass call */

@@ -1,0 +1,251 @@
+{
+ "run_dir": "unnamed_road_off_4th_street_5772fa.upload-3b22fb",
+ "area": "Unnamed road off 4th Street",
+ "generated": "2026-09-28T06:02:43.620007+00:00",
+ "pipeline": {
+  "detector": "YOLOv8s v8s_640_s2",
+  "ocr": "PaddleOCR en+ta (full)",
+  "vlm": "apac.amazon.nova-lite-v1:0",
+  "name_gate": 0.7,
+  "footprints": "OSM",
+  "reference": "Google Places (New)"
+ },
+ "imagery": {
+  "panoramas_found": 21,
+  "google_car": 21,
+  "user_photospheres": 0,
+  "cameras_planned": 9,
+  "cameras_dropped": {
+   "camera_inside_footprint": 1
+  },
+  "views_planned": 69,
+  "views_by_type": {
+   "unmapped": 1,
+   "perpendicular": 17,
+   "tilt": 17,
+   "oblique": 34
+  },
+  "views_facing_mapped_building": 68,
+  "views_facing_no_mapped_building": 1,
+  "views_fetched_ok": 69,
+  "street_view_requests": 0,
+  "street_view_cost_usd_notional": 0.0,
+  "by_street": {
+   "(unnamed residential #206801268)": {
+    "cameras": 9,
+    "views": 69
+   }
+  }
+ },
+ "maps": {
+  "footprints": {
+   "osm": 85,
+   "microsoft": 0
+  },
+  "osm_built_fraction": 0.509,
+  "buildings_registered": 25,
+  "buildings_by_source": {
+   "osm": 25
+  },
+  "verdict": "full: footprints on most frontages"
+ },
+ "detection": {
+  "boxes_total": 263,
+  "by_class": {
+   "building": 162,
+   "signboard": 53,
+   "pole": 40,
+   "lamp_head": 8
+  },
+  "used_for_geometry": 196,
+  "excluded_from_geometry": {
+   "tilted view": 67
+  },
+  "mean_conf_by_class": {
+   "building": 0.606,
+   "lamp_head": 0.368,
+   "pole": 0.563,
+   "signboard": 0.507
+  }
+ },
+ "assets": {
+  "located": 16,
+  "by_type": {
+   "streetlight": 3,
+   "pole": 13
+  },
+  "by_confidence": {
+   "low": 13,
+   "high": 1,
+   "medium": 2
+  },
+  "triangulated_2plus_cameras": 1,
+  "single_camera_approximate": 15,
+  "register_status": {
+   "unconfirmed_detection": 13,
+   "discrepancy": 2,
+   "matched": 1
+  },
+  "streetlight_gaps_60m": 1,
+  "missing_asset_records": 1
+ },
+ "buildings": {
+  "registered": 25,
+  "with_a_building_box": 30,
+  "no_building_box_detected": 0,
+  "box_rejected_by_quality_gate": {
+   "thin sliver at image edge": 6,
+   "roof cut off at top": 3,
+   "base cut off at bottom": 3
+  },
+  "usable_view": 18,
+  "vlm_said_wrong_target": 0,
+  "use_route": {
+   "tier1_local_clip": 13,
+   "tier3_vlm": 5
+  },
+  "use_values": {
+   "residential": 16,
+   "not observed": 7,
+   "commercial": 2
+  },
+  "floors_status": {
+   "measured": 16,
+   "not_measured": 8,
+   "low_confidence": 1
+  },
+  "floor_values": {
+   "2": 14,
+   "1": 3
+  }
+ },
+ "signs": {
+  "crops": 53,
+  "tiers": {
+   "read by OCR (Tier 2)": 8,
+   "no readable text": 38,
+   "Google watermark": 6,
+   "escalated to VLM (Tier 3)": 1
+  },
+  "ocr_seconds_per_crop": 0.0,
+  "ocr_mode": "full",
+  "vlm_name_calls": 4,
+  "vlm_name_verdicts": {
+   "advertisement": 1,
+   "business": 2,
+   "none": 1
+  },
+  "buildings_named": 3,
+  "name_route": {
+   "tier3_vlm+ocr_gate": 2,
+   "tier2_ocr": 1
+  },
+  "name_quality": {
+   "good": 1,
+   "fragment": 2
+  },
+  "google_confirmed": 0
+ },
+ "unmapped_businesses": {
+  "sign_candidates_checked_by_vlm": 2,
+  "kept": 1,
+  "vlm_said_not_business": 0,
+  "examples": [
+   "m.m. refrigeration"
+  ]
+ },
+ "matching": {
+  "match_status": {
+   "matched": 19,
+   "discrepancy": 6
+  },
+  "discrepancy_types": {
+   "use_change": 2,
+   "extra_floor": 3,
+   "area_understated": 1
+  },
+  "planted_error_scores": {
+   "location_shift": {
+    "planted": 0,
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+   },
+   "area_understated": {
+    "planted": 1,
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+   },
+   "missing_record": {
+    "planted": 0,
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+   }
+  },
+  "asset_register_scores": {
+   "location_shift": {
+    "planted": 1,
+    "tp": 1,
+    "fp": 0
+   },
+   "type_mismatch": {
+    "planted": 1,
+    "tp": 1,
+    "fp": 0
+   },
+   "missing_asset": {
+    "planted": 1,
+    "tp": 1,
+    "fp": 0
+   }
+  },
+  "register_note": "SYNTHETIC property + asset registers with planted errors (no open municipal data)"
+ },
+ "review": {
+  "items": 19,
+  "by_priority": {
+   "2": 5,
+   "4": 1,
+   "6": 13
+  },
+  "by_reason": {
+   "attribute discrepancy \u2014 verify on imagery": 5,
+   "building seen from one view only": 3,
+   "floor count low confidence (roofline not visible)": 1,
+   "single-detection asset": 13
+  }
+ },
+ "cost_time": {
+  "stage_seconds": {
+   "panoramas": 0.0,
+   "area": 1.6,
+   "plan": 3.1,
+   "detect": 1.8,
+   "geometry": 2.1,
+   "ocr": 20.7,
+   "vlm": 1.8,
+   "reference": 5.7,
+   "match": 1.8
+  },
+  "total_minutes": 0.7,
+  "vlm_calls": 0,
+  "vlm_cost_usd": 0.0,
+  "places_calls": 8,
+  "device": "gpu",
+  "buildings_use_local": 13,
+  "buildings_use_vlm": 5
+ },
+ "story": [
+  "Found 21 Street View panoramas (0 user photospheres, excluded from geometry).",
+  "Planned 9 camera stops and 69 views instead of a full 12-heading sweep.",
+  "1 views face frontage with no building outline in OSM \u2014 map coverage verdict: full: footprints on most frontages.",
+  "The detector drew 263 boxes; 196 were usable for positioning.",
+  "Located 16 poles/streetlights; 1 triangulated from 2+ cameras, 15 approximate (single camera).",
+  "25 buildings registered; 18 had a usable view for use/floors, 0 had no building box at all.",
+  "53 sign crops: 8 read locally, 1 escalated; 3 buildings named, 0 confirmed by Google.",
+  "1 businesses found on unmapped frontage (approximate points).",
+  "19 items sent to human review."
+ ]
+}

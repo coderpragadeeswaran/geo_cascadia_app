@@ -20,7 +20,7 @@ import os
 import time
 
 import requests
-from shapely.geometry import LineString, MultiLineString, Point, Polygon, mapping, shape
+from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, Polygon, mapping, shape
 from shapely.ops import linemerge, transform, unary_union
 
 from geo_cascadia.geo import Frame
@@ -99,13 +99,22 @@ def _parts(g):
     return [p for p in (list(g.geoms) if hasattr(g, "geoms") else [g]) if p.geom_type == "LineString" and p.length > 0]
 
 
+def _area_ll(F, lines_xy):
+    """The job area: the street buffered by the pipeline's 45 m, back in lon/lat. A street whose OSM ways leave a gap
+    wider than twice the buffer buffers into separate pieces; every piece is kept (a MultiPolygon with any number of
+    parts), and run_area / the worker take either. Holes are filled, as picker.click_to_street does."""
+    buf = lines_xy.buffer(BUFFER_M)
+    polys = [Polygon([F.ll(x, y)[::-1] for x, y in p.exterior.coords])
+             for p in (buf.geoms if hasattr(buf, "geoms") else [buf]) if not p.is_empty]
+    return polys[0] if len(polys) == 1 else MultiPolygon(polys)
+
+
 def _result(F, line_xy, way_ids, street, name_source, osm_name, source):
     parts = _parts(line_xy.intersection(Point(0, 0).buffer(MAX_LEN_M / 2)))       # cap job size (pipeline rule)
     if not parts:
         raise NoRoad(f"no road within {SEARCH_M} m of the clicked point")
     merged = MultiLineString(parts)
-    buf = merged.buffer(BUFFER_M)
-    poly = Polygon([F.ll(x, y)[::-1] for x, y in buf.exterior.coords])
+    poly = _area_ll(F, merged)
     lines_ll = _to_ll(F, merged)
     return {"street": street, "name_source": name_source, "osm_name": osm_name, "length_m": round(merged.length),
             "osm_ways": len(way_ids), "way_ids": way_ids, "polygon": mapping(poly),
@@ -140,8 +149,7 @@ def trim(res, lines):
         raise ValueError(f"the stretch is {merged.length:.0f} m; the shortest is {MIN_TRIM_M} m")
     if merged.length > full.length + 1:
         raise ValueError("the stretch is longer than the picked street")
-    buf = merged.buffer(BUFFER_M)
-    poly = Polygon([F.ll(x, y)[::-1] for x, y in buf.exterior.coords])
+    poly = _area_ll(F, merged)
     lines_ll = _to_ll(F, merged)
     return {**res, "length_m": round(merged.length), "full_length_m": res["length_m"], "trimmed": True, "polygon": mapping(poly),
             "lines": {"type": "MultiLineString", "coordinates": [[[round(x, 7), round(y, 7)] for x, y in l.coords] for l in lines_ll.geoms]}}

@@ -1,0 +1,1 @@
+{"attempts": 6, "resumed_from_saved_files": true, "ocr_mode": "full", "ocr_tries": [{"try": 1, "device": "gpu", "ocr_mode": "full", "ok": true, "why": null}, {"try": 1, "device": "gpu", "ocr_mode": "full", "ok": true, "why": null}]}

@@ -217,3 +217,19 @@ it was to the limit.
   30 s, 60 s and 120 s. The card shows "Map server busy (OpenStreetMap), retrying…". The run continues from its saved
   stages, so no photo is bought again. After the last try the job fails, and Retry is available.
 
+## "No Street View" or a request error? (D40)
+
+The job ends as **No Street View** only when Google answered "no imagery here" for every point it searched. If Google
+refused or failed the look-ups, the job **fails with the real cause** on the job card and in the cell, for example:
+
+```
+✗ Street View request failed: HTTP 200 REQUEST_DENIED — This API key is not authorized to use this service or API.
+  (412 of 412 look-ups). This is not a lack of imagery: the Google key given to the worker is not allowed to use the
+  Street View Static API (check that key's API restrictions in Google Cloud Console)
+```
+
+- **REQUEST_DENIED:** the cell asks for the Google key again (Enter keeps the setup cells' key). The server key must
+  allow **Street View Static API** and **Places API (New)**, plus Geocoding API for road names (D36). Then press
+  **Retry**: the search runs again.
+- **OVER_QUERY_LIMIT / HTTP errors / network:** fix the quota or billing, or wait, then press **Retry**.
+- The key itself is never printed or sent to the app.

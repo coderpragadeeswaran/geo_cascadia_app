@@ -19,7 +19,7 @@ DRIVE_JOBS_DIR = "/content/drive/MyDrive/gc_worker_jobs"   # worker on the same 
 OCR_SELF_TEST = "ask"           # at start: load the sign reader once, read one test image, free it. "ask" | True | False
 OVERPASS_RETRY_S = (30, 60, 120)  # OpenStreetMap busy at the area stage: wait this long and try again, then fail (Retry)
 
-import _thread, collections, dataclasses, gc, getpass, glob, inspect, json, os, platform, shutil, socket, subprocess, sys, \
+import _thread, collections, dataclasses, gc, getpass, glob, inspect, json, os, platform, re, shutil, socket, subprocess, sys, \
     threading, time, traceback, uuid
 
 try:
@@ -119,16 +119,136 @@ def google_key_problem(key):
     """One free call (Street View metadata) with the Google key the worker will use: None when it works (or when the
     answer is unclear), else a plain sentence. A website-restricted (browser) key is refused with a referer message."""
     try:
-        j = requests.get("https://maps.googleapis.com/maps/api/streetview/metadata",
-                         params={"location": "11.0296,76.9752", "key": key}, timeout=15).json()
+        r = requests.get("https://maps.googleapis.com/maps/api/streetview/metadata",   # the pipeline's own search call
+                         params={"location": "11.0296,76.9752", "radius": 15, "source": "outdoor", "key": key}, timeout=15)
+        j = r.json()
     except Exception:
         return None                                                # no network answer: the first job will tell
-    status, msg = j.get("status"), j.get("error_message") or ""
-    if status in ("OK", "ZERO_RESULTS", "NOT_FOUND"):
+    status, msg = j.get("status"), scrub(j.get("error_message") or "", key)
+    if status in SV_FINE:
         return None
     if "referer" in msg.lower() or "referrer" in msg.lower():
         return BROWSER_KEY
-    return f"Google refused this key ({status}{': ' + msg[:160] if msg else ''})."
+    return f"Google refused this key (HTTP {r.status_code} {status}{': ' + msg[:160] if msg else ''})."
+
+
+# ----------------------------------------------------------------------------------------------- Street View answers
+SV_FINE = ("OK", "ZERO_RESULTS", "NOT_FOUND")     # real answers about imagery; anything else is a refused/failed request
+SV_HINT = {"REQUEST_DENIED": "the Google key given to the worker is not allowed to use the Street View Static API "
+                             "(check that key's API restrictions in Google Cloud Console)",
+           "OVER_QUERY_LIMIT": "the key's Street View quota is used up, or billing is off on its project",
+           "network": "the worker could not reach Google"}
+
+
+def scrub(text, key=None):
+    """Never show a key: the key itself, any key=… in a URL, any AIza… token."""
+    t = str(text or "")
+    if key:
+        t = t.replace(key, "…")
+    t = re.sub(r"key=[^&\s'\"]+", "key=…", t)
+    return re.sub(r"AIza[0-9A-Za-z_\-]{20,}", "AIza…", t)
+
+
+class StreetViewProblem(Exception):
+    """The Street View look-ups were refused or failed, or no look-up was made: not "no imagery"."""
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+
+
+class StreetViewTrace:
+    """D40. The pipeline reads every Street View answer other than OK as "no panorama here" (and a photo that did not
+    come back as "no photo"), so a refused key, a used-up quota or a network failure ended as "Google has no outdoor
+    Street View imagery on this selection". The pipeline is not changed: for the run, the `requests` its streetview
+    module uses is wrapped, and every answer is counted as (HTTP status, Google's status) with Google's message."""
+
+    def __init__(self, key=None):
+        self.key, self.lock = key, threading.Lock()
+        self.meta, self.images, self.msgs = collections.Counter(), collections.Counter(), {}
+        self.reported = False                  # the job already failed with this trace's reason
+
+    def _add(self, counter, k, msg=None):
+        with self.lock:
+            counter[k] += 1
+            if msg and k not in self.msgs:
+                self.msgs[k] = scrub(msg, self.key)[:200]
+
+    def get(self, real, url, *a, **k):
+        counter = self.meta if str(url).rstrip("/").endswith("/metadata") else self.images
+        try:
+            r = real.get(url, *a, **k)
+        except Exception as e:
+            self._add(counter, ("network", type(e).__name__), str(e))
+            raise
+        if counter is self.meta:
+            try:
+                j = r.json()
+            except ValueError:
+                j = {}
+            self._add(counter, (r.status_code, j.get("status") or "no answer"), j.get("error_message"))
+        else:
+            self._add(counter, (r.status_code, "OK" if r.status_code == 200 else "refused"),
+                      None if r.status_code == 200 else (getattr(r, "text", "") or "").strip()[:200])
+        return r
+
+    def install(self, run_area):
+        """Wrap the streetview module of the package run_area comes from; returns the undo."""
+        pkg = (getattr(run_area, "__module__", "") or "").rpartition(".")[0]
+        mod = sys.modules.get(f"{pkg}.streetview") if pkg else None
+        if mod is None or not hasattr(mod, "requests"):
+            return lambda: None
+        real, trace = mod.requests, self
+
+        class Wrapped:
+            def __getattr__(self, n):
+                return getattr(real, n)
+
+            def get(self, url, *a, **k):
+                return trace.get(real, url, *a, **k)
+        mod.requests = Wrapped()
+
+        def undo():
+            mod.requests = real
+        return undo
+
+    def failed(self, counter):
+        return {k: n for k, n in counter.items() if k[1] not in SV_FINE}
+
+    def describe(self, counter, what):
+        """'HTTP 200 REQUEST_DENIED — <Google's message> (412 of 412 look-ups)'"""
+        bad = self.failed(counter)
+        (http, status), _ = max(bad.items(), key=lambda kv: kv[1])
+        msg = self.msgs.get((http, status))
+        head = f"network error ({status})" if http == "network" else f"HTTP {http} {status}"
+        return f"{head}{' — ' + msg if msg else ''} ({sum(bad.values())} of {sum(counter.values())} {what})"
+
+    def no_imagery(self):
+        """After the pipeline's NO_STREET_VIEW: (code, message). Only real answers (ZERO_RESULTS / NOT_FOUND, or
+        panoramas outside the selection) mean there is no imagery; a refused or failed look-up never does."""
+        total = sum(self.meta.values())
+        if not total:
+            return "BAD_AREA", ("Couldn't search this selection for Street View: no look-up was made, so the area the "
+                                "worker received is empty or too small. Please report this street")
+        bad = self.failed(self.meta)
+        if not bad:
+            return "NO_STREET_VIEW", f"Google has no outdoor Street View imagery on this selection ({total} points checked)"
+        (http, status), _ = max(bad.items(), key=lambda kv: kv[1])
+        if "referer" in self.msgs.get((http, status), "").lower():
+            return "GOOGLE_BROWSER_KEY", BROWSER_KEY
+        hint = SV_HINT.get("network" if http == "network" else status, "Google did not answer normally")
+        return ("GOOGLE_KEY" if status == "REQUEST_DENIED" else "GOOGLE_REQUEST",
+                f"Street View request failed: {self.describe(self.meta, 'look-ups')}. This is not a lack of imagery: {hint}")
+
+    def warnings(self):
+        """Look-ups or photos that failed in a run that still went on (points or views silently missing)."""
+        out = []
+        if self.reported:
+            return out
+        if self.failed(self.meta):
+            out.append(f"Street View look-ups failed: {self.describe(self.meta, 'look-ups')}; panoramas there may be missing")
+        if self.failed(self.images):
+            out.append(f"Street View photos failed: {self.describe(self.images, 'photos')}; those views have no detections")
+        return out
 
 
 def check_pipeline(run_area):
@@ -533,6 +653,7 @@ def run_job(api, job, base_cfg, run_area, state):
     from_drive = bool(saved and any(os.path.isfile(os.path.join(saved, f)) for f in STAGE_FILES))
     if from_drive:
         sync(saved, out)
+    drop_empty_panos(out)
     # ONE answer to "does this attempt continue?", for the printed line AND the job card's note: a stage file run_area
     # resumes from is present
     continuing = any(os.path.isfile(os.path.join(out, f)) for f in STAGE_FILES)
@@ -618,6 +739,8 @@ def run_job(api, job, base_cfg, run_area, state):
     post("panoramas", 0, None, force=True)
     log_mem("panoramas starts")
     waits = list(OVERPASS_RETRY_S)
+    trace = StreetViewTrace(getattr(cfg, "maps_key", None))       # D40: every Street View answer, to tell why
+    undo_trace = trace.install(run_area)
     try:
         while True:
             try:
@@ -625,6 +748,13 @@ def run_job(api, job, base_cfg, run_area, state):
                                   on_stage=on_stage, plan_check=plan_check, resume=True, ocr_runner=ocr_runner_for(tell, ocr_log))
                 break
             except Exception as err:
+                if str(err).startswith("NO_STREET_VIEW"):
+                    code, msg = trace.no_imagery()
+                    if code == "NO_STREET_VIEW":
+                        raise RuntimeError(f"NO_STREET_VIEW: {msg}") from None
+                    drop_empty_panos(out)                          # Retry must search again, not reload "nothing found"
+                    trace.reported = True
+                    raise StreetViewProblem(code, msg) from None
                 if not map_server_busy(err) or not waits:
                     raise
                 # D39: OpenStreetMap is often busy for a minute or two; the run resumes from its saved stages
@@ -636,8 +766,15 @@ def run_job(api, job, base_cfg, run_area, state):
                     time.sleep(1)
                 tell(f"Map server was busy (OpenStreetMap); continuing after {n} {'retry' if n == 1 else 'retries'}.")
     finally:
+        undo_trace()
+        warns = trace.warnings()                                   # look-ups / photos that failed in a run that went on
+        for w in warns:
+            print(f"  ⚠ {w}")
+        if warns:
+            note["street_view_errors"] = note.get("street_view_errors", []) + warns
         if ocr_log:                                                # what sign reading went through, kept with the run
             note["ocr_tries"] = note.get("ocr_tries", []) + ocr_log
+        if warns or ocr_log:
             json.dump(note, open(note_p, "w"))
     check()
     used = (exp.get("meta", {}).get("run") or {}).get("places_calls") or 0
@@ -691,7 +828,21 @@ def map_server_busy(err):
     return "Overpass" in m or "overpass" in m
 
 
+def drop_empty_panos(out):
+    """run_area saves panos.json before it checks it; an empty one would make every later attempt skip the search."""
+    p = os.path.join(out, "panos.json")
+    try:
+        with open(p) as f:
+            empty = json.load(f) == []
+        if empty:
+            os.remove(p)
+    except (OSError, ValueError):
+        pass
+
+
 def classify(err):
+    if isinstance(err, StreetViewProblem):                         # D40: refused / failed look-ups, not "no imagery"
+        return err.code, str(err)
     m = str(err)
     if "referer" in m.lower() or "referrer" in m.lower():
         return "GOOGLE_BROWSER_KEY", BROWSER_KEY
@@ -782,13 +933,13 @@ def main():
                     print("Enter fresh AWS keys; the same job resumes from where it stopped.")
                     keys(cfg, only_aws=True)                        # the job is claimable again; its files are kept
                     resume = job["id"]
-                elif code in ("FAILED", "GOOGLE_BROWSER_KEY"):
+                elif code in ("FAILED", "GOOGLE_BROWSER_KEY", "GOOGLE_KEY", "GOOGLE_REQUEST", "BAD_AREA"):
                     if state.get("out") and drive_dir(job):
                         sync(state["out"], drive_dir(job))         # keep everything for Retry in the app
                     print("  Its progress is kept" + (" on Drive" if drive_dir(job) else " in this session") +
                           ": press Retry on the job in the app to continue from here (no photo is bought again).")
-                    if code == "GOOGLE_BROWSER_KEY":
-                        keys(cfg, only_google=True)                # a server key now; Retry then finishes the job
+                    if code in ("GOOGLE_BROWSER_KEY", "GOOGLE_KEY"):
+                        keys(cfg, only_google=True)                # a working server key now; Retry then finishes the job
                 else:
                     forget(job, state.get("out"))                  # no Street View on this street: nothing to keep
             finally:

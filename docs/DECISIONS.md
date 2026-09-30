@@ -1294,3 +1294,65 @@ Google map and no Street View image, so the D21 heap limits hold.
      retries".
    - After the last try the job fails as retryable, with a plain message.
 
+## 2026-09-28 — live analysis: streets with gaps, Street View request errors
+
+### D40. MultiPolygon job areas; "no imagery" vs a refused request
+**1. Streets with gaps.** A street made of OSM ways with gaps wider than 90 m (2 × the 45 m buffer) buffers into
+separate pieces. `streetpick._result` and `trim` read `buf.exterior` and crashed (`'MultiPolygon' object has no attribute
+'exterior'`, a 500 on `/jobs/preview`).
+- `streetpick._area_ll` keeps every piece: a Polygon for one piece, a MultiPolygon for 2, 3 or more. Holes are filled,
+  as `picker.click_to_street` does, so a one-piece street gets exactly the polygon it got before.
+- It is used for whole and trimmed streets. The job input stores it as-is.
+- The worker passes it to `run_area` unchanged. The pipeline already takes a MultiPolygon (`Area._poly_to_local`; the
+  discovery grid uses only `bounds` / `contains`). No pipeline change.
+- A drawn area (`POST /jobs {polygon}`) stays a single Polygon.
+- Web types allow a MultiPolygon in `input.polygon` and the preview. The job pulse point uses `outerRings`.
+
+**2. "API not reachable" for a 500.** Starlette answers an unhandled error in its outermost layer, outside CORS. The
+browser therefore got no CORS header, `fetch` threw, and the app said "The API is not reachable".
+- `main.ServerErrorsAsJson` (the innermost middleware) turns it into a JSON 500, `{"detail": "server error
+  (<ErrorClass>)", "server_error": true}`, which passes through CORS. Only the class is sent: a message can hold a URL
+  with a key. The traceback goes to the API console.
+- Analyse: a 5xx on preview reads "Couldn't prepare this street — server error"; on start, "Couldn't queue this street
+  — server error". "The API is not reachable" only for a real connection failure (status 0).
+
+**3. Worker: "Google has no outdoor Street View imagery" for every street** (28 Sep, Sanganur Road, Sakthi Main Road,
+Bharathiar Road ×2).
+- The four job polygons were valid single Polygons in the right place (lon/lat). Not a polygon problem.
+- `StreetView._meta` (pipeline) returns None for every status other than OK. A refused key, a quota or a network error
+  therefore looks exactly like "no panorama here".
+- Checked from the laptop at the midpoints of the failed Sanganur and Sakthi jobs:
+  - the browser key answers OK (imagery exists);
+  - the server key in `backend/.env` (`GOOGLE_PLACES_SERVER_KEY`) answers `REQUEST_DENIED`: "This API key is not
+    authorized to use this service or API". Its API restrictions do not include the Street View Static API.
+  - The Colab key can't be seen from here. If it is that same key, this is the cause.
+
+Worker changes (no pipeline change):
+- `StreetViewTrace` wraps the `requests` of the pipeline's streetview module for the run (undone after). It counts
+  every metadata and photo answer: (HTTP status, Google status) plus Google's message.
+- When `run_area` raises NO_STREET_VIEW, the trace decides:
+  - Only ZERO_RESULTS / NOT_FOUND, or panoramas outside the selection → **no_street_view** "… (N points checked)".
+  - Any refused or failed look-up → **failed, retryable**:
+    - `GOOGLE_KEY` (REQUEST_DENIED; the cell then asks for the Google key);
+    - `GOOGLE_REQUEST` (quota, HTTP error, network);
+    - `GOOGLE_BROWSER_KEY` (referer message).
+    - The message reads "Street View request failed: HTTP 200 REQUEST_DENIED — <Google's message> (412 of 412
+      look-ups). This is not a lack of imagery: <hint>". The job card and Colab show it.
+  - No look-up at all (empty or tiny area) → `BAD_AREA`, failed.
+- Keys never appear: `scrub` removes the key, any `key=…` and any `AIza…` from every message and printed line.
+- `run_area` saves `panos.json` before it checks it, so an empty one made every later attempt skip the search.
+  `drop_empty_panos` removes it when the job fails this way and at the start of each attempt. Retry therefore
+  searches again.
+- In a run that goes on, failed look-ups or photos are printed as ⚠ lines and kept in `worker_run.json`
+  (`street_view_errors`).
+- The start-up key check now uses the pipeline's exact search call (`radius=15, source=outdoor`) and includes the HTTP
+  status.
+- Backend: `FAIL_CODES` lists the new codes as `failed`, which makes them retryable.
+
+**Tests:** `backend/tests/test_d40.py`:
+- 2 and 3 pieces, whole and trimmed, picker + preview + job input;
+- the pipeline's `Area` with the MultiPolygon;
+- the JSON 500 with CORS;
+- the worker through the pipeline's real `StreetView.discover` with fake Google answers: no imagery, denied, quota,
+  network, browser key, empty area, Retry after a denied key, three pieces, partial failures;
+- the backend statuses and `retryable`.

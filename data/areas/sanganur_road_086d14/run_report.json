@@ -1,0 +1,258 @@
+{
+ "run_dir": "sanganur_road_086d14.upload-182721",
+ "area": "Sanganur Road",
+ "generated": "2026-09-27T19:12:54.291275+00:00",
+ "pipeline": {
+  "detector": "YOLOv8s v8s_640_s2",
+  "ocr": "PaddleOCR en+ta (full)",
+  "vlm": "apac.amazon.nova-lite-v1:0",
+  "name_gate": 0.7,
+  "footprints": "OSM",
+  "reference": "Google Places (New)"
+ },
+ "imagery": {
+  "panoramas_found": 35,
+  "google_car": 35,
+  "user_photospheres": 0,
+  "cameras_planned": 17,
+  "cameras_dropped": {},
+  "views_planned": 119,
+  "views_by_type": {
+   "perpendicular": 32,
+   "tilt": 22,
+   "oblique": 63,
+   "unmapped": 2
+  },
+  "views_facing_mapped_building": 117,
+  "views_facing_no_mapped_building": 2,
+  "views_fetched_ok": 119,
+  "street_view_requests": 0,
+  "street_view_cost_usd_notional": 0.0,
+  "by_street": {
+   "Sanganur Road": {
+    "cameras": 17,
+    "views": 119
+   }
+  }
+ },
+ "maps": {
+  "footprints": {
+   "osm": 121,
+   "microsoft": 0
+  },
+  "osm_built_fraction": 0.504,
+  "buildings_registered": 52,
+  "buildings_by_source": {
+   "osm": 52
+  },
+  "verdict": "full: footprints on most frontages"
+ },
+ "detection": {
+  "boxes_total": 886,
+  "by_class": {
+   "signboard": 410,
+   "pole": 140,
+   "building": 313,
+   "lamp_head": 23
+  },
+  "used_for_geometry": 748,
+  "excluded_from_geometry": {
+   "tilted view": 138
+  },
+  "mean_conf_by_class": {
+   "building": 0.636,
+   "lamp_head": 0.405,
+   "pole": 0.546,
+   "signboard": 0.603
+  }
+ },
+ "assets": {
+  "located": 33,
+  "by_type": {
+   "streetlight": 7,
+   "pole": 26
+  },
+  "by_confidence": {
+   "medium": 15,
+   "low": 16,
+   "high": 2
+  },
+  "triangulated_2plus_cameras": 2,
+  "single_camera_approximate": 31,
+  "register_status": {
+   "discrepancy": 3,
+   "unconfirmed_detection": 15,
+   "matched": 10,
+   "unrecorded_asset": 5
+  },
+  "streetlight_gaps_60m": 0,
+  "missing_asset_records": 0
+ },
+ "buildings": {
+  "registered": 52,
+  "with_a_building_box": 57,
+  "no_building_box_detected": 0,
+  "box_rejected_by_quality_gate": {
+   "thin sliver at image edge": 8,
+   "implausibly tall box": 1,
+   "roof cut off at top": 5,
+   "base cut off at bottom": 1
+  },
+  "usable_view": 42,
+  "vlm_said_wrong_target": 0,
+  "use_route": {
+   "tier1_local_clip": 32,
+   "tier3_vlm": 10
+  },
+  "use_values": {
+   "other": 3,
+   "commercial": 36,
+   "institutional": 1,
+   "residential": 5,
+   "not observed": 7
+  },
+  "floors_status": {
+   "measured": 35,
+   "low_confidence": 4,
+   "not_measured": 13
+  },
+  "floor_values": {
+   "1": 22,
+   "2": 15,
+   "3": 2
+  }
+ },
+ "signs": {
+  "crops": 410,
+  "tiers": {
+   "read by OCR (Tier 2)": 169,
+   "no readable text": 193,
+   "escalated to VLM (Tier 3)": 48
+  },
+  "ocr_seconds_per_crop": 0.01,
+  "ocr_mode": "full",
+  "vlm_name_calls": 48,
+  "vlm_name_verdicts": {
+   "business": 34,
+   "advertisement": 10,
+   "notice": 4
+  },
+  "buildings_named": 45,
+  "name_route": {
+   "tier2_ocr": 24,
+   "tier3_vlm+ocr_gate": 21
+  },
+  "name_quality": {
+   "fragment": 10,
+   "good": 31,
+   "tamil_unverified": 4
+  },
+  "google_confirmed": 10
+ },
+ "unmapped_businesses": {
+  "sign_candidates_checked_by_vlm": 0,
+  "kept": 0,
+  "vlm_said_not_business": 0,
+  "examples": []
+ },
+ "matching": {
+  "match_status": {
+   "matched": 38,
+   "discrepancy": 13,
+   "no_record": 1
+  },
+  "discrepancy_types": {
+   "use_change": 4,
+   "extra_floor": 5,
+   "area_understated": 2,
+   "location_shift": 2,
+   "missing_record": 1
+  },
+  "planted_error_scores": {
+   "location_shift": {
+    "planted": 2,
+    "tp": 2,
+    "fp": 0,
+    "fn": 0
+   },
+   "area_understated": {
+    "planted": 2,
+    "tp": 2,
+    "fp": 0,
+    "fn": 0
+   },
+   "missing_record": {
+    "planted": 1,
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+   }
+  },
+  "asset_register_scores": {
+   "location_shift": {
+    "planted": 2,
+    "tp": 1,
+    "fp": 0
+   },
+   "type_mismatch": {
+    "planted": 2,
+    "tp": 2,
+    "fp": 0
+   },
+   "missing_asset": {
+    "planted": 0,
+    "tp": 0,
+    "fp": 0
+   }
+  },
+  "register_note": "SYNTHETIC property + asset registers with planted errors (no open municipal data)"
+ },
+ "review": {
+  "items": 32,
+  "by_priority": {
+   "1": 1,
+   "2": 9,
+   "4": 2,
+   "5": 4,
+   "6": 16
+  },
+  "by_reason": {
+   "high-severity discrepancy": 1,
+   "floor count low confidence (roofline not visible)": 4,
+   "attribute discrepancy \u2014 verify on imagery": 9,
+   "building seen from one view only": 7,
+   "single-detection asset": 16
+  }
+ },
+ "cost_time": {
+  "stage_seconds": {
+   "panoramas": 0.0,
+   "area": 4.7,
+   "plan": 5.9,
+   "detect": 4.6,
+   "geometry": 4.8,
+   "ocr": 23.5,
+   "vlm": 4.5,
+   "reference": 6.8,
+   "match": 4.4
+  },
+  "total_minutes": 1.1,
+  "vlm_calls": 0,
+  "vlm_cost_usd": 0.0,
+  "places_calls": 18,
+  "device": "gpu",
+  "buildings_use_local": 32,
+  "buildings_use_vlm": 10
+ },
+ "story": [
+  "Found 35 Street View panoramas (0 user photospheres, excluded from geometry).",
+  "Planned 17 camera stops and 119 views instead of a full 12-heading sweep.",
+  "2 views face frontage with no building outline in OSM \u2014 map coverage verdict: full: footprints on most frontages.",
+  "The detector drew 886 boxes; 748 were usable for positioning.",
+  "Located 33 poles/streetlights; 2 triangulated from 2+ cameras, 31 approximate (single camera).",
+  "52 buildings registered; 42 had a usable view for use/floors, 0 had no building box at all.",
+  "410 sign crops: 169 read locally, 48 escalated; 45 buildings named, 10 confirmed by Google.",
+  "0 businesses found on unmapped frontage (approximate points).",
+  "32 items sent to human review."
+ ]
+}

@@ -36,7 +36,10 @@ JOB_COLS = f"""j.id, j.kind, j.input, j.status, j.stage, j.done, j.total, j.mess
               j.approved, j.estimate, j.device, j.cancel_requested, j.note"""
 FAIL_CODES = {"NO_STREET_VIEW": "no_street_view", "NO_STREETS": "no_street_view", "NO_CAMERAS": "no_street_view",
               "AWS_TOKEN_EXPIRED": "expired_token", "EXPIRED_TOKEN": "expired_token", "NEEDS_APPROVAL": "needs_approval",
-              "CANCELLED": "failed"}
+              "CANCELLED": "failed",
+              # D40: Street View look-ups refused (key / quota / network) or no look-up made: an error, not "no imagery",
+              # so the job is failed and retryable (the worker keeps its progress; Retry searches again)
+              "GOOGLE_KEY": "failed", "GOOGLE_REQUEST": "failed", "GOOGLE_BROWSER_KEY": "failed", "BAD_AREA": "failed"}
 # the worker's stages, in run order (run_area's own names); sub-steps the pipeline reports map onto them
 STAGES = ["panoramas", "area", "plan", "detect", "geometry", "ocr", "vlm", "reference", "match", "export"]
 SUB_STAGES = {"vlm_names": "vlm", "building_crops": "vlm", "vlm_buildings": "vlm", "places": "reference"}
@@ -173,7 +176,8 @@ class ClickIn(BaseModel):
 class JobIn(BaseModel):
     lat: Optional[float] = Field(None, ge=-90, le=90)
     lon: Optional[float] = Field(None, ge=-180, le=180)
-    polygon: Optional[dict] = Field(None, description="GeoJSON Polygon (lon/lat)")
+    polygon: Optional[dict] = Field(None, description="GeoJSON Polygon (lon/lat), a drawn area. A clicked street's own "
+                                    "area may be a MultiPolygon (a street with gaps); it is built here, never sent")
     name: Optional[str] = Field(None, max_length=120)
     lines: Optional[dict] = Field(None, description="with {lat, lon}: the trimmed stretch of the clicked street (GeoJSON "
                                   "LineString / MultiLineString, lon/lat); the job polygon is rebuilt from it")
@@ -597,7 +601,8 @@ def worker_progress(body: ProgressIn, request: Request, D: Data = Depends(get_da
 
 @router.post("/worker/fail", tags=["worker"], dependencies=[Depends(worker_auth)])
 def worker_fail(body: FailIn, request: Request, D: Data = Depends(get_data)):
-    """NO_STREET_VIEW / NO_STREETS / NO_CAMERAS → no_street_view; AWS_TOKEN_EXPIRED → expired_token (resumable);
+    """NO_STREET_VIEW / NO_STREETS / NO_CAMERAS → no_street_view; GOOGLE_KEY / GOOGLE_REQUEST / BAD_AREA → failed with
+    the cause (retryable); AWS_TOKEN_EXPIRED → expired_token (resumable);
     NEEDS_APPROVAL → needs_approval (cost cap: waits for a person, with the estimate); anything else → failed."""
     status = FAIL_CODES.get(body.code.upper(), "failed")
 

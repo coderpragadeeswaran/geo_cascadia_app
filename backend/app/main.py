@@ -75,6 +75,34 @@ def _log_setup():
         lg.propagate = False
 
 
+class ServerErrorsAsJson:
+    """An unhandled error becomes a JSON 500 INSIDE the CORS middleware. Starlette answers it in its outermost layer,
+    without CORS headers, so the browser saw a failed fetch and the app said "API not reachable" for a server bug.
+    The detail names only the error class (a message can hold a request URL with a key); the traceback goes to the
+    API console."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        started = False
+
+        async def send_(msg):
+            nonlocal started
+            started = started or msg["type"] == "http.response.start"
+            await send(msg)
+        try:
+            await self.app(scope, receive, send_)
+        except Exception as exc:
+            if started:
+                raise
+            logging.getLogger("geo_cascadia").exception("server error on %s %s", scope.get("method"), scope.get("path"))
+            await JSONResponse({"detail": f"server error ({type(exc).__name__})", "server_error": True},
+                               status_code=500)(scope, receive, send)
+
+
 def create_app(settings: Optional[Settings] = None) -> FastAPI:
     settings = settings or Settings()
     _log_setup()
@@ -89,6 +117,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     app.state.gapcalc = gaps.GapCalc(settings.areas_dir)
     app.state.runfiles = hood.RunFiles(settings.areas_dir)
     app.state.workers = {}
+    app.add_middleware(ServerErrorsAsJson)          # added first = innermost: its 500 still passes through CORS
     app.add_middleware(GZipMiddleware, minimum_size=2000)
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"])
 

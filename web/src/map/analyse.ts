@@ -67,7 +67,9 @@ export const useAnalyse = create<AnalyseState>((set, get) => ({
       set({ loading: false, startedAt: null, error: !err ? { kind: 'other', message: 'Could not look up the street' }
         : err.status === 503 || err.status === 504 ? { kind: 'busy', message: 'OpenStreetMap is busy — try again in a moment.' }
           : err.status === 422 ? { kind: 'no_road', message: 'No road here. Point at a street with a blue Street View line and click.' }
-            : err.status === 0 ? { kind: 'offline', message: 'The API is not reachable.' } : { kind: 'other', message: err.message } })
+            : err.status === 0 ? { kind: 'offline', message: 'The API is not reachable.' }
+              : err.status >= 500 ? { kind: 'other', message: 'Couldn’t prepare this street — server error.' }
+                : { kind: 'other', message: err.message } })
     } finally {
       clearTimeout(timer)
       if (ctrl === mine) ctrl = null
@@ -90,7 +92,9 @@ export const useAnalyse = create<AnalyseState>((set, get) => ({
       const offline = e instanceof ApiError && e.offline
       set({ loading: false, error: { kind: offline ? 'offline' : 'other', message: offline
         ? 'Offline data mode: the database is unreachable, so new analyses can’t be queued (read-only).'
-        : e instanceof ApiError ? e.message : 'Could not queue the analysis' } })
+        : !(e instanceof ApiError) ? 'Could not queue the analysis'
+          : e.status === 0 ? 'The API is not reachable.'
+            : e.status >= 500 && e.status !== 503 ? 'Couldn’t queue this street — server error.' : e.message } })
     }
   },
   cancelJob: async () => {
