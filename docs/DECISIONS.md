@@ -1496,3 +1496,50 @@ area (the seed includes the area name).
 ### Explainer wording
 - Files 00, 01, 02, 03 and 05 use plain descriptions only (no request paths, file, function, table or column names, no
   code terms); OSM building IDs and asset IDs stay because the app shows them. Technical names live only in 04.
+
+## 2026-10-01 — P7 Round 1 (P7.1 Analyse / map UX, P7.2 estimates and cost)
+
+### D46. Analyse camera, end handles, minutes wording, unnamed-road names, OSM lookup budget, planner estimate, $2 cap
+**Camera (P7.1-1).** Why the map kept zooming: in Analyse every map click re-picks the street (a double-click zoom is two
+clicks), and each new preview re-ran the fit; and the band change to street level animated the tilt with a FIXED zoom
+for 900 ms, pulling a person's own scroll zoom back. Now: the street is fitted once per street (`analyse.streetKey`:
+same OSM ways = same street, which also keeps its trim); band changes animate the tilt only (`camera.tiltTo`); a wheel,
+drag or pinch cancels any running centre/zoom flight (`camera.yieldToUser`).
+**End handles (P7.1-2).** The map layer draws no end/vertex dots; the only dots are the 2 handles (TrimHandles), pushed
+apart on screen when closer than a handle (`trim.separate`: along the street; a loop uses each end's outward
+direction); a drag keeps its grab offset. A street too short to trim shows its 2 ends as fixed markers.
+**Minutes (P7.1-3).** `labels.minutesText`: anything that rounds to 0 is "< 1 minute" (Analyse sheet, job card time left,
+Jobs).
+**Unnamed roads (P7.1-4).** `streetpick.unnamed_label`: the named cross streets at the ends (≤ 15 m, or crossing ≤ 3 m;
+OSM names, then Google's name for an unnamed end road): two → "Unnamed road between A and B", one → "Unnamed road near
+A", none → "Unnamed road" (the D36 "off A" and far "near <nearest>" forms are gone). The clicked street keeps the
+picker's name on every record too (`jobs.fill_street_names` now replaces the pipeline's Google route name for it, which
+named the cross street: "Kattabomman Street", "3rd Street, Sridevi Nagar"). The two live unnamed roads were relabelled
+with `tools/relabel_live_streets.py --write` (files + DB reload + job input; slugs unchanged): "Unnamed road near
+Kattabomman Street", "Unnamed road near 4th Street". A Google look-up skipped for time makes the answer incomplete (not
+cached).
+**OSM lookup (P7.1-5).** Every Overpass query races both mirrors in a background pool (failed mirror retried, 45 s in
+total); a click waits ≤ 5 s (`BUDGET_S`), the browser ≤ 8 s. Roads are fetched per ~330 m tile (+80 m margin, so the
+nearest-road rule is unchanged); resolved streets are cached by OSM way id (any click on the same road) and by rounded
+click (complete answers only). Road found but details slow → shown with "OSM lookup slow — showing without OSM details"
+and Retry; road itself slow → 503 with that message (or the nearest analysed street). A timed-out click finishes in the
+background, so Retry is answered from the cache.
+**Planner estimate (P7.2-6).** `backend/app/planest.py` runs run_area stages 1–3 with the pipeline's own code and
+Config defaults (StreetView.discover, Area footprints + streets, capture_plan, building_register) in a background
+thread; `POST /jobs/preview` starts it, `POST /jobs/plan-estimate` (trimmed stretch) and `GET /jobs/plan-estimate/{key}`
+follow it; results cached (memory + data/cache/planest). Images = planned views + one building photo per building faced
+(the worker's cap rule, an upper bound). $ = images × model-card Street View price + images × cloud-AI $ per image;
+minutes = images × seconds per image. Rates from completed live jobs that ran from the start (live_run.json not resumed,
+not a replay; pooled; job time = claim → upload): today Kattabomman (33 images, 3.1 min) + Vadakku Masi Veethi (162,
+6.1 min) = 2.84 s and $0.000075 per image; Ward 29 full run as the fallback. CPU: model card 18 min per Ward 29 street /
+142 images. Places look-ups counted, not priced (no price recorded). The length-scaled estimate (`views.job_estimate`,
+`POST /jobs/estimate`) is removed. Ward 29 check (study area, its 10 streets, fresh discovery): 749 panoramas, 201
+cameras, 1,132 views + 373 buildings = 1,505 images, $10.65, 71.1 GPU min vs the real full run 1,420 images, ≈ $10.03,
+11.5 min. Time is ~6× high because the two small jobs' per-image time includes the fixed start-up (model loading); the
+Ward 29 rate would give 12.2 min. Reported as is, not tuned. Pillow added to the backend venv (streetview imports it).
+**Cost cap (P7.2-7).** `JOB_COST_CAP_USD` (default $2) is stored on each new job with the estimate's rates; the worker
+uses the job's cap and rates (else its own `MAX_USD_PER_JOB`, now 2.00); the confirm sheet has an editable cap. Earlier
+jobs keep theirs.
+**Hood photo cost (P7.2-8).** Original areas: photos = views fetched (_views_done.json) + reliable building views
+(building_views.json; one building photo each) — Ward 29 1,154 + 266 = 1,420, $9.94 — with the source as caption and
+tooltip.

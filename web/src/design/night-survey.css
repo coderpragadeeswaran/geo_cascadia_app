@@ -83,6 +83,7 @@
   cursor: grab; touch-action: none; }
 .ns .trim-handle:active { cursor: grabbing; transform: scale(1.12); }
 .ns .trim-handle:focus-visible { outline: 3px solid var(--ns-ink); outline-offset: 3px; }
+.ns .trim-handle-fixed { cursor: default; pointer-events: none; }
 
 /* every floating map card (hover card, notices): bounded width, text always wraps inside (walkthrough 2 fix 4) */
 .ns .map-card { width: max-content; min-width: 220px; max-width: min(300px, calc(100vw - 32px)); overflow-wrap: anywhere; }

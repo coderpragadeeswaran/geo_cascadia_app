@@ -54,11 +54,58 @@ def test_preview_endpoint_uses_the_picker(client, no_overpass):
     assert r.status_code == 200
     p = r.json()
     assert p["street"] == "Sri Ganapathy Gardens 3rd Street (approx.)" and p["already"][0]["slug"] == "ward29"
-    w = JS.bundle("ward29")["streets"]
-    per_street = sum(s["length_m"] for s in w) / len(w)                  # model_card's "per street" = an average Ward 29 street
-    assert p["estimate"]["cpu_minutes_full_ocr"] == round(18 * p["length_m"] / per_street)
+    # P7.2: the estimate is the real camera plan, planned in the background (tests run without the server key: it says so)
+    assert p["plan_estimate"]["status"] == "failed" and "server key" in p["plan_estimate"]["error"]
+    assert p["cost_cap_usd"] == 2.0
     far = client.post("/jobs/preview", json={"lat": 11.1, "lon": 77.0})
     assert far.status_code == 503 and "busy" in far.json()["detail"]
+
+
+# ------------------------------------------------------------------ P7.1: OpenStreetMap lookup budget and caches
+def _ways(lat, lon):
+    """a fake tile: one unnamed road through the click and a named road crossing its east end"""
+    d = 0.0009
+    return [{"type": "way", "id": 11, "tags": {"highway": "residential"},
+             "geometry": [{"lat": lat, "lon": lon - d}, {"lat": lat, "lon": lon + d}]},
+            {"type": "way", "id": 12, "tags": {"highway": "residential", "name": "East Street"},
+             "geometry": [{"lat": lat - d, "lon": lon + d}, {"lat": lat + d, "lon": lon + d}]}]
+
+
+def test_slow_details_show_the_street_without_them_then_retry_is_instant(monkeypatch, tmp_path):
+    import threading, time as T
+    lat, lon = 11.1, 77.0
+    gate = threading.Event()
+
+    def ask(url, query, wait_s=0.0):
+        if "around:" in query and not gate.is_set():                  # the roads at the ends: slow until released
+            gate.wait(10)
+        return _ways(lat, lon) if "around:" not in query else [_ways(lat, lon)[1]]
+    monkeypatch.setattr(streetpick, "_ask_mirror", ask)
+    monkeypatch.setattr(streetpick, "BUDGET_S", 0.6)
+    t = T.monotonic()
+    r = streetpick.pick(str(tmp_path), [], lat, lon)
+    assert T.monotonic() - t < 2                                       # never hangs past the budget
+    assert r["osm_details"] is False and "OSM lookup slow" in r["note"] and r["way_ids"] == [11]   # the road, details pending
+    gate.set()
+    while streetpick._INFLIGHT or streetpick._FINISHING:
+        T.sleep(0.05)
+    t = T.monotonic()
+    r2 = streetpick.pick(str(tmp_path), [], lat, lon)                  # Retry: answered from the cache
+    assert T.monotonic() - t < 0.3 and r2.get("osm_details") is None and r2["street"] == "Unnamed road near East Street"
+    r3 = streetpick.pick(str(tmp_path), [], lat, lon - 0.0004)         # another click on the same road: by its way id
+    assert r3["street"] == "Unnamed road near East Street" and r3["source"] == "cache"
+
+
+def test_slow_road_query_says_so_quickly(monkeypatch, tmp_path):
+    import threading, time as T
+    gate = threading.Event()
+    monkeypatch.setattr(streetpick, "_ask_mirror", lambda url, query, wait_s=0.0: gate.wait(10) and [])
+    monkeypatch.setattr(streetpick, "BUDGET_S", 0.5)
+    t = T.monotonic()
+    with pytest.raises(streetpick.OverpassSlow):
+        streetpick.pick(str(tmp_path), [], 11.2, 77.1)
+    assert T.monotonic() - t < 1.5
+    gate.set()
 
 
 @pytest.mark.parametrize("street,branches", [("Sathy Main Road", [803, 111]), ("Sri Ganapathy Gardens 3rd Street (approx.)", [485])])

@@ -1,6 +1,6 @@
 /** "Analyse a street" sheet (CLAUDE.md §9.4.1, design pass B §3): a live "asking OpenStreetMap…" state with elapsed
  *  seconds and Cancel; a clear busy message; the confirm sheet with the street's display name, "Already analysed in …"
- *  (Open / Analyse anyway) and an estimate scaled by length; then the job card with honest states (no worker online is
+ *  (Open / Analyse anyway) and an estimate from the pipeline's own camera planner (P7.2) with the job's cost cap; then the job card with honest states (no worker online is
  *  "queued, waiting for a worker", never a spinner). While it runs: the stage in plain words, time so far and an honest
  *  time left (the device's estimate minus elapsed); a cost-cap pause offers Approve / Cancel; when done the map flies to
  *  the new area. The exact snapped street is drawn on the map while the sheet is open. */
@@ -8,14 +8,15 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useMap } from '@vis.gl/react-google-maps'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Loader2, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { api } from '@/api/client'
+import type { JobEstimate, PlanStatus } from '@/api/p5'
 import { post, useAreas } from '@/api/queries'
-import type { JobPreview } from '@/api/types'
-import { deviceWord, JOB_STAGES, jobStatus, shortArea, STAGE_PLAIN, stageLine, timeLeft } from '@/lib/labels'
-import { fmt, noun } from '@/lib/utils'
-import { useAnalyse } from '@/map/analyse'
+import { deviceWord, JOB_STAGES, jobStatus, minutesParts, shortArea, STAGE_PLAIN, stageLine, timeLeft } from '@/lib/labels'
+import { fmt, noun, plural } from '@/lib/utils'
+import { streetKey, useAnalyse } from '@/map/analyse'
 import { flyToBounds } from '@/map/MapView'
-import { mainLine, MIN_STRETCH_M } from '@/map/trim'
+import { mainLine, MIN_STRETCH_M, slice } from '@/map/trim'
 import { useUi } from '@/store/ui'
 
 const STAGES = JOB_STAGES
@@ -27,24 +28,72 @@ function Elapsed({ since }: { since: number }) {
   return <span className="t-data">{Math.floor((now - since) / 1000)} s</span>
 }
 
-/** The estimate for what will be analysed: the preview's for the whole street, re-asked (debounced) while the end dots
- *  are dragged — the same backend rule, scaled by the stretch length (fix 10). */
-function useStretchEstimate() {
+/** P7.2: the estimate for what will be analysed, from the pipeline's own camera planner. The preview starts planning the
+ *  whole street; a trimmed stretch is planned again (debounced) while the end dots move. Planning runs on the backend
+ *  (free Street View metadata calls + OpenStreetMap), so the sheet polls it and keeps the last finished estimate,
+ *  dimmed, meanwhile. Start never waits for it. */
+function usePlanEstimate() {
   const preview = useAnalyse((s) => s.preview)
   const trim = useAnalyse((s) => s.trim)
-  const [trimmed, setTrimmed] = useState<{ len: number; est: JobPreview['estimate'] } | null>(null)
-  const len = trim ? Math.round(trim.b - trim.a) : null
+  const clickAt = useAnalyse((s) => s.clickAt)
+  const [st, setSt] = useState<PlanStatus | null>(null)
+  const [last, setLast] = useState<JobEstimate | null>(null)
+  const [nonce, setNonce] = useState(0)
+  const main = useMemo(() => mainLine(preview?.lines), [preview])
+  const stretch = trim && main ? slice(main, Math.round(trim.a), Math.round(trim.b)) : null
+  const stretchKey = stretch ? JSON.stringify(stretch) : null
+  useEffect(() => { setLast(null) }, [preview])
+  // which planning to follow: the preview's (whole street) or a trimmed stretch's
   useEffect(() => {
-    if (len == null) return
+    if (!preview) { setSt(null); return }
+    if (!stretchKey || !clickAt) { setSt(nonce ? null : preview.plan_estimate); if (!nonce) return }
     let off = false
     const t = setTimeout(() => {
-      post<{ estimate: JobPreview['estimate'] }>('/jobs/estimate', { length_m: len })
-        .then((r) => { if (!off) setTrimmed({ len, est: r.estimate }) }).catch(() => {})
-    }, 120)
+      post<PlanStatus>('/jobs/plan-estimate', { lat: clickAt!.lat, lon: clickAt!.lng, ...(stretchKey ? { lines: { type: 'LineString', coordinates: JSON.parse(stretchKey) } } : {}) })
+        .then((r) => { if (!off) setSt(r) }).catch(() => { if (!off) setSt({ key: '', status: 'failed', error: 'Could not plan this stretch.' }) })
+    }, stretchKey ? 600 : 0)
     return () => { off = true; clearTimeout(t) }
-  }, [len])
-  if (len == null) return { est: preview?.estimate ?? null, busy: false }
-  return { est: trimmed?.est ?? preview?.estimate ?? null, busy: trimmed?.len !== len }
+  }, [preview, stretchKey, clickAt, nonce])
+  // poll while planning
+  useEffect(() => {
+    if (st?.status === 'done' && st.estimate) setLast(st.estimate)
+    if (st?.status !== 'running' || !st.key) return
+    const t = setTimeout(() => {
+      api<PlanStatus>(`/jobs/plan-estimate/${st.key}`).then((r) => setSt((cur) => (cur?.key === r.key ? r : cur))).catch(() => {})
+    }, 1500)
+    return () => clearTimeout(t)
+  }, [st])
+  return { st, est: st?.status === 'done' ? st.estimate ?? null : last, busy: st?.status === 'running', retry: () => setNonce((n) => n + 1) }
+}
+
+/** P7.2: the job's cost cap (default from the backend, $2). Above it the worker pauses the job for approval before any
+ *  photo is bought; the estimate says which side of the cap it is on. */
+function CostCap({ total, fallback }: { total: number | null; fallback: number }) {
+  const cap = useAnalyse((s) => s.cap) ?? fallback
+  const [text, setText] = useState(cap.toFixed(2))
+  useEffect(() => { setText(cap.toFixed(2)) }, [cap])
+  const commit = () => {
+    const v = Number(text)
+    if (Number.isFinite(v) && v > 0 && v <= 100) useAnalyse.setState({ cap: Math.round(v * 100) / 100 })
+    else setText(cap.toFixed(2))
+  }
+  const over = total != null && total > cap
+  return (
+    <div className="t-small mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+      <label htmlFor="cost-cap" className="ink2">Cost cap $</label>
+      <input id="cost-cap" inputMode="decimal" className="t-data w-[72px] rounded-[var(--ns-r-control)] bg-transparent px-2 py-0.5"
+        style={{ boxShadow: 'inset 0 0 0 1px var(--ns-line-strong)' }} value={text} onChange={(e) => setText(e.target.value)}
+        onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') commit() }} aria-describedby="cost-cap-note" />
+      <span id="cost-cap-note" className={over ? '' : 'ink3'} style={over ? { color: 'var(--ns-sodium)' } : undefined}>
+        {over ? 'Above the cap: the worker will pause it for your approval before buying any photo.' : 'Above it, the job waits for your approval.'}</span>
+    </div>
+  )
+}
+
+/** P7.1: "≈ 3 minutes", "< 1 minute" (never "0") */
+function MinutesFigure({ m }: { m: number | null | undefined }) {
+  const [v, u] = minutesParts(m)
+  return <><dd className="t-figure mt-1" style={{ fontSize: 21.5 }}>{v === '—' ? v : v.startsWith('<') ? v : `≈ ${v}`}</dd><dd className="t-small ink3">{u}</dd></>
 }
 
 export function AnalysePanel() {
@@ -75,17 +124,23 @@ export function AnalysePanel() {
   }, [doneSlug, qc])
 
   const leave = () => { useUi.getState().setAnalyse(false); a.reset() }
-  const { est, busy: estBusy } = useStretchEstimate()
+  const plan = usePlanEstimate()
+  const est = plan.est
   const trimmable = (mainLine(a.preview?.lines)?.length ?? 0) >= MIN_STRETCH_M * 2
   const p = a.preview
-  // frame the snapped street so its highlight is in view above the sheet
+  // P7.1: frame the snapped street ONCE when a street is selected, so its highlight is in view above the sheet. Clicking
+  // the same street again, trimming it or the estimate arriving never moves the camera; only another street does.
+  const fitted = useRef<string | null>(null)
+  const key = streetKey(p)
   useEffect(() => {
-    if (!map || !p?.lines?.coordinates.length) return
+    if (!key) fitted.current = null
+    if (!map || !p?.lines?.coordinates.length || !key || fitted.current === key) return
+    fitted.current = key
     const pts = p.lines.coordinates.flat()
     const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1])
     // the sheet covers ~300 px at the bottom: frame the street above it so both end dots can be dragged (fix 10)
     flyToBounds(map, [Math.min(...xs) - 0.0003, Math.min(...ys) - 0.0003, Math.max(...xs) + 0.0003, Math.max(...ys) + 0.0003], { maxZoom: 17.2, bottomPx: 300 })
-  }, [map, p])
+  }, [map, p, key])
   const already = p?.already ?? []
   const openExisting = (slug: string, street: string) => {
     const ui = useUi.getState()
@@ -136,7 +191,21 @@ export function AnalysePanel() {
               </div>
               <button className="btn btn-icon" onClick={() => a.reset()} aria-label="Pick another street"><X /></button>
             </div>
-            {p.note && <p className="t-small mt-2" style={{ color: 'var(--ns-sodium)' }}>{p.note}</p>}
+            {p.note && (
+              <div className="mt-2 flex items-start gap-3">
+                <p className="t-small flex-1" style={{ color: 'var(--ns-sodium)' }}>{p.note}</p>
+                {p.osm_details === false && <button className="btn btn-line" disabled={a.loading} onClick={() => a.retry()}>Retry</button>}
+              </div>
+            )}
+            {a.loading && a.startedAt != null && (
+              <div className="t-small ink2 mt-2 flex items-center gap-2" role="status"><Loader2 className="size-3.5 animate-spin sodium" /> Looking up the street you clicked… <Elapsed since={a.startedAt} /></div>
+            )}
+            {!a.loading && a.error && a.error.kind === 'busy' && (
+              <div className="mt-2 flex items-start gap-3">
+                <p className="t-small flex-1" style={{ color: 'var(--ns-sodium)' }}>{a.error.message}</p>
+                <button className="btn btn-line" onClick={() => a.retry()}>Retry</button>
+              </div>
+            )}
             {already.length > 0 && !a.anyway ? (
               <div className="mt-3 border-l-2 pl-3" style={{ borderColor: 'var(--ns-sodium)' }}>
                 <p>Already analysed in <b>{shortArea(already[0].area)}</b>{already[0].street !== p.street ? <> as <b>{already[0].street}</b></> : null}.</p>
@@ -149,21 +218,36 @@ export function AnalysePanel() {
             ) : (
               <>
                 {est ? (
-                  <dl className="mt-4 grid grid-cols-3" aria-live="polite" style={{ opacity: estBusy ? 0.6 : 1 }}>
-                    {[['Street View', `≈ ${fmt.format(est.street_view_images)}`, `${noun(est.street_view_images, 'image')}${est.street_view_usd != null ? ` · ≈ $${est.street_view_usd}` : ''}`],
-                      ['GPU (Colab)', `≈ ${est.gpu_minutes}`, noun(Number(est.gpu_minutes), 'minute')],
-                      ['CPU only', `≈ ${est.cpu_minutes_full_ocr}`, `${noun(Number(est.cpu_minutes_full_ocr), 'minute')} · fast OCR ${est.cpu_minutes_fast_ocr}`]].map(([k, v, s], i) => (
-                      <div key={k} className={i ? 'rule-l pl-4' : ''}><dt className="t-micro">{k}</dt><dd className="t-figure mt-1" style={{ fontSize: 21.5 }}>{v}</dd><dd className="t-small ink3">{s}</dd></div>
-                    ))}
+                  <dl className="mt-4 grid grid-cols-3" aria-live="polite" style={{ opacity: plan.busy ? 0.6 : 1 }}>
+                    <div><dt className="t-micro">Street View</dt><dd className="t-figure mt-1" style={{ fontSize: 21.5 }}>≈ {fmt.format(est.street_view_images)}</dd>
+                      <dd className="t-small ink3">{noun(est.street_view_images, 'image')}{est.street_view_usd != null ? ` · ≈ $${est.street_view_usd.toFixed(2)}` : ''}</dd></div>
+                    <div className="rule-l pl-4"><dt className="t-micro">GPU (Colab)</dt><MinutesFigure m={est.gpu_minutes} /></div>
+                    <div className="rule-l pl-4"><dt className="t-micro">CPU only</dt><MinutesFigure m={est.cpu_minutes} /></div>
                   </dl>
-                ) : <p className="t-small ink3 mt-3">No estimate available (reference run missing).</p>}
+                ) : plan.st?.status === 'failed' ? null
+                  : <p className="t-small ink2 mt-3 flex items-center gap-2"><Loader2 className="size-3.5 animate-spin sodium" /> Planning camera stops with the pipeline’s own planner{plan.st?.elapsed_s != null ? ` · ${Math.floor(plan.st.elapsed_s)} s` : ''}… You can start without waiting.</p>}
+                {plan.st?.status === 'failed' && (
+                  <div className="mt-3 flex items-start gap-3">
+                    <p className="t-small ink2 flex-1">No estimate: {plan.st.error}</p>
+                    <button className="btn btn-line" onClick={plan.retry}>Try again</button>
+                  </div>
+                )}
+                {est && (
+                  <p className="t-small ink2 mt-2">
+                    {est.total_usd != null ? <>Total ≈ <span className="t-data">${est.total_usd.toFixed(2)}</span> (photos{est.cloud_ai_usd != null ? ` + cloud AI $${est.cloud_ai_usd.toFixed(est.cloud_ai_usd < 0.01 ? 4 : 2)}` : ''})</> : 'Total not known'}
+                    {est.cameras ? <> · {plural(est.cameras, 'camera stop')}</> : null}
+                    {plan.busy && <> · updating…</>}
+                  </p>
+                )}
+                {est?.note && <p className="t-small mt-1" style={{ color: 'var(--ns-sodium)' }}>{est.note}</p>}
+                <CostCap total={est?.total_usd ?? null} fallback={p.cost_cap_usd} />
                 {est && (
                   <details className="mt-2">
-                    <summary className="t-small ink3 cursor-pointer">An estimate{a.trim ? ' for the trimmed stretch' : ''}, scaled by length from an earlier run. <span className="link">How is this estimated?</span></summary>
+                    <summary className="t-small ink3 cursor-pointer">An estimate{a.trim ? ' for the trimmed stretch' : ''} from the same camera plan the worker makes. <span className="link">How is this estimated?</span></summary>
                     <p className="t-small ink3 mt-1">{est.basis}</p>
                   </details>
                 )}
-                {a.error && <p className="t-small mt-2" style={{ color: 'var(--ns-no-record)' }}>{a.error.message}</p>}
+                {a.error && a.error.kind !== 'busy' && <p className="t-small mt-2" style={{ color: 'var(--ns-no-record)' }}>{a.error.message}</p>}
                 <div className="mt-4 flex justify-end gap-2">
                   <button className="btn" onClick={leave}>Cancel</button>
                   <button className="btn btn-solid" disabled={a.loading || offline} onClick={() => a.start()}>{a.loading && <Loader2 className="animate-spin" />} {offline ? 'Offline — read-only' : 'Start analysis'}</button>

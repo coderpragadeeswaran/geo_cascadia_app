@@ -12,7 +12,9 @@ export interface StreetRow {
   street: string; length_m: number; cameras: number; views: number; buildings: number; no_record: number; discrepancy: number
   use_unknown: number; streetlights: number; poles: number; gaps: number; gap_m: number
 }
-export interface CostLine { key: string; label: string; value: number | null; detail: string; source: string | null; status: 'computed' | 'model_card' | 'measured' | 'not recorded' }
+export interface CostLine { key: string; label: string; value: number | null; detail: string; source: string | null; status: 'computed' | 'model_card' | 'measured' | 'not recorded'
+  /** P7.2: Street View photos the run bought (views + building photos), when computed from the run files */
+  photos?: number }
 export interface Hood {
   area: string; name: string; files: string[]
   /** analysed from the app by a worker (P6): its timings and costs are this run's own */
@@ -88,8 +90,12 @@ export const useReviewEvents = (id: number | null | undefined) =>
   useQuery({ queryKey: ['review-events', id], queryFn: () => api<{ events: ReviewEvent[] }>(`/review/${id}/events`).then((r) => r.events),
     enabled: id != null, staleTime: 0, refetchOnMount: 'always', retry: false })
 
-export interface JobEstimate { street_view_images: number; street_view_usd: number | null; gpu_minutes: number | null
-  cpu_minutes_full_ocr: number | string | null; cpu_minutes_fast_ocr: string | null; basis: string; is_estimate: true }
+/** P7.2: the estimate from the pipeline's own camera planner (POST /jobs/preview, /jobs/plan-estimate; stored on the job) */
+export interface JobEstimate { method: 'planner'; panoramas: number; cameras: number; views: number; buildings_faced: number
+  street_view_images: number; street_view_usd: number | null; cloud_ai_usd: number | null; places_calls: number | null
+  total_usd: number | null; gpu_minutes: number | null; cpu_minutes: number | null; cap_usd: number | null; over_cap: boolean
+  note?: string | null; basis: string; is_estimate: true }
+export interface PlanStatus { key: string; status: 'running' | 'done' | 'failed' | 'unknown'; elapsed_s?: number; error?: string; estimate?: JobEstimate }
 export interface JobP5 extends JobFull {
   display_status: 'queued' | 'running' | 'interrupted' | 'done' | 'failed' | 'cancelled' | 'no_street_view' | 'expired_token' | 'needs_approval' | 'cancelling'
   is_test: boolean; heartbeat_at: string | null; worker_id: string | null; message: string | null

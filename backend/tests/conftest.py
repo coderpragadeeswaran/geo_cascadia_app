@@ -7,6 +7,9 @@ from fastapi.testclient import TestClient
 
 BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND)
+# P7.2: no Google calls from tests. Without the server key the planner estimate answers "no key" at once instead of
+# discovering panoramas (load_dotenv never overrides a variable that is already set).
+os.environ["GOOGLE_PLACES_SERVER_KEY"] = ""
 
 from app.main import create_app  # noqa: E402
 from app.settings import ROOT, Settings  # noqa: E402

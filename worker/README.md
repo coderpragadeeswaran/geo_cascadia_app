@@ -155,8 +155,10 @@ files and the photo crops. When the street finishes or is cancelled, the folder 
 
 - **Heartbeat** every 15 s. The top bar shows *Worker · GPU/CPU* and the street's progress.
 - **One street at a time.** The app refuses a second street while one is queued or running.
-- **Cost cap** (top of the cell): `MAX_PHOTOS_PER_JOB = 300`, `MAX_USD_PER_JOB = 1.00`. After planning the camera
-  stops, and before any photo is bought, a larger street pauses as **Needs approval**. Approve it on the Jobs page (or
+- **Cost cap**: each job queued by the app carries its own cap (backend `JOB_COST_CAP_USD`, default **$2**, P7.2) and
+  the rates the app's estimate used; the cell's `MAX_USD_PER_JOB = 2.00` applies only to jobs without one, and
+  `MAX_PHOTOS_PER_JOB = 300` still applies. After planning the camera stops, and before any photo is bought, a larger
+  street pauses as **Needs approval**. Approve it on the Jobs page (or
   on the job card); the next worker that asks for work runs it with the cap lifted for that street.
 - **Google check**: at most `PLACES_PER_DAY = 300` look-ups per day on this machine, counted in `gc_jobs/places_<date>.json`.
 - **Cloud-AI keys expired**: the job shows **Paused: key expired**. The cell asks for new AWS keys and then continues

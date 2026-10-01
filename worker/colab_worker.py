@@ -8,7 +8,8 @@
 
 # ----------------------------------------------------------------------------------------------- settings you may edit
 MAX_PHOTOS_PER_JOB = 300        # cost cap: pause for approval if the plan needs more Street View photos than this …
-MAX_USD_PER_JOB = 1.00          # … or costs more than this (estimate; photos x price + cloud-AI calls)
+MAX_USD_PER_JOB = 2.00          # … or costs more than this (estimate; photos x price + cloud-AI calls). A job queued by the
+                                # app carries its own cap (backend JOB_COST_CAP_USD, default $2), which wins over this one
 PLACES_PER_DAY = 300            # daily cap on Google Places look-ups (the "also on Google" check), all jobs together
 HEARTBEAT_S = 15                # the app shows "disconnected" after ~45 s without a heartbeat
 IDLE_POLL_S = 10                # how often to ask for work when the queue is empty
@@ -730,8 +731,8 @@ def run_job(api, job, base_cfg, run_area, state):
         post(nxt_name or name, 0, None, force=True)
 
     def plan_check(plan):
-        est = plan_estimate(plan, price)
-        if not job.get("approved") and (est["photos"] > MAX_PHOTOS_PER_JOB or est["usd"] > MAX_USD_PER_JOB):
+        est = plan_estimate(plan, price, inp.get("rates"), inp.get("cost_cap_usd"))
+        if not job.get("approved") and (est["photos"] > est["cap_photos"] or est["usd"] > est["cap_usd"]):
             raise NeedsApproval(est)
         post("plan", 1, 1, force=True)
 
@@ -819,14 +820,20 @@ def prune_drive(api):
         print(f"Saved progress kept on Drive for {len(keep)} unfinished or failed street(s) (Retry continues from it).")
 
 
-def plan_estimate(plan, price):
+def plan_estimate(plan, price, rates=None, cap_usd=None):
     """The cost cap's estimate, from the REAL camera plan of the clicked street: one photo per planned view, plus one
-    building crop per building faced (an upper bound), plus cloud-model spend per building (Ward 29 rate, model card)."""
+    building crop per building faced (an upper bound). With the job's rates (P7.2, the same ones the app's estimate
+    used): photos x (Street View price + cloud-AI cost per photo); without: cloud-model spend per building (Ward 29)."""
     views = sum(len(e["views"]) for e in plan)
     faced = len({v["footprint"] for e in plan for v in e["views"] if v.get("footprint")})
     photos = views + faced
-    return {"photos": photos, "usd": round(photos * price + faced * VLM_USD_PER_BUILDING, 2), "cameras": len(plan),
-            "buildings": faced, "cap_photos": MAX_PHOTOS_PER_JOB, "cap_usd": MAX_USD_PER_JOB}
+    r = rates or {}
+    if r.get("sv_price") is not None and r.get("cloud_usd_per_image") is not None:
+        usd = photos * (r["sv_price"] + r["cloud_usd_per_image"])
+    else:
+        usd = photos * price + faced * VLM_USD_PER_BUILDING
+    return {"photos": photos, "usd": round(usd, 2), "cameras": len(plan), "buildings": faced,
+            "cap_photos": MAX_PHOTOS_PER_JOB, "cap_usd": cap_usd if cap_usd is not None else MAX_USD_PER_JOB}
 
 
 def map_server_busy(err):
@@ -926,7 +933,7 @@ def main():
                 state["busy"] = False
                 e = na.estimate
                 print(f"⏸ Needs approval: about {e['photos']} photos (~${e['usd']}) is above the cap "
-                      f"({MAX_PHOTOS_PER_JOB} photos / ${MAX_USD_PER_JOB}). Approve it in the app to run it.")
+                      f"({e['cap_photos']} photos / ${e['cap_usd']}). Approve it in the app to run it.")
                 api.call_or_ask("/worker/fail", {"job": job["id"], "code": "NEEDS_APPROVAL", "worker_id": state["id"],
                                                  "message": "Estimated cost is above the cap.", "estimate": e})
             except Exception as err:

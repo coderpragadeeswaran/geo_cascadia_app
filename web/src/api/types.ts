@@ -159,8 +159,13 @@ export interface JobPreview {
   already_analysed_in: string[]
   /** set when OpenStreetMap was busy and the nearest already-analysed street is offered instead */
   note?: string
-  estimate: null | { street_view_images: number; street_view_usd: number | null; gpu_minutes: number | null
-    cpu_minutes_full_ocr: number | null; cpu_minutes_fast_ocr: string | null; basis: string; is_estimate: true }
+  /** P7.1: false when OpenStreetMap was too slow for the details (the named street's full length, the roads at its
+   *  ends); Retry completes it from the cache once the background lookup lands */
+  osm_details?: false
+  /** P7.2: the real-planner estimate, planned in the background (poll GET /jobs/plan-estimate/{key}) */
+  plan_estimate: import('./p5').PlanStatus
+  /** the default cost cap per job (backend JOB_COST_CAP_USD) */
+  cost_cap_usd: number
 }
 /** one evidence photo with every detection box on it (GET /areas/{slug}/evidence/{kind}/{id}) */
 export interface EvidenceBox {

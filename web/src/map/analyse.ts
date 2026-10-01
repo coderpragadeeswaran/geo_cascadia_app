@@ -1,7 +1,7 @@
-/** "Analyse a street": click → /jobs/preview (street + estimate) → confirm → POST /jobs → poll the job.
- *  One lookup at a time: a new click cancels the pending one; the lookup gives up after 18 s with "OpenStreetMap is busy"
- *  (the backend tries two Overpass mirrors, ~8 s each). Honest states: worker offline, read-only data mode, no Street
- *  View, token expired. */
+/** "Analyse a street": click → /jobs/preview (street + planner estimate) → confirm → POST /jobs → poll the job.
+ *  One lookup at a time: a new click cancels the pending one. P7.1: the backend answers within ~5 s (a slow OpenStreetMap
+ *  keeps loading in the background, so Retry is quick); the browser gives up at 8 s. Honest states: worker offline,
+ *  read-only data mode, no Street View, token expired. */
 import { create } from 'zustand'
 import { ApiError, api } from '@/api/client'
 import { post } from '@/api/queries'
@@ -10,8 +10,9 @@ import type { JobFull, JobPreview } from '@/api/types'
 import { useUi } from '@/store/ui'
 import { mainLine, slice } from './trim'
 
-const CLIENT_TIMEOUT_MS = 18_000
+const CLIENT_TIMEOUT_MS = 8_000
 export type PickError = { kind: 'busy' | 'no_road' | 'offline' | 'other'; message: string }
+const SLOW = 'OSM lookup slow — the street isn’t loaded yet. It keeps loading in the background; Retry in a few seconds.'
 
 interface AnalyseState {
   clickAt: { lat: number; lng: number } | null
@@ -26,10 +27,14 @@ interface AnalyseState {
   trim: { a: number; b: number } | null
   setTrim: (t: { a: number; b: number } | null) => void
   job: JobFull | null
-  /** the job's length-scaled estimate (GPU / CPU minutes) for the honest time-left line */
+  /** the job's planner estimate (stored when it was queued) for the honest time-left line */
   estimate: JobEstimate | null
+  /** P7.2: the cost cap for the next job (US$); null = the backend default (JOB_COST_CAP_USD) */
+  cap: number | null
   workerOnline: boolean
   pick: (lat: number, lng: number) => Promise<void>
+  /** P7.1: look the same click up again (after "OSM lookup slow") */
+  retry: () => Promise<void>
   cancelPick: () => void
   start: () => Promise<void>
   cancelJob: () => Promise<void>
@@ -44,28 +49,31 @@ interface AnalyseState {
 let ctrl: AbortController | null = null
 
 export const useAnalyse = create<AnalyseState>((set, get) => ({
-  clickAt: null, preview: null, loading: false, startedAt: null, error: null, anyway: false, job: null, estimate: null, workerOnline: false, trim: null,
+  clickAt: null, preview: null, loading: false, startedAt: null, error: null, anyway: false, job: null, estimate: null, cap: null, workerOnline: false, trim: null,
   setTrim: (trim) => set({ trim }),
   pick: async (lat, lng) => {
     ctrl?.abort('replaced')                                       // one request at a time: a new click wins
     const mine = new AbortController()
     ctrl = mine
     const timer = setTimeout(() => mine.abort('timeout'), CLIENT_TIMEOUT_MS)
-    set({ clickAt: { lat, lng }, preview: null, loading: true, startedAt: performance.now(), error: null, anyway: false, trim: null })
+    // a click on the street already shown keeps its trim; another street starts untrimmed
+    set({ clickAt: { lat, lng }, loading: true, startedAt: performance.now(), error: null })
     try {
       const preview = await post<JobPreview>('/jobs/preview', { lat, lon: lng }, mine.signal)
-      if (ctrl === mine) set({ preview, loading: false, startedAt: null })
+      if (ctrl === mine) {
+        const same = streetKey(get().preview) === streetKey(preview)
+        set({ preview, loading: false, startedAt: null, ...(same ? {} : { trim: null, anyway: false }) })
+      }
     } catch (e) {
       if (ctrl !== mine) return                                   // replaced by a newer click
       if (mine.signal.aborted) {
         const reason = mine.signal.reason
-        set({ loading: false, startedAt: null, error: reason === 'cancelled' ? null
-          : { kind: 'busy', message: 'OpenStreetMap is busy — try again in a moment.' } })
+        set({ loading: false, startedAt: null, error: reason === 'cancelled' ? null : { kind: 'busy', message: SLOW } })
         return
       }
       const err = e instanceof ApiError ? e : null
       set({ loading: false, startedAt: null, error: !err ? { kind: 'other', message: 'Could not look up the street' }
-        : err.status === 503 || err.status === 504 ? { kind: 'busy', message: 'OpenStreetMap is busy — try again in a moment.' }
+        : err.status === 503 || err.status === 504 ? { kind: 'busy', message: err.offline ? 'Offline data mode: street lookups need the API.' : err.message || SLOW }
           : err.status === 422 ? { kind: 'no_road', message: 'No road here. Point at a street with a blue Street View line and click.' }
             : err.status === 0 ? { kind: 'offline', message: 'The API is not reachable.' }
               : err.status >= 500 ? { kind: 'other', message: 'Couldn’t prepare this street — server error.' }
@@ -75,16 +83,18 @@ export const useAnalyse = create<AnalyseState>((set, get) => ({
       if (ctrl === mine) ctrl = null
     }
   },
+  retry: async () => { const at = get().clickAt; if (at) await get().pick(at.lat, at.lng) },
   cancelPick: () => { ctrl?.abort('cancelled'); ctrl = null; set({ loading: false, startedAt: null }) },
   start: async () => {
-    const { clickAt: at, trim, preview } = get()
+    const { clickAt: at, trim, preview, cap } = get()
     if (!at) return
     set({ loading: true, error: null })
     // a trimmed stretch goes with the click; the backend checks it lies on the street and builds the polygon from it
     const m = trim && preview ? mainLine(preview.lines) : null
     const lines = m && trim ? { type: 'LineString', coordinates: slice(m, trim.a, trim.b) } : undefined
     try {
-      const r = await post<{ job: JobFull; worker_online: boolean }>('/jobs', { lat: at.lat, lon: at.lng, ...(lines ? { lines } : {}) })
+      const r = await post<{ job: JobFull; worker_online: boolean }>('/jobs', { lat: at.lat, lon: at.lng, ...(lines ? { lines } : {}),
+        ...(cap != null ? { cost_cap_usd: cap } : {}) })
       set({ job: r.job, workerOnline: r.worker_online, loading: false, preview: null, estimate: null })
       get().poll()
       useUi.getState().setAnalyse(false)
@@ -131,3 +141,8 @@ export const useAnalyse = create<AnalyseState>((set, get) => ({
     } catch { /* keep last state */ }
   },
 }))
+
+/** one street = the same OSM ways (or, for a street of an analysed area, the same name and length): a second click on it
+ *  keeps the camera and the trim (P7.1) */
+export const streetKey = (p: JobPreview | null | undefined) =>
+  !p ? null : p.way_ids?.length ? [...p.way_ids].sort((a, b) => a - b).join(',') : `${p.street}|${p.length_m}`

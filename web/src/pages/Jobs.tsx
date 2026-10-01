@@ -13,7 +13,7 @@ import { post, useAreas } from '@/api/queries'
 import type { AreaCard, WorkerStatus } from '@/api/types'
 import { Card } from '@/components/Detail'
 import { GeoMini } from '@/components/GeoMini'
-import { deviceWord, JOB_STAGES, jobStatus, shortArea, STAGE_PLAIN, stageLine, timeLeft } from '@/lib/labels'
+import { deviceWord, JOB_STAGES, jobStatus, minutesText, shortArea, STAGE_PLAIN, stageLine, timeLeft } from '@/lib/labels'
 import { cn, fmt, plural } from '@/lib/utils'
 import { useUi } from '@/store/ui'
 
@@ -173,16 +173,17 @@ function JobDetail({ id, online, onOpen, onDelete }: { id: string; online: boole
         <dt className="ink3">Requested</dt><dd>{when(j.created_at)}</dd>
         {j.started_at && <><dt className="ink3">Started</dt><dd>{when(j.started_at)}</dd></>}
         {j.finished_at && <><dt className="ink3">{st.key === 'cancelled' ? 'Cancelled at' : st.key === 'done' ? 'Finished' : st.key === 'no_street_view' ? 'Stopped at' : 'Failed at'}</dt>
-          <dd>{when(j.finished_at)}{st.key === 'done' && mins(j.started_at, j.finished_at) != null ? ` · took ${mins(j.started_at, j.finished_at)} min` : ''}{st.key === 'done' && j.device ? ` on a ${deviceWord(j.device)}` : ''}</dd></>}
+          <dd>{when(j.finished_at)}{st.key === 'done' && mins(j.started_at, j.finished_at) != null ? ` · took ${minutesText(mins(j.started_at, j.finished_at))}` : ''}{st.key === 'done' && j.device ? ` on a ${deviceWord(j.device)}` : ''}</dd></>}
       </dl>
       {est && (
         <div className="mt-4">
           <div className="t-micro mb-1">Estimate</div>
           <dl className="t-small grid grid-cols-[120px_1fr] gap-y-1">
             <dt className="ink3">Photos</dt><dd>about {fmt.format(est.street_view_images)} Street View images{est.street_view_usd != null ? ` · about $${est.street_view_usd.toFixed(2)}` : ''}</dd>
-            <dt className="ink3">Time</dt><dd>{est.gpu_minutes != null ? `about ${est.gpu_minutes} min on a GPU` : '—'}{est.cpu_minutes_fast_ocr ? ` · ${est.cpu_minutes_fast_ocr} min on a CPU (quick sign reading)` : est.cpu_minutes_full_ocr != null ? ` · ${est.cpu_minutes_full_ocr} min on a CPU` : ''}</dd>
+            <dt className="ink3">Total</dt><dd>{est.total_usd != null ? `about $${est.total_usd.toFixed(2)}` : '—'}{est.cap_usd != null ? ` · cost cap $${est.cap_usd.toFixed(2)}` : ''}</dd>
+            <dt className="ink3">Time</dt><dd>{est.gpu_minutes != null ? `about ${minutesText(est.gpu_minutes)} on a GPU` : '—'}{est.cpu_minutes != null ? ` · about ${minutesText(est.cpu_minutes)} on a CPU` : ''}</dd>
           </dl>
-          <p className="t-small ink3 mt-1">Scaled from the Ward 29 run by street length; an estimate, not a measurement.</p>
+          <p className="t-small ink3 mt-1">From the pipeline’s own camera plan for this street, made when it was queued; an estimate, not a measurement.</p>
           <details className="mt-1"><summary className="link t-small cursor-pointer">How is this estimated?</summary><p className="t-small ink3 mt-1">{est.basis}</p></details>
         </div>
       )}

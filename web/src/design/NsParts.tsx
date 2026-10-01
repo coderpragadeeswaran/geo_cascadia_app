@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { useConfig } from '@/api/queries'
 import type { Building, GapRow, JobPreview } from '@/api/types'
 import { kpis, type Records } from '@/lib/derive'
+import { minutesText } from '@/lib/labels'
 import { colors, type Mode } from './tokens'
 
 const fmt = new Intl.NumberFormat('en-IN')
@@ -210,7 +211,7 @@ export function NsEvidence({ b, onClose }: { b: Building; onClose?: () => void }
 
 // ------------------------------------------------------------------ analyse: confirm sheet
 export function NsAnalyseSheet({ p }: { p: JobPreview }) {
-  const e = p.estimate
+  const e = p.plan_estimate?.estimate
   return (
     <div className="sheet w-[420px] p-5" role="dialog" aria-label="Confirm analysis">
       <div className="t-micro">Analyse this street</div>
@@ -219,12 +220,12 @@ export function NsAnalyseSheet({ p }: { p: JobPreview }) {
       {p.already_analysed_in.length > 0 && <p className="t-small mt-3 border-l-2 pl-2 ink2" style={{ borderColor: 'var(--ns-sodium)' }}>Already inside {p.already_analysed_in.join(', ')}.</p>}
       {e && (
         <dl className="mt-4 grid grid-cols-3">
-          {[['Street View', `≈ ${e.street_view_images}`, `≈ $${e.street_view_usd}`], ['GPU', `≈ ${e.gpu_minutes}`, 'min, Colab'], ['CPU', `${e.cpu_minutes_full_ocr}`, 'min, full OCR']].map(([k, v, s], i) => (
+          {[['Street View', `≈ ${e.street_view_images}`, `≈ $${e.street_view_usd}`], ['GPU', minutesText(e.gpu_minutes), 'Colab'], ['CPU', minutesText(e.cpu_minutes), 'full OCR']].map(([k, v, s], i) => (
             <div key={k} className={i ? 'rule-l pl-4' : ''}><dt className="t-micro">{k}</dt><dd className="t-figure mt-1" style={{ fontSize: 20 }}>{v}</dd><dd className="t-small ink3">{s}</dd></div>
           ))}
         </dl>
       )}
-      <p className="t-small ink3 mt-3">Estimate scaled from the Ward 29 run (model_card). VLM calls not included.</p>
+      <p className="t-small ink3 mt-3">{e ? 'Estimate from the pipeline’s own camera plan.' : 'Planning camera stops…'}</p>
       <div className="mt-5 flex justify-end gap-2"><button className="btn">Cancel</button><button className="btn btn-solid" disabled title="Preview only">Start analysis</button></div>
     </div>
   )

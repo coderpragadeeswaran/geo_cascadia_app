@@ -46,7 +46,7 @@ def token():
 SV_PRICE, VLM_USD_PER_BUILDING = 0.007, 0.056 / 381           # as in the real cell (model card prices)
 
 
-def plan_estimate(plan, cap_photos, cap_usd=1.0):
+def plan_estimate(plan, cap_photos, cap_usd=2.0):
     """colab_worker.plan_estimate: one photo per planned view + one crop per building faced + cloud-model spend."""
     views = sum(len(e["views"]) for e in plan)
     faced = len({v["footprint"] for e in plan for v in e["views"] if v.get("footprint")})

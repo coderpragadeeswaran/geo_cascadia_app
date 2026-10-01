@@ -50,3 +50,23 @@ export function slice(m: MainLine, a: number, b: number): LonLat[] {
   out.push(pointAt(m, b))
   return out
 }
+
+/** P7.1: the start / end handles never overlap on screen */
+const HANDLE_PX = 22
+const GAP_PX = 6                                   // free space kept between the two handles
+export type Px = { x: number; y: number }
+
+/** where to draw the two handles: their true screen points, pushed apart when closer than a handle plus a gap */
+export function separate(a: Px, b: Px, outA: Px, outB: Px, min = HANDLE_PX + GAP_PX): [Px, Px] {
+  const dx = b.x - a.x, dy = b.y - a.y
+  const d = Math.hypot(dx, dy)
+  if (d >= min) return [a, b]
+  // direction to push along: from a to b; for (nearly) coincident ends (a loop), each end's own outward direction
+  let ux = dx, uy = dy
+  if (d < 1) { ux = outB.x - outA.x; uy = outB.y - outA.y }
+  let n = Math.hypot(ux, uy)
+  if (n < 1e-6) { ux = 1; uy = 0; n = 1 }
+  ux /= n; uy /= n
+  const half = (min - (d < 1 ? 0 : d)) / 2
+  return [{ x: a.x - ux * half, y: a.y - uy * half }, { x: b.x + ux * half, y: b.y + uy * half }]
+}

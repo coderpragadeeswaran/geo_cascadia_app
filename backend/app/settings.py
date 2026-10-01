@@ -30,6 +30,9 @@ class Settings:
     offline_retry_s: float = 30.0      # after a DB failure, serve JSON for this long before trying the DB again
     worker_online_s: float = 45.0      # a worker seen within this window counts as online (heartbeat ~15 s, P6)
     max_polygon_km2: float = 1.5       # job size cap for drawn areas (a street click is capped by the picker at 1.2 km)
+    # P7.2: default cost cap per job (US$). Stored on each new job; the worker pauses a job whose planned cost is above it
+    # ("needs approval") before buying any photo. Jobs created earlier keep the worker cell's own cap.
+    job_cost_cap_usd: float = field(default_factory=lambda: float(_env("JOB_COST_CAP_USD", "2") or 2))
 
     @property
     def areas_dir(self):

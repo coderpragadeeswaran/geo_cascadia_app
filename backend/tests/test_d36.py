@@ -14,10 +14,12 @@ FAR = LineString([(50, 200), (60, 200)])
 
 @pytest.mark.parametrize("named, expected", [
     ([("Union Mill Road", A), ("KPN Colony Main Road", B)], "Unnamed road between Union Mill Road and KPN Colony Main Road"),
-    ([("Union Mill Road", A), ("Far Road", FAR)], "Unnamed road off Union Mill Road"),
-    ([("Cross Street", MID), ("Far Road", FAR)], "Unnamed road off Cross Street"),
-    ([("Far Road", FAR)], "Unnamed road near Far Road"),
-    ([("Same Road", A), ("Same Road", B)], "Unnamed road off Same Road"),
+    # P7.1: one named cross street -> "near A"; a named road that is no cross street is not used
+    ([("Union Mill Road", A), ("Far Road", FAR)], "Unnamed road near Union Mill Road"),
+    ([("Cross Street", MID), ("Far Road", FAR)], "Unnamed road near Cross Street"),
+    ([("Union Mill Road", A), ("Cross Street", MID)], "Unnamed road between Union Mill Road and Cross Street"),
+    ([("Far Road", FAR)], "Unnamed road"),
+    ([("Same Road", A), ("Same Road", B)], "Unnamed road near Same Road"),
     ([], "Unnamed road"),
     ([("(unnamed residential #1)", A)], "Unnamed road"),                 # a raw map label is never a name
 ])

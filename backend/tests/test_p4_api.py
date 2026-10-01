@@ -46,21 +46,36 @@ def test_gap_query_rows_show_recorded_and_along_road(client):
     assert [r["length_m"] for r in rows.values()] == sorted((r["length_m"] for r in rows.values()), reverse=True)
 
 
-def test_job_estimate_scales_ward29_by_length(online):
-    from app import views
-    b = online.app.state.data.db.bundle("ward29")
-    mc = online.app.state.model_card.get()
-    e = views.job_estimate(1000, b, mc)
-    ref_len = sum(s["length_m"] for s in b["streets"])
-    assert e["street_view_images"] == round(1000 * 1154 / ref_len)
-    assert e["gpu_minutes"] == round(11.5 * 1000 / ref_len, 1) and e["is_estimate"]
-    # design pass B §3: CPU minutes scale with length too (model_card: 18 min per street; a Ward 29 street averages ref/10)
-    per_street = ref_len / len(b["streets"])
-    assert e["cpu_minutes_full_ocr"] == round(18 * 1000 / per_street)
-    short, long_ = views.job_estimate(282, b, mc), views.job_estimate(1161, b, mc)
-    assert short["cpu_minutes_full_ocr"] < 18 < long_["cpu_minutes_full_ocr"]
-    assert short["cpu_minutes_fast_ocr"] == f"{round(3 * 282 / per_street)}–{round(5 * 282 / per_street)}"
-    assert views.job_estimate(1000, None, mc) is None
+def test_plan_estimate_prices_the_real_plan():
+    """P7.2: images = planned views + one building photo per building faced (the worker's cap rule); dollars and minutes
+    from the recorded rates, nothing scaled by length."""
+    from app import planest
+    plan = [{"views": [{"footprint": "w1"}, {"footprint": "w1"}, {"footprint": None}]}, {"views": [{"footprint": "w2"}]}]
+    rates = {"sv_price": 0.007, "cloud_usd_per_image": 0.0001, "places_per_image": 0.2, "gpu": {"sec_per_image": 3.0, "basis": "x"}}
+    e = planest.cost_of_plan(plan, rates, cap_usd=2.0)
+    assert (e["views"], e["buildings_faced"], e["street_view_images"], e["cameras"]) == (4, 2, 6, 2)
+    assert e["street_view_usd"] == 0.04 and e["cloud_ai_usd"] == 0.0006 and e["total_usd"] == 0.04
+    assert e["gpu_minutes"] == 0.3 and e["cpu_minutes"] is None and e["places_calls"] == 1 and not e["over_cap"]
+    big = [{"views": [{"footprint": f"b{i}"}]} for i in range(200)]                     # 200 views + 200 buildings
+    assert planest.cost_of_plan(big, rates, cap_usd=2.0)["over_cap"]
+
+
+def test_measured_rates_come_from_full_live_runs():
+    """seconds and cloud dollars per image: completed live jobs that ran from the start (never resumed or replayed)"""
+    import json
+    from app import planest
+    from app.settings import Settings
+    st = Settings()
+    with open(os.path.join(st.data_dir, "model_card.json"), encoding="utf-8") as f:
+        mc = json.load(f)
+    r = planest.measured_rates(st.areas_dir, mc)
+    used = {j["slug"] for j in r["jobs"]}
+    assert "vadakku_masi_veethi_f17937" in used and "sanganur_road_086d14" not in used      # resumed: not a rate
+    n = sum(j["images"] for j in r["jobs"])
+    assert abs(r["gpu"]["sec_per_image"] - sum(j["seconds"] for j in r["jobs"]) / n) < 1e-9
+    assert r["sv_price"] == mc["cost_time"]["street_view_price_usd_per_image"]
+    # Ward 29's photos from its run files: 1,154 views fetched + 266 building crops = 1,420 (the owner's full run)
+    assert planest.photos_of_run(os.path.join(st.areas_dir, "ward29")) == {"views": 1154, "crops": 266, "photos": 1420}
 
 
 def test_cancel_job(online):

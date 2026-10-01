@@ -163,6 +163,11 @@ def facts(bundle, F, model_card=None):
     put("views_mapped", sum(v["footprint"] is not None for v in V), "plan.json: views facing a building footprint")
     put("views_unmapped", n["views"] - n["views_mapped"], "plan.json: views with footprint == null")
     put("views_fetched", len(F.get("_views_done") or []), "_views_done.json: views fetched")
+    # P7.2: the use/floors step fetches one more photo per reliable building view (vlm.run_building_attrs), so the photos
+    # a run buys = views fetched + those building photos (Ward 29: 1,154 + 266 = 1,420, the owner's full run, D41)
+    put("building_photos", sum(1 for q in F.get("building_views") or [] if q.get("reliable")),
+        "building_views.json: reliable rows (one building photo each, fetched for use and floors)")
+    put("photos_fetched", n["views_fetched"] + n["building_photos"], "views fetched + building photos")
     put("views_tilted", sum(bool(v["pitch"]) for v in V), "plan.json: views with pitch > 0")
     # detections
     D = F.get("detections") or []
@@ -430,8 +435,12 @@ def cost(bundle, n, model_card, live_run=None):
                 "timings": {"stage_seconds": run.get("stage_seconds") or {}, "total_minutes": run.get("total_minutes"),
                             "device": run.get("device"), "representative": not resumed, "badge": badge}}
     lines = [
-        {"key": "street_view", "label": "Street View photos", "value": round(n["views_fetched"] * price, 2) if price else None,
-         "detail": f"{n['views_fetched']:,} photos × ${price} per image", "source": "computed: _views_done.json × model_card price",
+        {"key": "street_view", "label": "Street View photos", "value": round(n["photos_fetched"] * price, 2) if price else None,
+         "photos": n["photos_fetched"],
+         "detail": f"{n['photos_fetched']:,} photos × ${price} per image",
+         "source": (f"computed from this run's files: {n['views_fetched']:,} views fetched (_views_done.json) + "
+                    f"{n['building_photos']:,} building photos for use and floors (reliable rows of building_views.json) = "
+                    f"{n['photos_fetched']:,} photos, × ${price} per image (model card)"),
          "status": "computed" if price else "not recorded"},
         {"key": "vlm", "label": "Vision-language model (VLM) calls",
          "value": ct.get("ward29_vlm_usd_with_router") if ward else gen.get("vlm_usd"),

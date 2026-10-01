@@ -10,4 +10,5 @@ python-multipart>=0.0.9
 pytest>=8
 httpx>=0.27          # Supabase Storage calls + FastAPI TestClient
 indic-transliteration>=2.3   # pipeline textmatch: Tamil -> Latin for the name gate (laptop recomputes must match Colab, P7a)
+pillow>=10            # imported by geo_cascadia.streetview (the P7.2 planner estimate runs its panorama discovery; no images)
 ../pipeline

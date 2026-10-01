@@ -4,20 +4,25 @@ A port of geo_cascadia.picker.click_to_street (same Overpass queries, road class
 extension and 1.2 km cap; the pipeline itself is not modified) with the reliability the UI needs:
 - the three analysed areas answer from their own streets.json first (a click within 15 m of an analysed street line):
   no Overpass call at all;
-- Overpass: one mirror, then one fallback mirror, inside a 14 s budget for the whole lookup; a clear "busy" error;
-  when OpenStreetMap is busy and an analysed street lies within the 60 m search radius, that street is offered
-  (with a note saying so);
-- disk caches: Overpass answers by query, and the resolved street by the rounded click (4 decimals ≈ 11 m); a street
-  whose named-street extension failed is cached for 10 minutes only;
+- Overpass (P7.1): every query races both mirrors in a background pool; a click waits at most BUDGET_S (5 s) in total.
+  A query still running when the click gives up keeps running and fills the cache, so Retry is instant once it lands.
+  The road itself comes first; if the details (the named street's full length, the roads at an unnamed road's ends)
+  are still slow, the street is shown without them (`osm_details: false`, a note, nothing cached as complete). When the
+  road itself is slow or OpenStreetMap is busy and an analysed street lies within 60 m, that street is offered;
+- disk caches: Overpass answers by query; roads by map tile (~330 m, so every click in a tile needs no new road query);
+  the resolved street by OSM way id (a second click anywhere on the same road is instant) and by the rounded click;
 - the display name: street_names.json for analysed streets (never "(unnamed residential #…)"); the OSM name outside
   analysed areas; an unnamed road gets "Unnamed <type> road" (+ "near <named road>" when one is within reach);
 - "already analysed": the same OSM way ids, or ≥ 30 % of its length within 15 m of an analysed street.
 """
 import hashlib
 import json
+import math
 import re
 import os
+import threading
 import time
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, TimeoutError as FutureTimeout, wait
 
 import requests
 from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, Polygon, mapping, shape
@@ -27,17 +32,23 @@ from geo_cascadia.geo import Frame
 from geo_cascadia.picker import ROADS            # same road classes as the pipeline
 
 MIRRORS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]
-BUDGET_S = 14.0            # the whole lookup (both queries, both mirrors); the browser gives up at 18 s
-PER_CALL_S = 6.5
+BUDGET_S = 5.0             # P7.1: a click waits at most this long in total; the browser gives up at 8 s
+BG_PER_CALL_S = 25.0       # a query keeps running in the background this long per mirror after the click gave up
+TILE_DEG = 0.003           # roads are fetched per tile (~330 m) with a margin, so any click in it resolves locally
+TILE_PAD_M = 80            # > SEARCH_M + 8 (the pipeline's around radius): the nearest road is never cut off
 SEARCH_M, BUFFER_M, MAX_LEN_M = 60, 45, 1200      # pipeline defaults (picker.click_to_street)
 LOCAL_SNAP_M = 15          # a click this close to an analysed street line is that street (no Overpass)
 OVERLAP_BUFFER_M, OVERLAP_SHARE = 15, 0.30
-PARTIAL_TTL_S = 600
+LABEL_RULE = 2             # P7.1 naming rule; resolved streets cached under an older rule are resolved again
 UA = {"User-Agent": "geo-cascadia/0.2 (research prototype; street picker)"}
 
 
 class OverpassBusy(RuntimeError):
     pass
+
+
+class OverpassSlow(OverpassBusy):
+    """The query is still running (in the background) after the click's time budget."""
 
 
 class NoRoad(RuntimeError):
@@ -54,34 +65,82 @@ def _read_json(path):
 
 def _write_json(path, obj):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = f"{path}.{os.getpid()}.tmp"
+    tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(obj, f)
     os.replace(tmp, path)
 
 
+_POOL = ThreadPoolExecutor(max_workers=6, thread_name_prefix="overpass-race")        # one coordinator per query
+_CALLS = ThreadPoolExecutor(max_workers=16, thread_name_prefix="overpass-call")      # mirror requests (may hang)
+_INFLIGHT, _LOCK = {}, threading.Lock()
+BG_TOTAL_S = 45.0          # a background query gives up after this long in total
+TRIES_PER_MIRROR = 3       # a mirror answering 429 / 5xx / timeout is asked again (after a short wait) while time allows
+
+
+def _ask_mirror(url, query, wait_s=0.0):
+    if wait_s:
+        time.sleep(wait_s)
+    r = requests.post(url, data={"data": query}, headers=UA, timeout=(5, BG_PER_CALL_S))
+    if r.status_code == 200 and r.text.lstrip().startswith("{"):
+        return r.json().get("elements", [])
+    raise OverpassBusy(f"HTTP {r.status_code}")
+
+
+def _race(query, path):
+    """Every mirror at once; the first valid answer wins and is cached. A failed mirror is asked again after a short
+    wait (Overpass answers 429 when one address asks too often). Runs in the background pool."""
+    t_end, last = time.monotonic() + BG_TOTAL_S, None
+    pending = {_CALLS.submit(_ask_mirror, u, query): (u, 1) for u in MIRRORS}
+    try:
+        while pending:
+            done, _ = wait(list(pending), timeout=max(0.0, t_end - time.monotonic()), return_when=FIRST_COMPLETED)
+            if not done:
+                break
+            for f in done:
+                u, k = pending.pop(f)
+                try:
+                    els = f.result()
+                except Exception as e:                    # noqa: BLE001 - any mirror failure: try again / the other one
+                    last = str(e) if isinstance(e, OverpassBusy) else type(e).__name__
+                    if k < TRIES_PER_MIRROR and time.monotonic() + 2 * k + 3 < t_end:
+                        pending[_CALLS.submit(_ask_mirror, u, query, 2.0 * k)] = (u, k + 1)
+                    continue
+                _write_json(path, els)
+                return els
+        raise OverpassBusy(f"OpenStreetMap is busy or unreachable ({last or 'timeout'}) — try again in a moment")
+    finally:
+        with _LOCK:
+            _INFLIGHT.pop(path, None)
+
+
 def overpass(query, cache_dir, deadline, per_call=None):
-    """Cached Overpass call: primary mirror, then one fallback, within the deadline. Returns (elements, from_cache).
-    per_call: seconds per mirror (default PER_CALL_S, tuned for a click; background fetches may wait longer)."""
+    """Cached Overpass call. Returns (elements, from_cache). Waits until `deadline` (time.monotonic) at most: a query
+    still running then raises OverpassSlow and keeps running in the background (a later identical call joins it).
+    per_call: unused, kept for callers of the old signature."""
     path = os.path.join(cache_dir, "overpass", hashlib.md5(query.encode()).hexdigest() + ".json")
     hit = _read_json(path)
     if hit is not None:
         return hit, True
-    last = None
-    for url in MIRRORS:
-        left = deadline - time.monotonic()
-        if left < 1.0:
-            break
-        try:
-            r = requests.post(url, data={"data": query}, headers=UA, timeout=(min(3.05, left), min(per_call or PER_CALL_S, left)))
-            if r.status_code == 200 and r.text.lstrip().startswith("{"):
-                els = r.json().get("elements", [])
-                _write_json(path, els)
-                return els, False
-            last = f"HTTP {r.status_code}"
-        except requests.RequestException as e:
-            last = type(e).__name__
-    raise OverpassBusy(f"OpenStreetMap is busy or unreachable ({last or 'timeout'}) — try again in a moment")
+    with _LOCK:
+        fut = _INFLIGHT.get(path)
+        if fut is None:
+            # a separate thread starts the race, so the race's own mirror calls never wait behind it in the pool
+            fut = _INFLIGHT[path] = _POOL.submit(_race, query, path)
+    try:
+        return fut.result(timeout=max(0.0, deadline - time.monotonic())), False
+    except FutureTimeout:
+        raise OverpassSlow("OSM lookup slow") from None
+
+
+def _tile_query(lat, lon):
+    """roads of the ~330 m tile holding the click, plus a margin wider than the pipeline's search radius"""
+    ty, tx = math.floor(lat / TILE_DEG), math.floor(lon / TILE_DEG)
+    plat = TILE_PAD_M / 110574
+    plon = TILE_PAD_M / (111320 * max(0.2, math.cos(math.radians(lat))))
+    s, w = ty * TILE_DEG - plat, tx * TILE_DEG - plon
+    n, e = (ty + 1) * TILE_DEG + plat, (tx + 1) * TILE_DEG + plon
+    return f'[out:json][timeout:25];way["highway"~"{ROADS}"]({s:.6f},{w:.6f},{n:.6f},{e:.6f});out geom tags;'
 
 
 # ------------------------------------------------------------------ geometry (local metre frame, as the pipeline)
@@ -181,21 +240,34 @@ def pick_local(bundles, lat, lon, snap_m=LOCAL_SNAP_M):
 
 
 # ------------------------------------------------------------------ 2) Overpass (port of picker.click_to_street)
+def _lines_ll(F, line_xy):
+    return [[[round(x, 7), round(y, 7)] for x, y in l.coords] for l in _to_ll(F, MultiLineString(_parts(line_xy))).geoms]
+
+
+def _from_ll(F, lines_ll):
+    return unary_union([LineString([F.xy(la, lo) for lo, la in l]) for l in lines_ll if len(l) >= 2])
+
+
 def pick_overpass(cache_dir, lat, lon, deadline, google_key=None):
-    """Returns (result, complete) — complete is False when the named-street extension could not be fetched."""
+    """Returns (result, complete). complete is False when the details (the named street beyond the tile, the roads at
+    an unnamed road's ends) were still loading when the click's budget ran out: the street is shown without them."""
     F = Frame(lat, lon)
-    q = f'[out:json][timeout:25];way["highway"~"{ROADS}"](around:{SEARCH_M + 8},{round(lat, 4)},{round(lon, 4)});out geom tags;'
-    els, cached = overpass(q, cache_dir, deadline)
+    els, cached = overpass(_tile_query(lat, lon), cache_dir, deadline)      # same road classes as the pipeline
     ways = [w for w in els if "geometry" in w]
     geom = lambda w: LineString([F.xy(n["lat"], n["lon"]) for n in w["geometry"]])
     hit = min(ways, key=lambda w: geom(w).distance(Point(0, 0))) if ways else None
     if hit is None or geom(hit).distance(Point(0, 0)) > SEARCH_M:
         raise NoRoad(f"no road within {SEARCH_M} m of the clicked point")
+    # the same road clicked before (anywhere along it): its street is resolved already
+    known = _read_json(os.path.join(cache_dir, "byway", f"{hit['id']}.json"))
+    if known and known.get("rule") == LABEL_RULE:
+        return _result(F, _from_ll(F, known["lines"]), known["way_ids"], known["street"], known["name_source"],
+                       known.get("osm_name"), "cache"), True
     tags = hit.get("tags", {})
     name = tags.get("name")
     group = [w for w in ways if name and w.get("tags", {}).get("name") == name] or [hit]
     source, complete = ("cache" if cached else "overpass"), True
-    if name:                                                      # extend a named street beyond the search circle
+    if name:                                                      # extend a named street beyond the tile
         safe = name.replace("\\", "").replace('"', '\\"')
         q2 = f'[out:json][timeout:25];way["highway"]["name"="{safe}"](around:1500,{round(lat, 3)},{round(lon, 3)});out geom tags;'
         try:
@@ -203,12 +275,12 @@ def pick_overpass(cache_dir, lat, lon, deadline, google_key=None):
             group = [w for w in els2 if "geometry" in w] or group
             source = "cache" if cached and cached2 else "overpass"
         except OverpassBusy:
-            complete = False                                      # keep the ways within the search circle
+            complete = False                                      # keep the pieces within the tile
     line = unary_union([geom(w) for w in group])
     if name:
         street, src = tidy(name), "osm"
     else:
-        # the named roads at the unnamed road's two ends (they can lie outside the search circle): one small query
+        # the named roads at the unnamed road's two ends (they can lie outside the tile): one small query
         named = [w for w in ways if (w.get("tags") or {}).get("name")]
         ends = end_points(line)
         els3 = []
@@ -221,15 +293,23 @@ def pick_overpass(cache_dir, lat, lon, deadline, google_key=None):
                 els3, _ = overpass(q3, cache_dir, deadline)
                 named += [w for w in els3 if "geometry" in w and (w.get("tags") or {}).get("name")]
             except OverpassBusy:
-                complete = False                                  # name from the roads within the search circle only
+                complete = False                                  # name from the roads within the tile only
         pairs = [(tidy(w["tags"]["name"]), geom(w)) for w in named]
         if google_key:
-            pairs += google_names_at_ends(cache_dir, F, line, [geom(w) for w in ways + (els3 if ends else [])
-                                                               if "geometry" in w and w["id"] != hit["id"]
-                                                               and not (w.get("tags") or {}).get("name")], google_key)
+            g_pairs, g_complete = google_names_at_ends(cache_dir, F, line, [geom(w) for w in ways + (els3 if ends else [])
+                                                                            if "geometry" in w and w["id"] != hit["id"]
+                                                                            and not (w.get("tags") or {}).get("name")], google_key, deadline)
+            pairs += g_pairs
+            complete = complete and g_complete                    # a Google name still to come: not final, not cached
         street = unnamed_label(line, pairs, Point(0, 0))
         src = "unnamed"
-    return _result(F, line, [w["id"] for w in group], street, src, name, source), complete
+    way_ids = [w["id"] for w in group]
+    if complete:                                                  # every way of the street resolves to it from now on
+        rec = {"rule": LABEL_RULE, "t": time.time(), "lines": _lines_ll(F, line), "way_ids": way_ids, "street": street,
+               "name_source": src, "osm_name": name}
+        for wid in (way_ids if name else [hit["id"]]):
+            _write_json(os.path.join(cache_dir, "byway", f"{wid}.json"), rec)
+    return _result(F, line, way_ids, street, src, name, source), complete
 
 
 TOUCH_M = 15                  # a named road this close to an end of an unnamed road is where it starts or ends
@@ -237,11 +317,12 @@ GEO_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 GOOGLE_TTL_S = 30 * 86400     # Google names are kept at most 30 days
 
 
-def google_names_at_ends(cache_dir, F, line, unnamed_osm, key):
+def google_names_at_ends(cache_dir, F, line, unnamed_osm, key, deadline=None):
     """D36: where an end of the clicked road meets a road that has no name on OpenStreetMap, ask Google Maps for that
     road's name (reverse geocoding, "route", 25 m along it from the junction; at most one look-up per end, cached).
-    Returns [(name, geometry)] for unnamed_label. Any failure (key not enabled for Geocoding, quota) returns nothing."""
-    out = []
+    Returns ([(name, geometry)] for unnamed_label, complete). A refusal (key not enabled for Geocoding, quota) adds
+    nothing and is final; a look-up skipped for time or lost to the network makes complete False (P7.1)."""
+    out, complete = [], True
     for p in end_points(line):
         near = [g for g in unnamed_osm if g.distance(p) <= TOUCH_M]
         if not near:
@@ -255,10 +336,15 @@ def google_names_at_ends(cache_dir, F, line, unnamed_osm, key):
         if hit and time.time() - hit.get("t", 0) < GOOGLE_TTL_S:
             name = hit.get("name")
         else:
+            left = 6.0 if deadline is None else deadline - time.monotonic()
+            if left < 0.5:
+                complete = False                                  # the click's budget is spent: no Google name this time
+                continue
             try:
                 j = requests.get(GEO_URL, params={"latlng": f"{la:.6f},{lo:.6f}", "result_type": "route", "key": key},
-                                 timeout=6).json()
-            except requests.RequestException:
+                                 timeout=min(6.0, left)).json()
+            except (requests.RequestException, ValueError):
+                complete = False
                 continue
             if j.get("status") not in ("OK", "ZERO_RESULTS"):
                 continue                                          # e.g. REQUEST_DENIED: Geocoding not enabled for the key
@@ -267,7 +353,7 @@ def google_names_at_ends(cache_dir, F, line, unnamed_osm, key):
             _write_json(path, {"t": time.time(), "name": name})
         if name and name.lower() != "unnamed road":
             out.append((tidy(name), g))
-    return out
+    return out, complete
 SMALL_WORDS = {"and", "of", "the", "to", "on", "in", "at", "by"}
 
 
@@ -287,26 +373,25 @@ def end_points(line):
     return list(b.geoms) if hasattr(b, "geoms") else ([] if b.is_empty else [b])
 
 
-def unnamed_label(line, named, click):
-    """D36: a name for a road the map has no name for, from real map names only (never invented):
-    connects two named roads -> "Unnamed road between A and B"; touches one -> "Unnamed road off A";
-    else -> "Unnamed road near <nearest named road>"; none known -> "Unnamed road".
+def unnamed_label(line, named, click=None):
+    """D36 / P7.1: a name for a road the map has no name for, from the named cross streets at its ends only (never
+    invented): two different names -> "Unnamed road between A and B"; one -> "Unnamed road near A"; none ->
+    "Unnamed road". A cross street is a named road within TOUCH_M of an end, or one crossing the road (within 3 m).
     `line` and the named geometries are in metres (same frame); `named` = [(name, geometry)], OpenStreetMap names first
-    (Google names for roads the map leaves unnamed after them)."""
+    (Google names for roads the map leaves unnamed after them). `click` is unused (kept for callers)."""
     named = [(n, g) for n, g in named if n and not str(n).startswith("(unnamed")]
     if not named:
         return "Unnamed road"
-    at_ends = []
+    cross = []
     for p in end_points(line):
         d, _, n = min((round(g.distance(p), 1), i, n) for i, (n, g) in enumerate(named))   # a tie: the earlier (map) name
-        if d <= TOUCH_M and n not in at_ends:
-            at_ends.append(n)
-    if len(at_ends) >= 2:
-        return f"Unnamed road between {at_ends[0]} and {at_ends[1]}"
-    touching = at_ends or [n for d, n in sorted((g.distance(line), n) for n, g in named) if d <= 3][:1]
-    if touching:
-        return f"Unnamed road off {touching[0]}"
-    return f"Unnamed road near {min((g.distance(line), n) for n, g in named)[1]}"
+        if d <= TOUCH_M and n not in cross:
+            cross.append(n)
+    if len(cross) < 2:
+        cross += [n for d, n in sorted((g.distance(line), n) for n, g in named) if d <= 3 and n not in cross][:2 - len(cross)]
+    if len(cross) >= 2:
+        return f"Unnamed road between {cross[0]} and {cross[1]}"
+    return f"Unnamed road near {cross[0]}" if cross else "Unnamed road"
 
 
 # ------------------------------------------------------------------ 3) display name + overlap with analysed streets
@@ -351,24 +436,62 @@ def plain_name(name):
     return UNNAMED_TYPED.sub("Unnamed road", name) if isinstance(name, str) else name
 
 
+_FINISHING = set()
+
+
+def _finish_later(cache_dir, lat, lon, path, google_key):
+    """The click gave up: resolve the same click in the background with a long budget (its queries join the ones
+    already running), so Retry — or any click on the same road — is answered from the cache."""
+    with _LOCK:
+        if path in _FINISHING:
+            return
+        _FINISHING.add(path)
+
+    def run():
+        try:
+            res, complete = pick_overpass(cache_dir, lat, lon, time.monotonic() + BG_TOTAL_S, google_key)
+            if complete:
+                _write_json(path, {"complete": True, "rule": LABEL_RULE, "t": time.time(), "res": res})
+        except Exception:                                         # noqa: BLE001 - best effort; the next click asks again
+            pass
+        finally:
+            with _LOCK:
+                _FINISHING.discard(path)
+    threading.Thread(target=run, name="pick-finish", daemon=True).start()
+
+
+SLOW_NOTE = "OSM lookup slow — showing without OSM details (the name and full length may be incomplete)."
+
+
 def pick(cache_dir, bundles, lat, lon, google_key=None):
-    """Resolve a click. Raises NoRoad (422) or OverpassBusy (503)."""
+    """Resolve a click within BUDGET_S. Raises NoRoad (422), OverpassSlow (503, still loading in the background) or
+    OverpassBusy (503). A street resolved without its OSM details carries osm_details=False and SLOW_NOTE."""
     res = pick_local(bundles, lat, lon)
     if res is None:
-        # picks2: resolved clicks named by the D36 rule (the old folder holds "near" names)
+        # picks2: resolved clicks (complete answers named by the current rule only)
         path = os.path.join(cache_dir, "picks2", f"{round(lat, 4):.4f}_{round(lon, 4):.4f}.json")
         hit = _read_json(path)
-        if hit and (hit.get("complete") or time.time() - hit.get("t", 0) < PARTIAL_TTL_S):
+        if hit and hit.get("complete") and hit.get("rule") == LABEL_RULE:
             res = {**hit["res"], "source": "cache"}
         else:
             try:
                 res, complete = pick_overpass(cache_dir, lat, lon, time.monotonic() + BUDGET_S, google_key)
-                _write_json(path, {"complete": complete, "t": time.time(), "res": res})
-            except OverpassBusy:
-                res = pick_local(bundles, lat, lon, SEARCH_M)          # busy: offer the nearest analysed street
+                if complete:
+                    _write_json(path, {"complete": True, "rule": LABEL_RULE, "t": time.time(), "res": res})
+                else:
+                    res["osm_details"], res["note"] = False, SLOW_NOTE
+                    _finish_later(cache_dir, lat, lon, path, google_key)
+            except OverpassSlow:
+                _finish_later(cache_dir, lat, lon, path, google_key)
+                res = pick_local(bundles, lat, lon, SEARCH_M)
                 if res is None:
                     raise
-                res["note"] = "OpenStreetMap is busy, so this is the nearest street that was already analysed."
+                res["note"] = "OpenStreetMap is slow, so this is the nearest street that was already analysed."
+            except OverpassBusy:
+                res = pick_local(bundles, lat, lon, SEARCH_M)          # slow / busy: offer the nearest analysed street
+                if res is None:
+                    raise
+                res["note"] = "OpenStreetMap is slow or busy, so this is the nearest street that was already analysed."
     res = annotate(res, bundles, lat, lon)
     res["street"] = plain_name(res["street"])
     return res

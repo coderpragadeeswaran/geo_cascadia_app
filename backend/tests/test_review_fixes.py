@@ -301,12 +301,13 @@ def _sathy_click():
     return lat, lon
 
 
-def test_stretch_estimate_scales_with_length(offline):
-    full = offline.post("/jobs/estimate", json={"length_m": 1000}).json()["estimate"]
-    half = offline.post("/jobs/estimate", json={"length_m": 500}).json()["estimate"]
-    assert abs(half["street_view_images"] * 2 - full["street_view_images"]) <= 1
-    assert half["gpu_minutes"] < full["gpu_minutes"]
-    assert offline.post("/jobs/estimate", json={"length_m": 0}).status_code == 422
+def test_plan_estimate_needs_the_server_key(offline):
+    """P7.2: the estimate is the real camera plan; without a Google server key it says so (never a length formula)"""
+    lat, lon = _sathy_click()
+    r = offline.post("/jobs/plan-estimate", json={"lat": lat, "lon": lon})
+    assert r.status_code == 200 and r.json()["status"] == "failed" and "server key" in r.json()["error"]
+    assert offline.get(f"/jobs/plan-estimate/{r.json()['key']}").json()["status"] == "failed"
+    assert offline.post("/jobs/estimate", json={"length_m": 1000}).status_code in (404, 405)
 
 
 def test_trimmed_job_uses_only_the_stretch(online):

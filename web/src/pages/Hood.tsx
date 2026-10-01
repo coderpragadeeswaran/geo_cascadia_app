@@ -388,10 +388,12 @@ function CostTime({ h }: { h: HoodData }) {
   const sv = c.lines.find((l) => l.key === 'street_view')
   if (c.live) return <LiveCost h={h} />
   const time = c.model_card?.gpu_minutes != null ? `About ${c.model_card.gpu_minutes} min on a Colab GPU` : 'Time: not recorded for this run'
-  const money = sv?.value != null ? `about $${Math.round(sv.value)} in Street View photos` : 'Street View cost not recorded'
+  const money = sv?.value != null
+    ? `about ${sv.value.toFixed(2)} in Street View photos (${sv.photos != null ? fmt.format(sv.photos) : '—'} photos)` : 'Street View cost not recorded'
   return (
     <Section id="cost" title="Time and cost">
-      <p className="t-body">{time}; {money}.</p>
+      <p className="t-body" title={sv?.source ?? undefined}>{time}; {money}.</p>
+      {sv?.source && <p className="t-small ink3 mt-1">Where the photo count comes from: {sv.source}.</p>}
     </Section>
   )
 }

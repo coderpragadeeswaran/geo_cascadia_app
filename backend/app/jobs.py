@@ -1,7 +1,7 @@
 """Jobs (analyse a new street) and the Colab worker protocol (CLAUDE.md §7-8).
 
 A street click is resolved on the laptop by app/streetpick.py (a port of geo_cascadia.picker.click_to_street: analysed
-areas answer from their own streets.json, Overpass with a 15 s budget, a disk cache, display names, overlap check).
+areas answer from their own streets.json, Overpass with a 5 s budget (P7.1), disk caches, display names, overlap check).
 The job stores the polygon (GeoJSON, lon/lat), OSM way ids and an output slug, so the worker can call run_area directly.
 Jobs need the database: in offline data mode, creating/claiming jobs returns 503.
 """
@@ -23,7 +23,7 @@ from shapely.geometry import mapping, shape
 from shapely.ops import transform
 from shapely.validation import explain_validity
 
-from . import loader, minimap, streetpick, views
+from . import loader, minimap, planest, streetpick, views
 from .store import Data, OfflineError
 
 router = APIRouter()
@@ -163,6 +163,9 @@ def pick_street(settings, D, lat, lon):
                                google_key=settings.google_server_key)
     except streetpick.NoRoad as e:
         raise HTTPException(422, str(e)) from None
+    except streetpick.OverpassSlow:
+        raise HTTPException(503, "OSM lookup slow — the street isn't loaded yet. It keeps loading in the background; "
+                                 "Retry in a few seconds.") from None
     except streetpick.OverpassBusy as e:
         raise HTTPException(503, str(e)) from None
 
@@ -183,6 +186,8 @@ class JobIn(BaseModel):
                                   "LineString / MultiLineString, lon/lat); the job polygon is rebuilt from it")
     test: bool = Field(False, description="made by an automated test (only such jobs, and jobs cancelled before any worker "
                                           "started them, are removed by 'clear test jobs')")
+    cost_cap_usd: Optional[float] = Field(None, gt=0, le=100, description="pause for approval above this planned cost "
+                                          "(US$); default JOB_COST_CAP_USD (2)")
 
 
 class EstimateIn(BaseModel):
@@ -191,23 +196,43 @@ class EstimateIn(BaseModel):
 
 @router.post("/jobs/preview", tags=["jobs"])
 def job_preview(body: ClickIn, request: Request, D: Data = Depends(get_data)):
-    """Resolve a map click to the street it lands on (no job created) — for the confirm sheet."""
+    """Resolve a map click to the street it lands on (no job created) — for the confirm sheet. The estimate comes from
+    the real camera plan (P7.2): planning starts here in the background; poll GET /jobs/plan-estimate/{key}."""
     res = pick_street(request.app.state.settings, D, body.lat, body.lon)
-    return {"offline": not D.db_online, **res, "estimate": _estimate(request, D, res.get("length_m"))}
+    return {"offline": not D.db_online, **res, "plan_estimate": _plan(request, res["polygon"], res.get("way_ids")),
+            "cost_cap_usd": request.app.state.settings.job_cost_cap_usd}
 
 
-def _estimate(request, D, length_m):
-    try:
-        ref, _ = D.read(lambda s: s.bundle("ward29"))
-    except Exception:
-        ref = None
-    return views.job_estimate(length_m, ref, request.app.state.model_card.get())
+def _plan(request, polygon, way_ids):
+    st = request.app.state.settings
+    return planest.start(polygon, way_ids, data_dir=st.data_dir, maps_key=st.google_server_key,
+                         model_card=request.app.state.model_card.get(), cap_usd=st.job_cost_cap_usd)
 
 
-@router.post("/jobs/estimate", tags=["jobs"])
-def job_estimate(body: EstimateIn, request: Request, D: Data = Depends(get_data)):
-    """Estimate for a stretch of this length (live while the end dots are dragged): same rule as the preview."""
-    return {"offline": not D.db_online, "length_m": round(body.length_m), "estimate": _estimate(request, D, body.length_m)}
+class PlanIn(BaseModel):
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    lines: Optional[dict] = Field(None, description="the trimmed stretch (GeoJSON LineString / MultiLineString, lon/lat); "
+                                  "none = the whole street")
+
+
+@router.post("/jobs/plan-estimate", tags=["jobs"])
+def job_plan_estimate(body: PlanIn, request: Request, D: Data = Depends(get_data)):
+    """Start (or join) the real-planner estimate for the street under {lat, lon}, or for a trimmed stretch of it.
+    Same job polygon as POST /jobs would store. Returns {key, status, estimate?}."""
+    pick = pick_street(request.app.state.settings, D, body.lat, body.lon)
+    if body.lines is not None:
+        try:
+            pick = streetpick.trim(pick, body.lines)
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from None
+    return {"offline": not D.db_online, "length_m": pick["length_m"], **_plan(request, pick["polygon"], pick.get("way_ids"))}
+
+
+@router.get("/jobs/plan-estimate/{key}", tags=["jobs"])
+def job_plan_estimate_status(key: str):
+    """The planner estimate's progress: running (with elapsed seconds) / done (with the estimate) / failed (why)."""
+    return {"offline": False, **planest.status(key)}
 
 
 @router.post("/jobs", tags=["jobs"], status_code=201)
@@ -238,9 +263,17 @@ def job_create(body: JobIn, request: Request, D: Data = Depends(get_data)):
                 raise HTTPException(422, str(e)) from None
         kind, inp = "street_click", {"click": {"lat": body.lat, "lon": body.lon}, **pick,
                                      "name": body.name or pick["street"]}
+        st = _plan(request, pick["polygon"], pick.get("way_ids"))
+        if st.get("estimate"):
+            inp["estimate"] = st["estimate"]
     else:
         raise HTTPException(422, "give {lat, lon} or {polygon}")
     inp["slug"] = _slugify(inp["name"], job_id)
+    # P7.2: this job's cost cap (the worker pauses above it) and the rates behind the confirm sheet's estimate, so the
+    # worker's check prices the plan the same way
+    inp["cost_cap_usd"] = body.cost_cap_usd if body.cost_cap_usd is not None else settings.job_cost_cap_usd
+    rates = planest.measured_rates(settings.areas_dir, request.app.state.model_card.get())
+    inp["rates"] = {"sv_price": rates.get("sv_price"), "cloud_usd_per_image": rates.get("cloud_usd_per_image")}
 
     def fn(s):
         with s.pool.connection() as c:
@@ -307,14 +340,14 @@ def job_clear_test(body: ClearIn, request: Request, D: Data = Depends(get_data))
 
 @router.get("/jobs/{job_id}", tags=["jobs"])
 def job_get(job_id: str, request: Request, D: Data = Depends(get_data)):
-    """One job, with the estimate for its street length (same rule as the confirm sheet; an estimate, not a measurement)."""
+    """One job, with the confirm sheet's planner estimate stored when it was queued (an estimate, not a measurement)."""
     def fn(s):
         with s.pool.connection() as c:
             return _get_job(c, job_id)
     job = D.write(fn)
-    length = (job["input"] or {}).get("length_m")
+    # P7.2: the planner estimate stored with the job (jobs created before P7.2 have none)
     return {"offline": False, "job": job, "worker_online": worker_online(request.app),
-            "estimate": _estimate(request, D, length) if length else None}
+            "estimate": (job["input"] or {}).get("estimate")}
 
 
 @router.get("/jobs/{job_id}/minimap", tags=["jobs"])
@@ -707,8 +740,11 @@ def fill_street_names(folder, job_input=None):
     """D35/D36: a street the pipeline could not name (no Google route name) keeps its raw OpenStreetMap label, e.g.
     "(unnamed residential #907980850)". Give it a plain display name from real map names only: the clicked street keeps
     the name the picker gave it (it saw the roads at both ends); any other one gets streetpick.unnamed_label from the
-    run's own streets ("between A and B" / "off A" / "near A"). Added to street_names.json and put on the export's
-    records, as the pipeline does for the names it found. Display names only; no numbers change."""
+    run's own streets ("between A and B" / "near A"). Added to street_names.json and put on the export's records, as the
+    pipeline does for the names it found. Display names only; no numbers change.
+    P7.1: the clicked street gets the picker's name even when the pipeline found a Google route name for it (Google's
+    reverse geocoding names the nearest route, often the cross street), so the Analyse box, Jobs, the map and the records
+    all use one label for it."""
     def rd(n, default):
         p = os.path.join(folder, n)
         if not os.path.isfile(p):
@@ -736,10 +772,16 @@ def fill_street_names(folder, job_input=None):
     job_ways, job_name = set(ji.get("way_ids") or []), ji.get("street")
     new, used = {}, set(names.values())
     for raw in geo:
-        if not str(raw).startswith("(unnamed") or raw in names:
+        clicked = bool(job_name and ways.get(raw, set()) & job_ways)
+        if not str(raw).startswith("(unnamed") or (raw in names and not clicked):
             continue
-        if job_name and ways.get(raw, set()) & job_ways:
+        if clicked:
             base = job_name                                    # the clicked street: the picker's name
+            if names.get(raw) == base:
+                continue
+            old = names.get(raw)
+            if old:                                            # replaces the pipeline's Google route name on the records
+                used.discard(old)
         else:
             named = [(streetpick.tidy(display(n)), g) for n, g in geo.items() if n != raw]
             base = streetpick.unnamed_label(geo[raw], named, Point(0, 0))
@@ -749,14 +791,19 @@ def fill_street_names(folder, job_input=None):
         new[raw] = name; used.add(name)
     if not new:
         return
+    # records carry the display name (the raw label, or the pipeline's Google name): map both to the new name
+    rename = {display(raw): nm for raw, nm in new.items()}
+    rename.update(new)
     names.update(new)
     for key in STREET_KEYS:
         for rec in exp.get(key) or []:
-            if isinstance(rec, dict) and rec.get("street") in new:
-                rec["street"] = new[rec["street"]]
+            if isinstance(rec, dict) and rec.get("street") in rename:
+                rec["street"] = rename[rec["street"]]
     by = ((exp.get("dashboard") or {}).get("charts") or {}).get("by_street")
     if isinstance(by, dict):
-        exp["dashboard"]["charts"]["by_street"] = {new.get(k, k): v for k, v in by.items()}
+        exp["dashboard"]["charts"]["by_street"] = {rename.get(k, k): v for k, v in by.items()}
+    if isinstance((exp.get("dashboard") or {}).get("streets"), list):
+        exp["dashboard"]["streets"] = [rename.get(x, x) for x in exp["dashboard"]["streets"]]
     for n, obj in (("street_names.json", names), ("export.json", exp)):
         with open(os.path.join(folder, n), "w", encoding="utf-8") as f:
             json.dump(obj, f)

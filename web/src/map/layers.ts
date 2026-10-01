@@ -377,14 +377,12 @@ export function buildLayers(ctx: LayerCtx): Layer[] {
       getColor: rgba(c.ink, 110), capRounded: true, jointRounded: true }))
   }
   if (ctx.analyseLines?.length) {
-    const ends = ctx.analyseLines.flatMap((l) => [l[0], l[l.length - 1]])
+    // P7.1: no end or vertex dots here: the street's only dots are its two start / end handles (TrimHandles)
     L.push(
       new PathLayer({ id: 'analyse-casing', data: ctx.analyseLines, getPath: (d) => d, widthUnits: 'pixels', getWidth: 11,
         getColor: rgba(c.bg0, 230), capRounded: true, jointRounded: true }),
       new PathLayer({ id: 'analyse-line', data: ctx.analyseLines, getPath: (d) => d, widthUnits: 'pixels', getWidth: 5,
         getColor: rgba(c.ink, 255), capRounded: true, jointRounded: true }),
-      new ScatterplotLayer({ id: 'analyse-ends', data: ends, getPosition: (d) => d, radiusUnits: 'pixels', getRadius: 5.5,
-        getFillColor: rgba(c.sodium), stroked: true, lineWidthUnits: 'pixels', getLineWidth: 2, getLineColor: rgba(c.bg0) }),
     )
   }
 

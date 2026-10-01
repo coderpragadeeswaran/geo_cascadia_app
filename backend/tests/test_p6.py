@@ -262,11 +262,29 @@ def test_unnamed_roads_get_plain_names(tmp_path):                               
     J.fill_street_names(str(tmp_path))
     names = json.loads((tmp_path / "street_names.json").read_text(encoding="utf-8"))
     out = json.loads((tmp_path / "export.json").read_text(encoding="utf-8"))
-    assert names == {"(unnamed residential #1)": "Unnamed road near Main Road",
-                     "(unnamed residential #2)": "Unnamed road near Main Road (2)"}
-    assert out["buildings"][0]["street"] == "Unnamed road near Main Road"
-    assert out["streetlight_gaps"][0]["street"] == "Unnamed road near Main Road (2)"
-    assert list(out["dashboard"]["charts"]["by_street"]) == ["Unnamed road near Main Road"]
+    # P7.1: parallel roads that meet no named road at their ends: plain "Unnamed road", told apart by a number
+    assert names == {"(unnamed residential #1)": "Unnamed road", "(unnamed residential #2)": "Unnamed road (2)"}
+    assert out["buildings"][0]["street"] == "Unnamed road"
+    assert out["streetlight_gaps"][0]["street"] == "Unnamed road (2)"
+    assert list(out["dashboard"]["charts"]["by_street"]) == ["Unnamed road"]
+
+
+def test_clicked_street_keeps_the_picker_name_everywhere(tmp_path):                  # P7.1
+    """the pipeline's Google route name for the clicked unnamed road is replaced by the picker's name on every record"""
+    from app import jobs as J
+    streets = [{"name": "(unnamed residential #7)", "way_ids": [7], "lines_latlon": [[[11.0, 77.0], [11.001, 77.0]]]}]
+    exp = {"meta": {}, "buildings": [{"id": "w1", "street": "Kattabomman Street"}], "assets": [],
+           "dashboard": {"streets": ["Kattabomman Street"], "charts": {"by_street": {"Kattabomman Street": {"buildings": 1}}}}}
+    for n, o in (("streets.json", streets), ("street_names.json", {"(unnamed residential #7)": "Kattabomman Street"}),
+                 ("export.json", exp)):
+        (tmp_path / n).write_text(json.dumps(o), encoding="utf-8")
+    J.fill_street_names(str(tmp_path), {"way_ids": [7], "street": "Unnamed road near Kattabomman Street"})
+    names = json.loads((tmp_path / "street_names.json").read_text(encoding="utf-8"))
+    out = json.loads((tmp_path / "export.json").read_text(encoding="utf-8"))
+    assert names == {"(unnamed residential #7)": "Unnamed road near Kattabomman Street"}
+    assert out["buildings"][0]["street"] == "Unnamed road near Kattabomman Street"
+    assert out["dashboard"]["streets"] == ["Unnamed road near Kattabomman Street"]
+    assert list(out["dashboard"]["charts"]["by_street"]) == ["Unnamed road near Kattabomman Street"]
 
 
 def test_delete_area_removes_it_everywhere(online, W, jobs):                        # F7 / F8

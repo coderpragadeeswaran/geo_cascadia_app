@@ -1,11 +1,11 @@
 /** Pure UI helpers (review fixes 10, 11, 13, 14), no browser: `npm run test:ui`. Exits 1 on the first failure. */
 import { strict as assert } from 'node:assert'
 import { placeLabels, placeMapLabels, type Rect } from '../src/lib/labelLayout'
-import { JOB_STAGES, jobStatus, matchLabel, stageLine, stageProgress, stageShort, timeLeft } from '../src/lib/labels'
+import { JOB_STAGES, jobStatus, matchLabel, minutesText, stageLine, stageProgress, stageShort, timeLeft } from '../src/lib/labels'
 import { kpis, type Records } from '../src/lib/derive'
 import { photoProblem, saveDecision } from '../src/lib/review'
 import { article, costText, noun, plural, usd, withArticle } from '../src/lib/utils'
-import { mainLine, pointAt, project, slice } from '../src/map/trim'
+import { mainLine, pointAt, project, separate, slice } from '../src/map/trim'
 
 let n = 0
 const t = (name: string, fn: () => void) => { fn(); n++; console.log('ok', name) }
@@ -129,10 +129,17 @@ t('P6: job stages, progress and an honest time left', () => {
   assert.equal(stageLine('area', 5, 5), 'Stage 2 of 10 · Reading the map')
   assert.equal(stageLine(null), 'Starting')
   assert.equal(stageShort('plan'), '3/10')
-  const est = { gpu_minutes: 6, cpu_minutes_fast_ocr: '2–3', cpu_minutes_full_ocr: 11 }
-  assert.equal(timeLeft(120, 'gpu', est), 'about 4 min left (estimate for a GPU)')
-  assert.equal(timeLeft(60, 'cpu', est), 'about 2 min left (estimate for a CPU)')      // upper end of the fast range
-  assert.equal(timeLeft(600, 'gpu', est), 'taking longer than the GPU estimate of 6 min')   // never a fake countdown
+  const est = { gpu_minutes: 6, cpu_minutes: 11 }
+  assert.equal(timeLeft(120, 'gpu', est), 'about 4 minutes left (estimate for a GPU)')
+  assert.equal(timeLeft(60, 'cpu', est), 'about 10 minutes left (estimate for a CPU)')
+  assert.equal(timeLeft(600, 'gpu', est), 'taking longer than the GPU estimate of 6 minutes')   // never a fake countdown
+  assert.equal(timeLeft(30, 'gpu', { gpu_minutes: 0.3, cpu_minutes: null }), 'taking longer than the GPU estimate of < 1 minute')
+  // P7.1: a duration that rounds to 0 is "< 1 minute", never "0"
+  assert.equal(minutesText(0.2), '< 1 minute')
+  assert.equal(minutesText(0), '< 1 minute')
+  assert.equal(minutesText(0.6), '1 minute')
+  assert.equal(minutesText(71.1), '71 minutes')
+  assert.equal(minutesText(null), '—')
   assert.equal(timeLeft(10, 'gpu', null), null)
   assert.deepEqual(jobStatus({ status: 'needs_approval', display_status: 'needs_approval' }).label, 'Needs approval')
   assert.equal(jobStatus({ status: 'running', display_status: 'interrupted' }).label, 'Interrupted')
@@ -163,6 +170,17 @@ t('map labels: never over the corner plates or a marker; dropped when nothing is
 t('map labels: priority order wins the free spot', () => {
   const out = placeMapLabels([{ text: '9 m', cands: [[200, 100]], strong: true }, { text: 'Sathy Main Road', cands: [[200, 100], [200, 150]] }], [], 480, 220, W8)
   assert.deepEqual(out.map((l) => [l.text, l.y]), [['9 m', 100], ['Sathy Main Road', 150]])
+})
+t('trim handles: never overlap (short street, loop, far zoom); far apart = left alone (P7.1)', () => {
+  const dist = (p: { x: number; y: number }, q: { x: number; y: number }) => Math.hypot(p.x - q.x, p.y - q.y)
+  const far = separate({ x: 0, y: 0 }, { x: 100, y: 0 }, { x: -1, y: 0 }, { x: 1, y: 0 })
+  assert.deepEqual(far, [{ x: 0, y: 0 }, { x: 100, y: 0 }])                         // nothing to fix
+  const short = separate({ x: 50, y: 50 }, { x: 58, y: 50 }, { x: -1, y: 0 }, { x: 1, y: 0 })
+  assert.ok(dist(short[0], short[1]) >= 28 - 1e-9 && short[0].x < 50 && short[1].x > 58)   // pushed apart along the street
+  const loop = separate({ x: 10, y: 10 }, { x: 10, y: 10 }, { x: 0, y: -1 }, { x: 0, y: 1 })
+  assert.ok(dist(loop[0], loop[1]) >= 28 - 1e-9 && loop[0].y < loop[1].y)          // a loop: each end along its own way out
+  const same = separate({ x: 10, y: 10 }, { x: 10, y: 10 }, { x: 0, y: 0 }, { x: 0, y: 0 })
+  assert.ok(dist(same[0], same[1]) >= 28 - 1e-9)                                   // no direction known: still apart
 })
 
 console.log(`${n} UI tests passed`)

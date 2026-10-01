@@ -12,7 +12,7 @@ import { queryApplies } from '@/lib/query'
 import { useFocus } from '@/lib/useAreaData'
 import { useUi } from '@/store/ui'
 import { useAnalyse } from './analyse'
-import { bboxCenter, fitZoom, flyTo, isFlying, OBJECT_TILT, STREET_TILT } from './camera'
+import { bboxCenter, fitZoom, flyTo, isFlying, OBJECT_TILT, STREET_TILT, tiltTo, yieldToUser } from './camera'
 import { useDriveMark } from './drive'
 import { mainLine, slice } from './trim'
 import { TrimHandles } from './TrimHandles'
@@ -75,6 +75,7 @@ function MapInstance({ mapId }: { mapId: string }) {
       style={{ position: 'absolute', inset: 0 }}
     >
       <RestoreCamera cam={start.current} />
+      <YieldToUser />
       <DeckLayers introDone={!!start.current} />
       <CameraDirector introDone={!!start.current} />
       <CoverageLayer />
@@ -83,6 +84,13 @@ function MapInstance({ mapId }: { mapId: string }) {
       <TrimHandles />
     </Map>
   )
+}
+
+/** P7.1: a wheel, drag or pinch stops any camera animation, so the person's own zoom / pan is never overridden */
+function YieldToUser() {
+  const map = useMap('main')
+  useEffect(() => (map ? yieldToUser(map.getDiv()) : undefined), [map])
+  return null
 }
 
 /** a cached map comes back where it was left (default* props only apply to a new map): put it on the current view */
@@ -340,11 +348,10 @@ function CameraDirector({ introDone }: { introDone: boolean }) {
     let timer = 0
     const apply = () => {
       if (isFlying()) { timer = window.setTimeout(apply, 120); return }   // let a zoom/fly finish, then tilt
-      const c = map.getCenter()
       const tilt = map.getTilt() ?? 0
-      if (!c) return
-      if (near && tilt < 10) flyTo(map, { center: c.toJSON(), zoom: map.getZoom() ?? 17, tilt: STREET_TILT }, { duration: 900 })
-      if (!near && tilt > 0) flyTo(map, { center: c.toJSON(), zoom: map.getZoom() ?? 15, tilt: 0, heading: 0 }, { duration: 700 })
+      // tilt only: centre and zoom stay the person's own (P7.1)
+      if (near && tilt < 10) tiltTo(map, STREET_TILT, { duration: 900 })
+      if (!near && tilt > 0) tiltTo(map, 0, { heading: 0, duration: 700 })
     }
     apply()
     return () => clearTimeout(timer)

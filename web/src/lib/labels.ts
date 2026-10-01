@@ -172,16 +172,23 @@ export function stageProgress(stage: string | null | undefined, done?: number | 
   const within = total ? Math.min(1, Math.max(0, (done ?? 0) / total)) : 0
   return (i + within) / JOB_STAGES.length
 }
-/** Honest time left: the length-scaled estimate for this device minus the time already spent. Never a countdown past
- *  the estimate: over it, it says so. `est` is the job's estimate from the API (GPU minutes, CPU fast-OCR range). */
-export function timeLeft(elapsedS: number, device: string | null | undefined, est: { gpu_minutes: number | null; cpu_minutes_fast_ocr: string | null; cpu_minutes_full_ocr: number | string | null } | null | undefined) {
+/** P7.1: a duration in minutes, never "0": anything that rounds to 0 is "< 1 minute". [figure, unit] for figure layouts. */
+export function minutesParts(m: number | null | undefined): [string, string] {
+  if (m == null || !Number.isFinite(m)) return ['—', '']
+  const r = Math.round(m)
+  return r < 1 ? ['< 1', 'minute'] : [r.toLocaleString('en-IN'), r === 1 ? 'minute' : 'minutes']
+}
+export const minutesText = (m: number | null | undefined) => minutesParts(m).filter(Boolean).join(' ')
+
+/** Honest time left: the job's estimate for this device (from the real camera plan, P7.2) minus the time already spent.
+ *  Never a countdown past the estimate: over it, it says so. */
+export function timeLeft(elapsedS: number, device: string | null | undefined, est: { gpu_minutes: number | null; cpu_minutes: number | null } | null | undefined) {
   if (!est) return null
-  const hi = (v: unknown) => { const m = String(v ?? '').match(/(\d+(?:\.\d+)?)\s*$/); return m ? Number(m[1]) : null }
-  const total = device === 'cpu' ? hi(est.cpu_minutes_fast_ocr) ?? hi(est.cpu_minutes_full_ocr) : est.gpu_minutes
+  const total = device === 'cpu' ? est.cpu_minutes : est.gpu_minutes
   if (total == null) return null
   const left = total - elapsedS / 60
-  return left > 0.5 ? `about ${Math.ceil(left)} min left (estimate for a ${device === 'cpu' ? 'CPU' : 'GPU'})`
-    : `taking longer than the ${device === 'cpu' ? 'CPU' : 'GPU'} estimate of ${total} min`
+  return left > 0.5 ? `about ${minutesText(Math.ceil(left))} left (estimate for a ${device === 'cpu' ? 'CPU' : 'GPU'})`
+    : `taking longer than the ${device === 'cpu' ? 'CPU' : 'GPU'} estimate of ${minutesText(total)}`
 }
 export const deviceWord = (d: string | null | undefined) => (d === 'gpu' ? 'GPU' : d === 'cpu' ? 'CPU' : null)
 /** P5/P6: the API's display_status adds "interrupted" (running, worker silent for 2 min) and "cancelled" */
