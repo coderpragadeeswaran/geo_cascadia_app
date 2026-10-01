@@ -55,7 +55,7 @@ def test_preview_endpoint_uses_the_picker(client, no_overpass):
     p = r.json()
     assert p["street"] == "Sri Ganapathy Gardens 3rd Street (approx.)" and p["already"][0]["slug"] == "ward29"
     # P7.2: the estimate is the real camera plan, planned in the background (tests run without the server key: it says so)
-    assert p["plan_estimate"]["status"] == "failed" and "server key" in p["plan_estimate"]["error"]
+    assert p["plan_estimate"]["status"] == "failed" and "no Google key" in p["plan_estimate"]["error"]
     assert p["cost_cap_usd"] == 2.0
     far = client.post("/jobs/preview", json={"lat": 11.1, "lon": 77.0})
     assert far.status_code == 503 and "busy" in far.json()["detail"]

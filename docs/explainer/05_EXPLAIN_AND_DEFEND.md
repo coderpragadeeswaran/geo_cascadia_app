@@ -3,7 +3,7 @@
 **What's in this file**
 - The demo script for judges ([§14](#14-demo-script-for-judges)) and the FAQ ([§17](#17-faq)).
 - Limitations ([§15](#15-limitations-and-known-issues)) and the P7 to-do list ([§18](#18-still-to-do-p7)).
-- [Appendix A](#appendix-a-every-decision-d1--d45) (decisions D1–D45), [Appendix B](#appendix-b-conflicts-found) (conflicts found, stale docs) and [Appendix C](#appendix-c-open-questions) (open questions).
+- [Appendix A](#appendix-a-every-decision-d1--d49) (decisions D1–D49), [Appendix B](#appendix-b-conflicts-found) (conflicts found, stale docs) and [Appendix C](#appendix-c-open-questions) (open questions).
 
 [← 04 Backend, database and worker](04_BACKEND_DB_WORKER.md) · [Start here](00_START_HERE.md) · (this is the last file) →
 
@@ -22,15 +22,15 @@ Before the demo: the server and the web app running, the database awake (or the 
 8. **Poles: four in the photo, one on the map.** *Do:* open asset-0160. *See:* "Found 7 times… from one camera position, so its position is approximate", with a dashed ring of ±2.4 m ("one camera, 4 m away"). *Trust / caveat:* boxes within about 5 m merge; the map means "a pole here", not an exact count; within 8 m the circle size is a consistency check; beyond 8 m it is ±5 m from the surveyed check, and about half fall inside (Trust › Pole & light positions).
 9. **Review round-trip.** *Do:* Review → A on an item → U. *Asks for:* saving the decision, then undoing it. *See:* "N waiting" drops by 1 and comes back; the History panel shows both events. *Trust:* the decision and its history entry are written in one step, and the history is only ever added to. *Caveat:* no login; the finding itself does not change.
 10. **Trust: Register tests.** *See:* 94 of 108 planted mistakes caught across six areas, 14 false alarms, 530 of 538 records paired with their own building by location, and the note "This tests the comparison logic end to end on made-up data". *Caveat:* say that every miss comes from a moved pin taken by a neighbour, and that a real register can be loaded with the register import tool.
-10b. **Trust: Gate 1 and "tried and dropped".** *See:* camera-derived median 2.8 m, 60% ≤ 3.5 m (n=260), status "not verified"; YOLO26s rejected; condition withheld (53% vs 66%). *Caveat:* say out loud why 73% is not quoted.
-11. **(If a worker is online) Analyse a street.** *Do:* Analyse → click a short street → trim → Start. *See:* Stage 1 of 10…, the street sweeping; Done → the map flies to the new area. *Caveat:* the estimate is about 2× low; the new street is compared with a **synthetic** register too. *No worker?* Show "Queued, waiting for a worker" and open Vadakku Masi Veethi (Madurai, 162 photos, $1.13, 6.2 min).
+10b. **Trust: Gate 1 and "tried and dropped".** *See:* camera-derived median 2.8 m, 60% ≤ 3.5 m (n=260), status "not verified"; YOLO26s rejected; condition withheld (53% vs 66%). *Caveat:* say out loud why no pooled "all buildings" figure is quoted.
+11. **(If a worker is online) Analyse a street.** *Do:* Analyse → click a short street → trim → Start. *See:* Stage 1 of 10…, the street sweeping; Done → the map flies to the new area. *Caveat:* the estimate comes from the real camera plan (D46, D47) and runs high on time for a big area (Ward 29: 16.0 min estimated vs 11.5 real); the new street is compared with a **synthetic** register too. *No worker?* Show "Queued. The analysis computer is not connected yet" and open Vadakku Masi Veethi (Madurai, 162 photos, $1.13, 6.2 min).
 
 ---
 
 ## 17. FAQ
 
 1. **Is the 3.5 m target met?** Not verified. Against the organiser's reference (the OSM front-wall centre), camera-derived positions have a median of 2.8 m and 60.4% within 3.5 m (n=260). No surveyed truth exists, so we can't claim it.
-2. **Why not quote 73%?** It includes 121 buildings whose position *is* the reference point (0 m by construction).
+2. **Why not quote a pooled "all buildings" figure?** It would include 121 buildings whose position *is* the reference point (0 m by construction).
 3. **Is the register real?** No. It is synthetic, generated per area: it copies what the photos show except planted mistakes (78 in Ward 29), because no open municipal register exists. It is regenerated for every new street too. A real one can be loaded with the register import tool.
 4. **So what does "differs from the register" prove?** That the comparison works end to end: 94 of 108 planted mistakes were caught across six areas, and every difference shown is a planted mistake or a moved pin taken by a neighbour (14 false alarms). Before D42 most use and floor differences were noise from random register values (46 of 50 and 30 of 36 in Ward 29); that is fixed.
 5. **Why does the photo show more buildings than the map highlights?** The photo shows every detection; the map highlights the selected building. Other boxes belong to neighbours, to outlines that are not registered, or to buildings with no OSM outline ([§10.4](03_APP_AND_FLOWS.md#104-the-photo-shows-45-buildings-but-the-map-highlights-only-12-why)).
@@ -82,45 +82,34 @@ Before the demo: the server and the web app running, the database awake (or the 
 - **Pole merging:** poles closer than about 5 m become one. 369 of 822 pole boxes placed nothing.
 - **Dark stretches:** straight-line lengths on curves (not planned to fix); lamps can't be judged working.
 - **Businesses with no analysed building:** with no outline the position is assumed 12 m along the ray. Some kept names are the cloud model's reading of garbled OCR (Tiruppur "Edelweiss Mutual Fund" from "Haletha Inectmento").
-- **Timings of the three original runs** are from resumed runs (D1). The real Ward 29 full run is the owner's 28 Sep run (11.5 min, 1,420 photos, $0.0887 cloud AI), whose results are not in the repository. Hood's Ward 29 photo cost counts planned views only ($8.08 vs the real ≈ $9.94).
-- **Street names can differ** between the picker and a live area's records ("Unnamed road off 4th Street" vs "3rd Street, Sridevi Nagar").
-- **Job estimate** about 2× low for photos, more for time.
+- **Timings of the three original runs** are from resumed runs (D1). The real Ward 29 full run is the owner's 28 Sep run (11.5 min, 1,420 photos, $0.0887 cloud AI), whose results are not in the repository. Hood's Ward 29 photo cost now counts the run files' 1,420 photos (≈ $9.94 at list price, P7.2).
+- **Street names** of the live areas now agree between the picker and the records (D46, D47: "3rd Street, Sridevi Nagar").
+- **Job estimate** from the real camera plan: photos a few per cent high, time high on a large area (Ward 29 16.0 min vs 11.5 real; D47).
 - **No authentication:** anyone who can reach the server can review, delete a live area or open appeal photos.
-- **Guided tour, README, performance audit not done** (P7).
+- **Manual browser checks** for P7 are listed in docs/P7_MANUAL_CHECKS.md; the exact Colab setup-cell text is still to be pasted into worker/colab_setup_cells.md.
 - **The README is a one-line placeholder.**
 
 ---
 
 ## 18. Still to do (P7)
 
-**Planned:**
-- [ ] A short **guided tour** (project brief §9.5), running on pre-computed data with no worker.
-- [ ] **Polish audit:** loading, empty and error states; keyboard access; both themes; any number that disagrees with the computed counts.
-- [ ] **Performance:** lazy-loading, virtualised tables, map layers throttled by zoom, and a production heap re-check (≤ 60 MB; the D21 numbers predate P6).
-- [ ] **README** with demo-day steps and the offline fallback (today it is a one-line placeholder).
-- [ ] **Faster / cached OpenStreetMap lookup** on click, with a timeout fallback.
-- [ ] Analyse: **the map must keep zooming while a street is selected**, and auto-zoom to it.
-- [ ] Analyse: **the end dots never overlap**, and only the 2 drag handles show.
-- [ ] Time wording: **"< 1 minute"** instead of "0 minutes".
-- [ ] **"Unnamed road between …"** in the Analyse box.
-- [ ] A **better cost/time estimate from the real planner** (today ~2× low, [§13.3](04_BACKEND_DB_WORKER.md#133-how-the-estimate-is-made-and-why-it-is-2-too-low)).
-- [ ] **Cost cap default $2** (today $1.00 and 300 photos in the worker cell).
-- [ ] A **map layer for camera-only building points** (buildings with no map outline; today kept in the run's saved building positions, not exported).
-- [ ] A **one-time offline-fallback test** on the real demo setup.
-- [ ] A **random spot-check of the sign-text rule** (D32), shown on Trust.
-- [ ] **Clearer wording where the map shows one pole for several detections** ("Pole (1 or more) seen here", [§10.6](03_APP_AND_FLOWS.md#106-poles-streetlights-and-dark-stretches-on-the-map)).
+**Done in P7 (rounds 1–3, D46–D49):** the guided tour; the polish audit (loading / empty / error states, keyboard, both
+themes, numbers vs the database); the production heap re-check (21.6–46.3 MB); the README with demo-day steps and the
+offline fallback; cached OpenStreetMap lookups (disk caches + `tools/warm_osm_cache.py`) with a timeout fallback; the
+Analyse camera and end handles; "< 1 minute"; "Unnamed road between …"; the estimate from the real planner; the $2 cost
+cap; the camera-only buildings layer; the offline-fallback test (automated: map servers blocked, worker offline, Google
+keys missing, API down); the sign-move spot-check on Trust (AI first pass + a person can redo it); "1 pole on the map ·
+seen in N photos"; the Hood photo cost from the run files (1,420); street-name consistency (picker and records); the
+stale docs; `worker/colab_setup_cells.md`; the worker's result upload retried with back-off.
 
-**Follow-ups to P7a (D42–D45 are done):**
-- [ ] **Spot-check the sign moves by eye** (D44): a random sample of the 570 Ward 29 sign crops that changed building, on Trust.
+**Still open:**
+- [ ] **Paste the exact S0 / S1a / S1ba / S1bb cell text** into `worker/colab_setup_cells.md` (marked "PASTE CELL HERE").
+- [ ] **A person redoes the sign spot-check** on Trust (today: an AI first pass).
 - [ ] **Cloud-check the business candidates the re-apply could not check** (Ward 29: 17) with a live re-run.
-- [ ] A **new surveyed check of single-camera pole positions** by distance (D45 uses the notebook's older surveyed medians beyond 8 m).
-
-**From the conflicts and the owner's answers:**
-- [ ] **Hood photo cost from the real full-run count** (1,420 photos for Ward 29, not the 1,154 planned views).
-- [ ] **Street-name consistency** between the picker and the records ("Unnamed road off 4th Street" vs "3rd Street, Sridevi Nagar", [Appendix B](#appendix-b-conflicts-found) item 18).
-- [ ] **Update the stale docs** (code wins; list in [Appendix B](#appendix-b-conflicts-found) "To update in P7").
-- [ ] **A real README** (demo-day steps, keys, offline fallback).
-- [ ] **Add the Colab setup cells to the repository** (S0, S1a, S1ba, S1bb; the owner will paste them).
+- [ ] A **new surveyed check of single-camera pole positions** by distance (D45 uses the notebook's older surveyed
+  medians beyond 8 m).
+- [ ] **The manual browser checks** in `docs/P7_MANUAL_CHECKS.md` (rounds 1–3).
+- [ ] A **real-run test of the tunnel** on demo day with `127.0.0.1` (the IPv6 note in the README).
 
 **Intentionally not planned:**
 - Hosting the app (it runs on the laptop plus a tunnel).
@@ -130,7 +119,7 @@ Before the demo: the server and the web app running, the database awake (or the 
 
 ---
 
-## Appendix A: every decision, D1 → D45
+## Appendix A: every decision, D1 → D49
 
 | # | One line |
 |---|---|
@@ -178,6 +167,10 @@ Before the demo: the server and the web app running, the database awake (or the 
 | D43 | Register records paired with buildings by location (one-to-one, ≤ 50 m, match confidence); a register import tool. |
 | D44 | Signs linked by their own line of sight when it is clear (±4°), after a check against Google pins showed the plain rule did not help; businesses on no analysed building; Google check reusable from saved places. |
 | D45 | Single-camera pole uncertainty by camera distance (±2.4 m ≤ 8 m, ±5 m beyond): per band the larger of the two-camera check and the notebook's surveyed median. |
+| D46 | Analyse: one framing per street, two end handles, "< 1 minute", unnamed-road names, a raced OSM lookup with a 5 s budget, the estimate from the real camera plan, a $2 default cost cap. |
+| D47 | Time = start-up + photos × 0.49 s; Google's own name for an unnamed road; camera-only buildings layer; linked sign boxes; the street-name picker; the sign rule and its AI spot-check on Trust. |
+| D48 | Street lookup answers "pending" instead of 503 and keeps looking in the background; mirrors raced with health; plain words on user screens; no city badges. |
+| D49 | Guided tour; demo-day map cache (warm-up tool); the planner never caches a failed Street View search; worker upload retries; the app opens without a map key; API-lost banner; no pooled Gate 1 row; heap re-measured; README and docs. |
 | D41 | Owner facts (30 Sep): the fresh full Ward 29 run (28 Sep: 11.5 min T4, 1,420 photos, cloud AI $0.0887, router on) is the real full-run time/cost; FarmwiseAI doubt session (27 Sep): OSM accepted, position = centre of the front, register data may come later; one Google server key for the server, Colab and the worker, browser key for the map only, D40 was that key refused. |
 
 ---
@@ -211,7 +204,8 @@ Rule (owner, 30 Sep): **the code wins everywhere.** Code and data beat the decis
 23. **The third history note is identical to the first.** A third history note seems to be missing.
 24. **The README** is a one-line placeholder, while the project brief §11 (P7) expects demo-day steps.
 
-### To update in P7 (stale docs; do not edit before then)
+### To update in P7 (stale docs) — done in P7 R3 (D49)
+The project brief (CLAUDE.md), the design notes, the older pages document and the README were brought up to date on 1 Oct 2026; the rows below are kept as the record of what changed. The third history note was not replaced (the real one is not in the repository).
 
 | Document | What is stale | What the code does |
 |---|---|---|
@@ -240,7 +234,7 @@ Still **not confirmed**:
 4. **The hand-label sets** (use n=29/31, floors n=36, names n=31, detector test set) are not in the repository; only their numbers are (D32).
 5. **YOLO-World** zero-shot results: not recorded (history chat 1).
 6. **Supabase dashboard settings:** any security or storage rules added by hand, outside the project's database set-up scripts.
-7. **The "S1ba" / "S1bb" setup cells:** not in the repository until the owner pastes them in.
+7. **The exact setup-cell text (S0, S1a, S1ba, S1bb):** `worker/colab_setup_cells.md` describes each cell; the text itself is marked "PASTE CELL HERE" until the owner pastes it.
 8. **Accuracy of the D32 sign rule:** not measured.
 8b. **Whether the D44 sign moves are right:** 570 Ward 29 sign crops changed building. Checked against Google's pins (14 closer, 6 further), not against the photos by eye.
 9. **Why some Tiruppur business names passed the 0.7 OCR gate** with little visible support (e.g. "coimbatore association" from OCR "gngiuguy"): not investigated.
@@ -250,7 +244,7 @@ Still **not confirmed**:
 13. **Microsoft outline IDs** (built from the outline's centre) change between Microsoft releases: how a reloaded live area keeps its review decisions after a re-fetch is not confirmed.
 14. **Google Places price** is not in the model card, so Places cost is "not recorded".
 15. **Photo dates:** the app does not show a panorama's capture date, and whether Google's embedded panorama shows it in this configuration (address control off) is not confirmed.
-16. **Production memory after P6** has not been re-measured.
+16. ~~Production memory after P6~~: re-measured in P7 R3 (21.6–46.3 MB, [§13.4](04_BACKEND_DB_WORKER.md#134-memory-d3-d21-production-build-js-heap-after-gc)).
 
 ---
 

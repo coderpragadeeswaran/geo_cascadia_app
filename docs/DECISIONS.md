@@ -1608,3 +1608,78 @@ and Trust stay technical (D16).
 **City labels (H3).** The city-zoom name badges are gone (outlines only; name and counts on hover). No other app layer
 draws map text.
 **Verification rule** added to CLAUDE.md; `web/scripts/screenshots.ts` (Playwright, dev-only `window.__gcMap`).
+
+## 2026-10-01 — P7 Round 3 (tour, audit, performance, docs, demo cache)
+
+### D49. Guided tour, demo-day cache, honest fallbacks, audit fixes
+**Leftovers.**
+- **Map caches (A1).** The street / road caches were already on disk (`data/cache/streetpick/`, keyed by query, way id and
+  rounded click) and survive API restarts. New `tools/warm_osm_cache.py` + `tools/demo_streets.json` (an editable list):
+  roads around every analysed area and every job, the building outline under each dropped camera (Hood examples), and
+  for each demo street a click every 100 m along it plus its cost estimate; slow servers are retried until done. Run on
+  1 Oct: **28.4 min** while OpenStreetMap answered with 504s (a first attempt was stopped after ~10 min by the shell's
+  time limit; three estimates were recomputed afterwards, see below). `--check` blocks every request in-process: all six
+  demo streets answered from the cache, slowest click 30 ms. Through an API whose outgoing requests all fail (a dead
+  proxy): demo clicks in 0.6–1.1 s with their estimates; an uncached street → 503 "Map server is busy — try again in a
+  minute." after 12 s. `minimap.roads_query` / `outline_query` / `job_bounds` are shared with the tool, so it fills the
+  same files the API reads.
+- **Planner bug found while testing (A1).** The pipeline's Street View search returns nothing on any error (D40), so a
+  network failure during planning was cached as "no Street View, 0 photos". It happened to three demo streets while the
+  blocked-network API ran. `planest.plan_street` now makes one free metadata call when the search is empty; unless
+  Google answers OK / ZERO_RESULTS / NOT_FOUND, the estimate fails ("Google Street View could not be reached…") and is
+  not cached. The three bad files were deleted and re-planned: Dr Alagesan Road 314 photos ($2.22), "Unnamed road near 5th Street" 21 photos ($0.15) — not the cached 0; Pioneer Mills Cross Street kept failing on a busy OpenStreetMap at commit time (no estimate cached; the warm-up now retries estimates too, so a later run fills it). pytest covers it.
+- **Hood cost caption (A2):** "Photo cost is at Google's list price — Google's free monthly allowance may cover it."
+  The cloud-AI (AWS) cost stays as measured. Also fixed: the original areas' line read "about 9.94" (the `$` was eaten
+  by the template literal).
+- **Worker upload (A3).** `/worker/result` went through `call_or_ask`, which retried, but the files were opened once, so
+  a retry after a network blip would have sent them empty. `upload_result`: files reopened for every try, back-off
+  5 / 15 / 30 / 60 / 120 s, then the usual "Paste the new tunnel URL" prompt; a 409 "job is done" after a lost answer
+  counts as delivered; a 4xx is not retried. pytest with a fake API. **Re-paste the worker cell.** The pipeline is
+  unchanged: no new package zip.
+- **Sign boxes (A4).** Trust › Detector: "In a 20-photo check, 6 of the 20 boxes counted as signs weren't shop signs
+  (billboards, a gate, a house number, a STOP sign, a pole poster)", labelled as the AI visual check (Claude Code), not a
+  human check; the detector was not retrained. The numbers are read from `sign_spotcheck_ai.json`.
+- **Test hooks (A5).** `window.__gcMap` / `__gcOverlay` are behind `import.meta.env.DEV`; the production `dist/` contains
+  neither (grep). The `?perf=1` heap readout stays (an owner tool, not a test hook).
+
+**Guided tour (P7.5).** `components/Tour.tsx`: seven steps (key numbers → a building's evidence → Review → Analyse a
+street → Jobs → Trust, Gate 1 "Not verified" → done), started from **Tour (?)** on the rail; it opens once on the first
+visit (`gc.tourSeen`). Esc closes it (capture phase, so it never also closes the panel underneath); ← → and Enter step;
+focus sits on Next; a sodium ring marks the step's target; the Analyse step's card sits top-right, clear of the bottom
+sheet. Each step reads only what exists (no area / building / worker / model card → it says so). Checked live in both
+themes (`web/scripts/tour-shots.ts`, every step screenshotted).
+
+**Polish audit (P7.6).**
+- **States.** Evidence photos and the drawer say what is loading; an API error on the evidence says so, with Try again
+  (it used to say "No Street View evidence stored"); a record missing from the loaded area says so instead of loading
+  forever; the panel shows the area's load error; the drive tells a 404 from an API failure; the planner's "no key"
+  message is in plain words.
+- **API lost mid-session.** `apiReachable` was tracked but never shown. Now a banner ("The API isn't answering … What is
+  on screen stays") that clears on the next good call.
+- **No Maps browser key / Map ID.** The app used to stop at a splash. Now it opens without the map ("The map can't be
+  shown", what to set, and links to Review / Under the Hood / Trust / Jobs, which work); photos say the key is missing;
+  Live 360° is hidden.
+- **Keyboard and themes** (`web/scripts/audit.ts`, both themes): Tab order with a visible ring on every stop (the map
+  canvas and the ask field mark focus their own way); Ctrl K opens and Esc closes the palette; Esc closes the panel, the
+  drawer and Analyse. Daylight `.btn-solid:hover` was light text on light orange (~2.4:1) → sodium mixed with ink.
+- **Numbers (C3).** Ward 29, database vs UI, all equal: 381 buildings · 50 differ · 27 not in the register · 139 use not
+  known · 96 names read clearly · 218 review items (218 waiting) · 11 dark stretches · 268 poles and lights (38 + 230) ·
+  Gate 1 camera-derived median 2.8 m, 60.4% ≤ 3.5 m, n = 260, status "Not verified" (`tools/audit_numbers.py`).
+- **No pooled Gate 1 row.** Trust showed the pooled "all buildings" rows (front-wall centre 73.0%, OSM wall 95.3%). Both
+  count points that score 0 m by construction, and D27 said the second is never shown. Both map-referenced tables now
+  leave them out, with a note; the Google-pin table keeps its pooled row (an independent reference). "73%" appears
+  nowhere in the app or the docs.
+- **Performance (C4).** Production build, Chrome DevTools Protocol, JS heap after GC, two runs: Ward 29 idle 21.6 / 25.4
+  MB; the tour's building step 44.5 / 45.3 MB; after the whole tour 45.6 / 46.3 MB (target ≤ 60). At street / object
+  zoom about two-thirds of the sampled live heap is Google Maps JS and 8–9% deck.gl. No layer or data was hidden.
+  API: `/areas` made one pooler round trip per area for the version check (1.4–4.5 s); `DbStore.slugs` now returns every
+  version in its one query → ~0.5 s (the first load after a restart still reads every area, ~18 s).
+- **Fallbacks (C5)**, `web/scripts/offline.ts` (production preview; extra APIs on :8001 with every outgoing request
+  blocked and on :8002 with both Google keys empty): map servers blocked, analysis computer offline (a test job stays
+  "Queued"), Google keys missing, API down mid-session — all pass. A tunnel that is down is the worker-offline case for
+  the app, plus the worker's own retries (unit-tested).
+
+**Docs (P7.7).** README (demo-day steps in order; the tunnel on `127.0.0.1`, because Windows may resolve `localhost` to
+IPv6; the fallback table; tests), `worker/colab_setup_cells.md` (each cell described; the exact S0 / S1a / S1ba / S1bb
+text marked "PASTE CELL HERE"), CLAUDE.md, DESIGN.md (Hood chapters, tour, states), the pages document, and the
+explainer (§13.3 estimate, §13.4 memory, §18, appendices) brought up to date.

@@ -1,7 +1,9 @@
 # Review, Under the Hood and Jobs — how these pages work
 
-This document describes the three secondary pages of the GEO-CASCADIA web app **as they are implemented today**
-(commit `505c9bc` plus the uncommitted working tree of 26 Sep 2026). The source of truth is the code. Every claim cites
+This document describes the three secondary pages of the GEO-CASCADIA web app. It was written on 26 Sep 2026 (commit
+`505c9bc`) and **brought up to date on 1 Oct 2026 (P7 R3)**: the Under the Hood section, the worker and jobs parts, Spec
+vs code, the limitations and the open questions now describe the code as it is (P5–P7: D29–D49). Smaller details in
+the Review section still date from 26 Sep where no later decision changed them. The source of truth is the code. Every claim cites
 the file and the function or component. Where the code differs from the written specs (`CLAUDE.md`, `docs/DESIGN.md`,
 `docs/DECISIONS.md`), the code is described and the difference is listed in [Spec vs code](#spec-vs-code).
 
@@ -63,7 +65,7 @@ flowchart LR
   end
   FILES[("data/areas/&lt;slug&gt;/*.json<br/>export.json, run_report.json,<br/>detections.json, plan.json …")]
   GSV[["Google Street View Static API<br/>(images fetched by the browser)"]]
-  W["Colab worker<br/>(planned, P6 — not built)"]
+  W["Colab worker<br/>(worker/colab_worker.py, P6)"]
 
   R & H & J & E -- "HTTP JSON" --> API
   D -->|DB reachable| DB --> PG
@@ -166,7 +168,7 @@ Three columns (`grid-cols-[330px_minmax(0,1fr)_320px]`): **queue** (left) | **ev
 - A building gets all reasons that apply. Its **priority is the smallest (most urgent) of them**:
   `min(PRI[x] for x in reasons)`.
 - Assets always get priority 6.
-- The queue is sorted by priority. Ward 29 has 260 items: P1 24, P2 61, P3 3, P4 2, P5 13, P6 157 (from
+- The queue is sorted by priority. Ward 29 had 260 items on 26 Sep (218 since P7a, D42); the split below is from 26 Sep: P1 24, P2 61, P3 3, P4 2, P5 13, P6 157 (from
   `run_report.json` `review.by_priority`).
 
 **2. The loader copies it into the database.** `backend/app/loader.py` `load_area` (run by `backend/load_area.py`):
@@ -327,7 +329,7 @@ or `input`.
 3. **Request.** `PATCH /review/{id}` with `multipart/form-data` (`web/src/lib/review.ts` `saveDecision`):
    - `action`: `approve` | `reject` | `appeal`;
    - `note`: optional, required for appeal, ≤ 2000 characters;
-   - `reviewer`: optional, ≤ 120 characters; **the UI never sends it**;
+   - `reviewer`: **required** since D29 (≤ 120 characters), asked once in the browser and sent with every decision;
    - `photo`: optional file, appeal only.
 4. **Server** (`backend/app/review.py` `review_decide`):
    - Validates the action (anything else → 422, e.g. the old `reset`) and requires a note for an appeal (422).
@@ -484,7 +486,7 @@ sequenceDiagram
 | Does **not** change |
 |---|
 | The finding itself: `match_status`, discrepancies, severity, attributes, positions, the dashboard/KPIs computed from them. Rejecting a "not in the register" finding does not make it matched. |
-| The **"Waiting for review" KPI number** in Explore: `derive.ts` `kpis().low_confidence_observations` counts **all** queue items regardless of status. Ward 29 always shows 260. |
+| The **"Waiting for review" KPI number** in Explore counts **pending** items only (`dashboard.kpi.waiting_for_review`, D29); `low_confidence_observations` stays the queue size. Ward 29: 218 waiting of 218 (1 Oct). |
 | `export.json`, `run_report.json`, `data/model_card.json`, the Trust page, the pipeline's outputs or thresholds. Decisions are never fed back into the pipeline. |
 | The review queue's membership or priorities. Reloading an area keeps decisions. |
 
@@ -492,106 +494,38 @@ sequenceDiagram
 
 ## Under the Hood page
 
-Component: `web/src/pages/Hood.tsx` (default export `Hood`). Route `#/hood` or `#/hood/<chapter id>`.
+Component: `web/src/pages/Hood.tsx`. Route `#/hood` or `#/hood/<section id>`. Data: `GET /areas/{slug}/hood`
+(`backend/app/hood.py`), which computes **every number from the area's records and its run files** (panos, plan,
+plan_anomalies, _views_done, detections, ocr, building_views, vlm_unmapped, sign_links); each value carries its source
+(`src`), and pytest recounts them from the raw files (D29). `GET /areas/{slug}/hood/examples?key=` gives up to 3 real
+items per step, each with its reason, photo and a small plan (`GeoMini`, D39).
 
 ### What it is for
-
-A "verifier" page (D16). It tells, as a scrolling story, what the pipeline did for one area: panoramas → camera stops →
-views → detections → buildings → poles and lights → dark stretches → signs → review items. For each step it shows what
-was kept and what was dropped. Pipeline-internal counts come from `run_report.json`. Anything countable in the records
-is counted from the records instead (D2).
-
-### Data flow
-
-```mermaid
-sequenceDiagram
-  participant UI as Hood.tsx
-  participant Q as useAreaData / useAreas
-  participant API as FastAPI
-  participant S as Store (DB or JSON)
-  UI->>Q: area from store
-  Q->>API: GET /areas (area list)
-  Q->>API: GET /areas/{slug} (run_report, …)
-  Q->>API: GET /areas/{slug}/buildings, /assets, /unmapped, /geojson, /review
-  API->>S: bundle(slug)
-  S-->>API: records + run_report (areas.run_report jsonb or run_report.json)
-  API-->>Q: JSON
-  Q-->>UI: records, detail.run_report, gaps
-  UI->>UI: kpis(records) + run_report fields → 9 chapters
-```
-
-- The page renders when both `detail.run_report` and the records are loaded. Before that it says "Loading…".
-- If an area has no run report, it says "This area has no run report yet (tools/build_run_report.py)."
+A verifier page (D16), in plain words only (D31: the Plain / Technical toggle was removed): what the pipeline did for one
+area, step by step, what was kept and what was dropped, with real examples behind every number.
 
 ### Elements, top to bottom
-
-1. **Header.** "Under the hood" and "How <area> was analysed". A paragraph says the counts come from
-   `run_report.json`, every countable finding is counted from the records, and "No timings: the stored runs were
-   resumed."
-2. **Area tabs.** One button per area, sorted by building count. Clicking one calls `setArea`, which changes the area
-   for the **whole app**, Explore included.
-3. **Nine chapters** (`Step`). Each has:
-   - a number `01`–`09`;
-   - a large figure that counts up once the chapter scrolls into view (skipped with reduced motion);
-   - a unit and one sentence;
-   - for most chapters, a horizontal **kept-vs-dropped bar**: solid accent = kept, hatched = dropped, red = VLM share
-     in chapter 08. Hovering a segment shows its label and count; a legend with counts sits underneath;
-   - sometimes a grey note.
-
-   A chapter is at 15% opacity until it is 30% visible (IntersectionObserver).
-
-| # | id | Figure (Ward 29) | Bar / sentence data | Source and calculation |
-|---|---|---|---|---|
-| 01 | `imagery` | **733** panoramas | 731 Google car (kept) · 2 user photospheres (dropped) | `run_report.imagery.panoramas_found`, `.google_car`, `.user_photospheres` ← counts of `panos.json` by `source` |
-| 02 | `stops` | **203** camera stops | 203 planned · 13 dropped: camera inside footprint | `imagery.cameras_planned` (= entries in `plan.json`), `imagery.cameras_dropped` ← `plan_anomalies.json` by reason |
-| 03 | `views` | **1,154** views | 1,043 face a mapped building · 111 face no building outline. Note: "Map coverage verdict: full: footprints on most frontages." | `imagery.views_planned`, `views_facing_mapped_building`, `views_facing_no_mapped_building` (views in `plan.json` with / without a `footprint`); `maps.verdict` |
-| 04 | `detection` | **5,554** detections | Sentence: 2,411 building, 2,065 sign, 958 pole, 120 lamp boxes. Bar: 4,617 usable for positioning · 839 excluded: tilted view · 98 excluded: user photosphere | `detection.boxes_total`, `.by_class`, `.used_for_geometry` (`geom_ok`), `.excluded_from_geometry` ← `detections.json` |
-| 05 | `buildings` | **381** buildings (records) | Sentence: 266 had a usable view; the quality gate rejected 152 boxes. Bar: 221 use classified · 160 not. Note: 19 no record, 102 with a discrepancy (synthetic register). | Figure, bar and note from the records (`kpis()`: `buildings_analysed`, `use_not_classified`, `unmatched_properties`, `buildings_with_discrepancy`). `usable_view` and the gate total (sum of `buildings.box_rejected_by_quality_gate`: 88 sliver, 49 roof cut, 10 base cut, 4 too tall, 1 full frame) from run_report |
-| 06 | `assets` | **268** poles & streetlights | Sentence: 38 streetlights and 230 poles with no lamp seen. Bar: 20 triangulated · 248 approximate. Note (only when they differ): the run report says 29 "seen by 2+ cameras", the records say 20 triangulated; the records are shown. | Records: `assets`, `streetlights`, `poles`, `assets_triangulated` (`method == 'triangulated'`); `run_report.assets.triangulated_2plus_cameras` for the note |
-| 07 | `streetlights` | **11** dark stretches | Sentence: "… 2,019 m in total (recorded lengths)". Note on straight-line lengths. | Count and total length of the `streetlight_gap` features in `GET /areas/<slug>/geojson` (recorded `length_m`) |
-| 08 | `signs` | **2,065** sign crops | Bar: 807 read by OCR (Tier 2) · 180 escalated to VLM (Tier 3) · 1,065 no readable text · 13 Google watermark. Sentence: 116 buildings got a good name; 23 also on Google Maps. Note: 84 signs on unmapped frontage checked, 30 kept as businesses not on the map, VLM said 23 were not businesses. | `signs.crops`, `signs.tiers` (from `ocr.json` tier codes); names from records (`named_businesses` = name quality "good", `names_confirmed_by_google`); `unmapped_businesses.sign_candidates_checked_by_vlm`, `.vlm_said_not_business` from run_report; kept = records `unmapped_businesses` |
-| 09 | `review` | **260** items for a person | Sentence only | Records: number of review items (all statuses) |
-
-Other areas, for comparison:
-
-| Area | Panoramas | Stops | Views (no outline) | Detections | Buildings | Assets (triangulated) | Dark stretches | Sign crops | Review items |
-|---|---|---|---|---|---|---|---|---|---|
-| Trichy | 177 | 102 | 338 (113) | 2,403 | 66 | 87 (2) | 8 | 1,267 | 77 |
-| Tiruppur | 75 | 36 | 77 (69) | 333 | 1 | 20 (0) | 3 | 132 | 13 |
-
-Chapter anchors (`id`) are the targets of "How do we know?" links elsewhere (e.g. `#/hood/detection`). The page
-scrolls to the section named in the route (`ui.section`).
-
-### Timings and "resumed runs"
-
-- **The page shows no timings at all.** There is no stage timeline, and nothing is greyed out.
-- The reason is D1: every stored run was resumed from checkpoints. So `stage_seconds` and `total_minutes` in
-  `run_report.cost_time` do not describe a real full run. Ward 29 says 3.3 minutes in total, with 187 s in the VLM stage.
-- The page states this in its intro line. The `cost_time` section of the run report is loaded but not used by this
-  page.
-- D1 describes a greyed-out timeline with a "resumed run, not representative" badge. That is **not implemented** (see
-  Spec vs code).
-
-### The "story" sentences
-
-- `run_report.json` contains a `story[]` list of plain-English sentences, written by `tools/build_run_report.py`
-  `build`.
-- **The page does not render `story[]`.** It builds its own chapter sentences from the fields above, so countable facts
-  come from the records.
-- Example: the story says "Located 268 poles/streetlights; 29 triangulated … 239 approximate". The page says 20 / 248
-  and explains the 29.
+1. **Header** "How <area> was analysed" and **area tabs** (every area; "Compare all N").
+2. **Coverage & summary:** the map-coverage verdict ("full — 10% of photos face no mapped building") and **the run in N
+   sentences**: the `story[]` sentences rebuilt from computed numbers. Corrections of the stored text are listed on
+   Trust › Stored vs computed (D29, D31).
+3. **Ten chapters**, each a counted-up figure, one sentence, a kept-vs-dropped bar and "see real examples":
+   01 Streets planned · 02 Camera positions · 03 Photos fetched · 04 Objects detected · 05 Signs read · 06 Local or
+   cloud AI · 07 Floors and use · 08 Positions · 09 Matched · 10 Findings. Ward 29: 733 panoramas (2 user photospheres
+   excluded), 203 camera stops, 1,154 views (111 face no outline), 5,554 boxes (4,617 usable), 2,065 sign crops (807
+   read locally, 180 escalated), 381 buildings, 268 poles and streetlights (20 triangulated), 218 items for review.
+4. **Whole pipeline** (an SVG funnel / Sankey; Nivo is not used), **What got dropped** (skipped panoramas split by the
+   planner's rules, D30; boxes rejected by the quality gate; names dropped by the gate), **Street by street** (table and
+   plan), **Street names** (pick a display name per street, D47).
+5. **Time and cost.** Originals: model-card GPU minutes and the photo cost from the run files (Ward 29: 1,154 views +
+   266 building photos = 1,420 photos ≈ $9.94, D46), captioned "Photo cost is at Google's list price — Google's free
+   monthly allowance may cover it" (P7 R3); their stage timings keep the "resumed run, not representative" badge (D1).
+   Live areas: their own minutes, photo count, cloud-AI calls and cost (as measured), and the stage timeline (D34).
 
 ### Interactions
-
-| Input | Effect |
-|---|---|
-| Scroll | Chapters fade in; figures count up; bars grow. |
-| Hover a bar segment | Native tooltip "<label>: <count>". |
-| Click an area tab | Switches the app's current area (all pages). |
-| Arrive via `#/hood/<id>` | Smooth-scrolls to that chapter. |
-
-No writes, and no API calls beyond the reads above. Offline mode works the same: all data comes from the JSON files,
-and `run_report` is loaded from `run_report.json` by `JsonStore`.
+Scroll (figures count up; reduced motion shows the final values), a sticky section nav that follows the scroll, "see
+real examples" (the example sheet: photos with boxes and plans), area tabs (switch the app's area), `#/hood/<id>`
+(scrolls to that section). No writes. Offline mode serves the same numbers from the JSON files.
 
 ---
 
@@ -644,7 +578,7 @@ stateDiagram-v2
   [*] --> queued: POST /jobs
   queued --> running: /worker/next
   expired_token --> running: /worker/next (keys refreshed)
-  running --> running: /worker/next after 10 min without heartbeat
+  running --> running: /worker/next after 2 min without heartbeat (interrupted, D34)
   running --> done: /worker/result
   running --> no_street_view: /worker/fail NO_STREET_VIEW|NO_STREETS|NO_CAMERAS
   running --> expired_token: /worker/fail AWS_TOKEN_EXPIRED
@@ -660,44 +594,35 @@ Other job columns: `kind` (`street_click` | `polygon`), `input` (jsonb), `stage`
 `input` holds the click or polygon, the resolved street, the OSM way ids, the job polygon (a 45 m buffer around the
 street, possibly trimmed), the length and the output slug.
 
-### Today, with no worker
+### With and without a worker (P6, D34–D40)
 
-- Jobs can be created, from Explore's Analyse mode or directly via `POST /jobs`, and they stay **Queued**.
-- The Analyse job card says "Queued — the analysis worker is offline. It starts when the Colab worker comes online."
-  (`AnalysePanel.tsx` `JobCard`).
-- The Jobs page shows "offline" for the worker. The job can be cancelled from the job card in Explore; the Jobs page
-  has no cancel button.
-- All `/worker/*` endpoints exist and are tested (`backend/tests/test_writes.py`):
-  - `next`: claim a job;
-  - `heartbeat`;
-  - `progress`: stage, done, total;
-  - `fail`;
-  - `result`: multipart upload of `export.json` + run JSONs → saved under `data/areas/<slug>/`, `run_report.json`
-    built, loaded into the database.
-- They require the header `X-Worker-Token`. Its value is set in `backend/.env` and compared in constant time. Missing
-  or wrong → 401; not configured → 503.
-
-**Planned (P6), not built:**
-- `worker/colab_worker.py`. Only `worker/README.md` exists: a Colab cell that polls the endpoints through a cloudflared
-  tunnel and runs `run_area`.
-- Live progress on the map.
-- Durations and costs on the Jobs page.
+- The worker is built: `worker/colab_worker.py`, one Colab / Kaggle / laptop cell (`worker/README.md`,
+  `worker/colab_setup_cells.md`). It claims a job (`/worker/next`), heartbeats every 15 s, reports progress per stage,
+  then uploads the result (`/worker/result`, retried with back-off on a network blip, P7 R3) or fails with a code.
+- **No worker:** a new street stays **Queued**. The job card and Jobs say "Queued. The analysis computer is not
+  connected yet; it starts as soon as it is", and the top bar says "Analysis off". Nothing is lost.
+- **Cost cap:** the worker plans the camera stops first; a street above the job's cap ($2 by default, P7.2) pauses as
+  **Needs approval** before any photo is bought. Approve or Cancel on the job card or on Jobs.
+- Statuses shown: queued, running (stage N of 10), needs approval, done, failed (Retry when retryable), no Street View,
+  key expired (paused), cancelling, cancelled, interrupted (running with no heartbeat for 2 min; claimable again).
+- The Jobs page: the analysis-computer line, Pre-computed runs, Started from this app (list and detail: estimate,
+  stages, plan, Retry / Approve / Cancel, Delete this analysed area…, Remove from list, Clear test jobs…).
 
 ```mermaid
 sequenceDiagram
   actor P as Person (Explore → Analyse)
   participant API as FastAPI jobs.py
   participant DB as jobs table
-  participant W as Colab worker (planned P6)
-  P->>API: POST /jobs {lat, lon[, lines]}
-  API->>DB: insert (status queued, input)
-  API-->>P: job + worker_online=false + "queued — analysis worker offline"
-  Note over P,API: Jobs page polls GET /jobs every 15 s
-  W-->>API: POST /worker/next (X-Worker-Token)   [planned]
+  participant W as Colab worker
+  P->>API: POST /jobs/preview {lat, lon} (street + planner estimate)
+  P->>API: POST /jobs {lat, lon[, lines], cost_cap_usd}
+  API->>DB: insert (queued)
+  W->>API: POST /worker/next (X-Worker-Token)
   API->>DB: queued → running
-  W-->>API: /worker/progress, /worker/heartbeat   [planned]
-  W-->>API: /worker/result (export.json + run files)   [planned]
+  W->>API: /worker/progress, /worker/heartbeat (every 15 s)
+  W->>API: /worker/result (export.json + run files; retried)
   API->>DB: load area, running → done
+  API-->>P: the map flies to the new area
 ```
 
 ### Offline mode
@@ -716,8 +641,8 @@ sequenceDiagram
 | Review queue (membership, priority, reasons) | `export.json` `review_queue` → `review_items` (`item_type`, `ref_id`, `priority`, `reasons`, `discrepancies`, `ord`, geometry) | pipeline; loader | `GET /review` → Review page, rail badge, Explore |
 | Review decision (current) | `review_items.status`, `reviewer`, `note`, `appeal_photo_url` (a path), `updated_at` | `PATCH /review/{id}`, `POST /review/{id}/undo` | `GET /review`, detail endpoints |
 | Review status on objects | `buildings.review_status`, `assets.review_status`; GeoJSON `review_status` | the same SQL statements; loader (initial) | map layers, findings table |
-| Review history | `review_events` (append-only) | same SQL statement as each decision / undo | `GET /review/{id}/events` (no UI) |
-| Appeal photos | Supabase Storage bucket `appeal-photos` (private), path `<slug>/review-<id>-<hex>.<ext>` | `storage.upload_photo` (service key) | `GET /review/{id}/photo` → signed URL, 600 s (no UI) |
+| Review history | `review_events` (append-only) | same SQL statement as each decision / undo | `GET /review/{id}/events` → the History panel on Review |
+| Appeal photos | Supabase Storage bucket `appeal-photos` (private), path `<slug>/review-<id>-<hex>.<ext>` | `storage.upload_photo` (service key) | `GET /review/{id}/photo`, `GET /review/{id}/events/{event_id}/photo` → signed URL, 600 s |
 | Evidence boxes | `data/areas/<slug>/detections.json`, `ocr.json` (files only, not in the DB) | pipeline | `evidence.Detections` → `GET /areas/<slug>/evidence/...` |
 | Street View pixels | Google (never stored) | — | browser, Static API |
 | Pipeline counts for Under the Hood | `data/areas/<slug>/run_report.json` → `areas.run_report` jsonb | `tools/build_run_report.py` (also run by `/worker/result`); loader | `GET /areas/{slug}` → Hood page |
@@ -729,64 +654,34 @@ sequenceDiagram
 
 ## Spec vs code
 
-| Topic | Spec says | Code does |
+| Topic | Spec says | Code does (1 Oct) |
 |---|---|---|
-| Review filters | CLAUDE.md §9.4: "full-screen queue (priority, reasons, filters)" | No filter controls. The only filter is the set sent from Explore ("Send N to Review"). The API supports `status`, `item_type`, `street`, `priority` filters, but the UI doesn't use them. |
-| Review decisions API | CLAUDE.md §7: `PATCH /review/{id}` (approve / reject / appeal + note + optional photo) | As specified, plus `event_id` in the response, `POST /review/{id}/undo`, `GET /review/{id}/events` and table `review_events` (D24). The earlier `action=reset` was removed (422). |
-| `appeal_photo_url` | CLAUDE.md §6: a URL | Stores the storage **path**; URLs are signed on request. |
-| Reviewer | CLAUDE.md §6 `reviewer` column | Column exists, but the UI never sends a reviewer (no login), so UI decisions have `reviewer = NULL`. Only API callers (tests) set it. |
-| Under the Hood contents | CLAUDE.md §9.4: animated `story[]` timeline, Sankey, sign funnel, stage Gantt, cost waterfall, model-route donut, coverage verdict banner, per-street table, "what got dropped" list, Compare runs | Nine chapters with a figure, sentence and kept/dropped bar (DESIGN.md "scroll story", which lists seven chapters). Not implemented: `story[]` rendering, Sankey, Gantt, cost waterfall, donut, per-street table, compare-runs cards. Coverage verdict appears only as a note in chapter 03. |
-| Resumed-run timings | D1: stage timings shown greyed out with a "resumed run, not representative" badge | No timings are shown at all; the intro sentence explains why. |
-| Hood chapters | DESIGN.md: 7 chapters; chapter 06 includes "11 dark stretches" | 9 chapters: dark stretches (07) and signs (08) are separate chapters. |
-| Jobs page | CLAUDE.md §9.4: "history of analyses with status, duration, cost, link to area and to Under the Hood" | Status, stage, message, created time, "Open" for done jobs. No duration, no cost, no "Under the hood" link for jobs (only for pre-computed areas). |
-| Job statuses | Task text mentions "cancelled" and "interrupted" | "Cancelled" is stored as `failed` + message "cancelled by user" and shown grey. "Interrupted" does not exist: stale running jobs are re-claimable after 10 min and show as Running. |
-| Worker | CLAUDE.md §8: `worker/colab_worker.py` | Not built (P6). Backend endpoints exist. |
-| "Waiting for review" KPI | — (label implies pending only) | Counts all review items regardless of status (`kpis().low_confidence_observations`). |
+| Review filters | CLAUDE.md §9.4: priority, reasons, filters | Status, priority, street and reason filters; every filter is strict (D30). |
+| Review decisions API | `PATCH /review/{id}` | As specified, plus `event_id`, `POST /review/{id}/undo`, `GET /review/{id}/events` and the append-only `review_events` (D24). |
+| `appeal_photo_url` | a URL | The storage **path**; links are signed on request (10 min). |
+| Reviewer | `reviewer` column | Required on every decision; asked once in the browser and remembered (D29). |
+| Under the Hood | story timeline, Sankey, sign funnel, Gantt, cost waterfall, route donut, verdict banner, per-street table, dropped list, compare runs | Coverage & summary with the story, ten chapters, whole-pipeline funnel, dropped list, street by street, street names, time and cost, compare runs (D29–D31). The original runs' timings are greyed with the "resumed run" badge (D1). |
+| Jobs page | status, duration, cost, links | Status, stage, time so far / taken, estimate, cost, links to the area and to Under the Hood (P6). |
+| Job statuses | six | Plus needs approval, and the display states cancelled / cancelling / interrupted (D34, D35). |
+| Worker heartbeat | 30 s | 15 s; interrupted after 2 min. |
+| Guided tour | §9.5: the example queries with fly-throughs | Seven plain steps from the ? button (P7.5). |
 
 ## Known limitations / not implemented
 
-**Review page**
-1. **No history panel** in the UI (API only). **No appeal-photo viewer** in the UI (API only).
-2. **"Live 360°" on the Review page** opens the panorama on the shared map, which is hidden behind the page. The button
-   flips to "Back to map", but nothing is visible until you go to Explore.
-3. **No authentication.** Anyone who can reach the API can decide, undo, or request signed photo URLs. Reviewer
-   identity is not recorded from the UI.
-4. **Undo goes one step back at a time, newest first.** An older decision can't be undone while a later one on the same
-   item is still in effect (409). The undo event's `reviewer` records the restored reviewer, not who pressed Undo.
-5. **The undo target lives only in page memory.** After a reload, the toast (and with it the event id needed for undo
-   from the UI) is gone. The API still allows the undo with the event id from `/review/{id}/events`.
-6. **An orphaned photo stays in the bucket** if the database write fails after a successful upload, or after an appeal
-   is undone.
-7. **A typed note is sent with any decision.** If a note is typed in the appeal box and Approve or Reject is clicked,
-   the note is sent with that decision.
-8. **Keys:** J/K move through the whole list (decided items included). After a save, the page auto-advances to the next
-   *waiting* item.
-9. **The list loads at most 500 items per area** (`page_size` cap). Ward 29 has 260.
-10. **`review_events` also holds test rows**, which can't be deleted (append-only by design).
-11. **Latency:** decisions usually take 0.3–0.5 s. The first write after an idle period can take several seconds
-    (3.3 s measured).
-
-**Under the Hood**
-
-12. Shows no timings or costs, does not render `story[]`, and has no charts beyond the bars (see Spec vs code). The area
-    tabs change the global area.
-
-**Jobs page**
-
-13. No worker yet, so jobs stay queued. No cancel button on the page. No durations or costs. The worker-online flag
-    resets when the API restarts.
+1. **No authentication.** The reviewer name is a label for the history, not an identity check.
+2. **Undo goes back one step at a time, newest first** (409 for an older decision while a later one is live).
+3. **An orphaned photo can stay in the bucket** if the database write fails after a successful upload.
+4. **`review_events` holds test rows** from before the test area existed (append-only by design).
+5. **Live 360° on Review** shows through the page (a see-through overlay; one map instance, D3).
+6. **One street at a time** (409 while a real job is queued, running, paused or waiting for approval).
+7. **The worker-online flag lives in the API's memory** and resets when the API restarts (the worker reconnects within
+   15 s).
+8. **The original areas' stage timings come from resumed runs** (D1) and are shown greyed.
 
 ## Open questions
 
-These could not be confirmed from the code or data. They are listed, not guessed:
-
-1. **Supabase row-level security.** Every table has RLS enabled and no policies are created in the migrations. Whether
-   any policies were added in the Supabase dashboard (e.g. for the anon key) is not visible from the repository.
-2. **Bucket access rules.** `tools/verify_setup.py` reports the bucket `appeal-photos` as private. Any bucket policies
-   beyond that are not in the repository.
-3. **Who made the existing decisions on review items #94 and #97** (approved, reviewer NULL). No history exists from
-   before `review_events` was added on 26 Sep 2026.
-4. **The intended layout of the Hood "Sankey / Gantt / Compare runs" sections.** CLAUDE.md lists them, but no mock-up or
-   component exists.
-5. **What the P6 worker will report** as stages and messages. The backend accepts any `stage` string ≤ 40 characters;
-   the list the UI shows (`AnalysePanel.tsx` `STAGES`) was written before the worker exists.
+1. **Supabase row-level security.** RLS is on for every table with no policies in the migrations; whether any were
+   added in the dashboard is not visible from the repository.
+2. **Bucket access rules** beyond "private" are not in the repository.
+3. **Who made the decisions on items #94 and #97** before `review_events` existed (26 Sep). The one-time reset of
+   27 Sep (D30) set every item back to waiting.

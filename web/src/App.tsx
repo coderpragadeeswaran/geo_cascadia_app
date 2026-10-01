@@ -6,6 +6,7 @@ import { useConfig, useFollowJobs } from '@/api/queries'
 import { CommandPalette } from '@/components/CommandPalette'
 import { Explore } from '@/components/Explore'
 import { Rail } from '@/components/Rail'
+import { Tour } from '@/components/Tour'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { MapView } from '@/map/MapView'
 import { useUi } from '@/store/ui'
@@ -24,37 +25,58 @@ export default function App() {
   const cfg = useConfig()
 
   if (cfg.isPending) return <Splash />
-  if (cfg.isError || !cfg.data?.maps_js_key || !cfg.data?.map_id) {
+  if (cfg.isError || !cfg.data) {
     return (
       <Splash>
         <div className="t-small ink2 mt-6 max-w-md text-center">
-          {cfg.isError ? (
-            <>Can’t reach the API at <code className="t-data text-ink">{API_URL}</code>. Start it with
-              <pre className="sheet t-data mt-3 px-3 py-2 text-left text-ink">backend\.venv\Scripts\python -m uvicorn app.main:app --app-dir backend --port 8000</pre></>
-          ) : (
-            <>The API has no Maps browser key or Map ID. Set GOOGLE_MAPS_BROWSER_KEY and GOOGLE_MAP_ID in backend/.env.</>
-          )}
+          <>Can’t reach the API at <code className="t-data text-ink">{API_URL}</code>. Start it with
+            <pre className="sheet t-data mt-3 px-3 py-2 text-left text-ink">backend\.venv\Scripts\python -m uvicorn app.main:app --app-dir backend --port 8000</pre></>
         </div>
       </Splash>
     )
   }
+  // P7 R3 (C5): with no Maps browser key or Map ID the app still opens without the map and the Street View photos;
+  // Review, Under the Hood, Trust and Jobs work from the API, and Explore says what is missing
+  const mapId = cfg.data.maps_js_key ? cfg.data.map_id : ''
 
+  const shell = (
+    <TooltipProvider>
+      <main className="grid h-full grid-cols-[64px_minmax(0,1fr)]">
+        <Rail />
+        {/* the map is home: one map instance stays mounted under every page (D3) */}
+        <div className="relative min-w-0 overflow-hidden" data-map-stage>
+          {mapId ? <><MapView mapId={mapId} /><Explore /></> : <NoMap />}
+          <Pages />
+        </div>
+        <CommandPalette />
+        <Tour />
+        <ApiLost />
+        <PerfMeter />
+      </main>
+    </TooltipProvider>
+  )
+  return mapId ? <APIProvider apiKey={cfg.data.maps_js_key} version={MAPS_VERSION}>{shell}</APIProvider> : shell
+}
+
+/** Explore without a map (no browser key / Map ID): say so plainly and point to what still works. */
+function NoMap() {
+  const page = useUi((s) => s.page)
+  const go = useUi((s) => s.go)
+  if (page !== 'explore') return null
   return (
-    <APIProvider apiKey={cfg.data.maps_js_key} version={MAPS_VERSION}>
-      <TooltipProvider>
-        <main className="grid h-full grid-cols-[64px_minmax(0,1fr)]">
-          <Rail />
-          {/* the map is home: one map instance stays mounted under every page (D3) */}
-          <div className="relative min-w-0 overflow-hidden" data-map-stage>
-            <MapView mapId={cfg.data.map_id} />
-            <Explore />
-            <Pages />
-          </div>
-          <CommandPalette />
-          <PerfMeter />
-        </main>
-      </TooltipProvider>
-    </APIProvider>
+    <div className="flex h-full items-center justify-center p-10">
+      <div className="sheet max-w-lg p-6" role="status">
+        <h1 className="t-title">The map can’t be shown</h1>
+        <p className="t-small ink2 mt-2">The API has no Google Maps browser key or Map ID, so the map and the Street View photos are off. Set <code className="t-data">GOOGLE_MAPS_BROWSER_KEY</code> and <code className="t-data">GOOGLE_MAP_ID</code> in backend/.env and restart the API.</p>
+        <p className="t-small ink2 mt-2">Everything else still works from the saved results:</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button className="btn btn-line" onClick={() => go('review')}>Review</button>
+          <button className="btn btn-line" onClick={() => go('hood')}>Under the hood</button>
+          <button className="btn btn-line" onClick={() => go('trust')}>Trust</button>
+          <button className="btn btn-line" onClick={() => go('jobs')}>Jobs</button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -67,6 +89,18 @@ function Pages() {
   return (
     <div className={see ? 'pointer-events-none absolute inset-0 z-40' : 'surface absolute inset-0 z-40'}>
       <Suspense fallback={<p className="t-small ink3 p-10">Loading…</p>}><P /></Suspense>
+    </div>
+  )
+}
+
+/** P7 R3 (C5): the API stopped answering after the app had loaded (it was restarted, or the laptop slept). Everything
+ *  already loaded stays on screen; the next successful call clears this. */
+function ApiLost() {
+  const lost = useUi((s) => !s.apiReachable)
+  if (!lost) return null
+  return (
+    <div role="alert" className="sheet t-small fixed left-1/2 top-3 z-[55] -translate-x-1/2 px-3 py-1.5" style={{ color: 'var(--ns-sodium)', background: 'var(--ns-bg2)' }}>
+      The API isn’t answering ({API_URL}). What is on screen stays; new data loads once it is back.
     </div>
   )
 }

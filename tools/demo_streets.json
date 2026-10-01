@@ -1,0 +1,11 @@
+{
+  "_comment": "Streets to pre-load for demo day (tools/warm_osm_cache.py). One entry per street: any point on the road (lat, lon) and a label for the log. Add or remove lines freely; the label is only printed, the name shown in the app comes from the map.",
+  "streets": [
+    {"label": "Sakthi Main Road", "lat": 11.042553, "lon": 76.9841361},
+    {"label": "Ganapathy - Avarampalayam Road", "lat": 11.0285555, "lon": 76.9805159},
+    {"label": "Dr Alagesan Road", "lat": 11.0228307, "lon": 76.9454516},
+    {"label": "Pioneer Mills Cross Street", "lat": 11.0265337, "lon": 77.0047134},
+    {"label": "Sanganur Road (west of the analysed stretch)", "lat": 11.0357721, "lon": 76.9548099},
+    {"label": "Unnamed road near 5th Street", "lat": 11.0405957, "lon": 76.9848286}
+  ]
+}

@@ -70,7 +70,7 @@ function AnalyseButton() {
   const offline = useUi((s) => s.offline)
   return (
     <Tip label={offline ? 'Offline — read-only: new analyses need the database' : on ? 'Leave Analyse (Esc)' : 'Analyse a new street: point at it on the map'}>
-      <button className={cn('btn', on ? 'btn-solid' : 'btn-sodium')} onClick={() => useUi.getState().setAnalyse(!on)} aria-pressed={on}>
+      <button data-tour="analyse" className={cn('btn', on ? 'btn-solid' : 'btn-sodium')} onClick={() => useUi.getState().setAnalyse(!on)} aria-pressed={on}>
         <Crosshair /> {on ? 'Analysing…' : 'Analyse'}
       </button>
     </Tip>

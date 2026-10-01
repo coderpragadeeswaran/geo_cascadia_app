@@ -1,8 +1,9 @@
 /** The slim left rail (docs/DESIGN.md "App structure"): the map is home (Explore + Analyse are modes of the map); the rail
  *  reaches Review, Under the Hood, Trust and Jobs. Active item = sodium bar. Night / Daylight toggle at the bottom. */
-import { Activity, Inbox, ListChecks, Map as MapIcon, Moon, ShieldCheck, Sun } from 'lucide-react'
+import { Activity, CircleHelp, Inbox, ListChecks, Map as MapIcon, Moon, ShieldCheck, Sun } from 'lucide-react'
 import { useMap } from '@vis.gl/react-google-maps'
 import { useActiveJobs, useReviewRows } from '@/api/queries'
+import { useTour } from '@/components/Tour'
 import { Tip } from '@/components/ui/tooltip'
 import { switchMode } from '@/map/bands'
 import { useUi, type Page } from '@/store/ui'
@@ -53,6 +54,13 @@ export function Rail() {
         )
       })}
       <div className="flex-1" />
+      <Tip side="right" label={<><b className="font-semibold">Guided tour</b><br /><span className="ink2">Seven short steps through the app, on the real data</span></>}>
+        <button onClick={() => useTour.getState().start()} aria-label="Guided tour"
+          className="flex w-full cursor-pointer flex-col items-center gap-1 py-2.5 text-ink3 transition-colors hover:text-ink">
+          <CircleHelp className="size-[18px]" strokeWidth={1.6} />
+          <span className="text-[13px] leading-none" style={{ fontStretch: '85%', fontWeight: 560 }}>Tour</span>
+        </button>
+      </Tip>
       <Tip side="right" label={mode === 'night' ? 'Daylight: paper and ink, for projectors' : 'Night: the default'}>
         <button onClick={() => switchMode(map)} aria-label={mode === 'night' ? 'Switch to Daylight' : 'Switch to Night'}
           className="flex w-full cursor-pointer flex-col items-center gap-1 py-2.5 text-ink3 transition-colors hover:text-ink">

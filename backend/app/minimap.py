@@ -51,14 +51,33 @@ def area_bounds(bundle, plan):
     return bounds_of(lats, lons)
 
 
+def roads_query(bb):
+    """the Overpass query for every road in bb (also used by tools/warm_osm_cache.py, so it fills the same cache file)"""
+    s, w, n, e = (round(x, 4) for x in bb)
+    return f'[out:json][timeout:25];way["highway"~"{ROADS}"]({s},{w},{n},{e});out geom tags;'
+
+
+def outline_query(lat, lon):
+    """the Overpass query behind building_at (shared with tools/warm_osm_cache.py)"""
+    return f'[out:json][timeout:15];way["building"](around:25,{lat:.6f},{lon:.6f});out geom;'
+
+
+def job_bounds(inp):
+    """the box a job's mini-map covers: its requested stretch + 150 m (None without lines)"""
+    g = (inp or {}).get("lines") or {}
+    parts = [g["coordinates"]] if g.get("type") == "LineString" else g.get("coordinates") or []
+    lats = [la for part in parts for lo, la in part]
+    lons = [lo for part in parts for lo, la in part]
+    return bounds_of(lats, lons, 150) if lats else None
+
+
 def roads(bundle, plan, cache_dir, deadline=None, bb=None):
     """Every road around the area (or inside `bb`): [{name, type, lines: [[[lat, lon], …], …]}]. available=False when
     OpenStreetMap could not be reached and nothing is cached (the mini-maps then draw the analysed streets only, and say so)."""
     bb = bb or area_bounds(bundle, plan)
     if not bb:
         return {"available": False, "roads": []}
-    s, w, n, e = (round(x, 4) for x in bb)
-    q = f'[out:json][timeout:25];way["highway"~"{ROADS}"]({s},{w},{n},{e});out geom tags;'
+    q = roads_query(bb)
     if time.monotonic() - _failed.get(q, -1e9) < RETRY_AFTER_S:
         return {"available": False, "roads": []}
     try:
@@ -94,11 +113,8 @@ def context(bundle, plan, cache_dir):
 def job_context(inp, bundle, plan, cache_dir):
     """A job's mini-map (Jobs page): the roads around the requested stretch, and once the job made its area, that
     area's camera stops. Before the run, the stops are not known (stops_available=false)."""
-    g = (inp or {}).get("lines") or {}
-    parts = [g["coordinates"]] if g.get("type") == "LineString" else g.get("coordinates") or []
-    lats = [la for part in parts for lo, la in part]
-    lons = [lo for part in parts for lo, la in part]
-    r = roads(None, None, cache_dir, bb=bounds_of(lats, lons, 150)) if lats else {"available": False, "roads": []}
+    bb = job_bounds(inp)
+    r = roads(None, None, cache_dir, bb=bb) if bb else {"available": False, "roads": []}
     return {"roads": r["roads"], "roads_available": r["available"], "stops": stops(plan, bundle) if plan else [],
             "stops_available": plan is not None}
 
@@ -107,7 +123,7 @@ def building_at(lat, lon, cache_dir):
     """The OpenStreetMap building outline containing (lat, lon), as [[lat, lon], …], or None (none there, it came from
     Microsoft's building map, or OpenStreetMap is unreachable). One small cached query per point."""
     from shapely.geometry import Point, Polygon
-    q = f'[out:json][timeout:15];way["building"](around:25,{lat:.6f},{lon:.6f});out geom;'
+    q = outline_query(lat, lon)
     try:
         els, _ = streetpick.overpass(q, cache_dir, time.monotonic() + BUDGET_S, per_call=PER_CALL_S)
     except OverpassBusy:

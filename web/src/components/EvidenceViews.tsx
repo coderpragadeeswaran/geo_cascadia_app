@@ -4,7 +4,7 @@
  *  highlighted, and says where the boxes come from. "Live 360°" dives into the panorama with pins on the objects. */
 import { Rotate3d } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { useEvidence } from '@/api/queries'
+import { useConfig, useEvidence } from '@/api/queries'
 import type { EvidenceBox, EvidenceViewData } from '@/api/types'
 import { cn, plural } from '@/lib/utils'
 import { useUi } from '@/store/ui'
@@ -64,13 +64,14 @@ export function Boxes({ boxes, all, hidden, targetName }: { boxes: EvidenceBox[]
 export function EvidenceViews({ kind, id, at, target }: {
   kind: 'building' | 'asset' | 'unmapped'; id: string; at: { lat: number; lng: number }; target: keyof typeof TARGET_NAME }) {
   const area = useUi((s) => s.area)
-  const { data: views, isPending, isError } = useEvidence(area, kind, id)
+  const { data: views, isPending, isError, refetch } = useEvidence(area, kind, id)
   const [i, setI] = useState(0)
   const [hidden, setHidden] = useState<Set<string>>(new Set())
   // this photo's own "How do we know?": open = draw everything the detector found (it never opens other sections)
   const [all, setAll] = useState(false)
   const dive = useUi((s) => s.dive)
   const setDive = useUi((s) => s.setDive)
+  const hasMap = !!useConfig().data?.maps_js_key            // Live 360° needs the map (no browser key: no photos either)
   useEffect(() => { setI(0) }, [id])
   const v: EvidenceViewData | undefined = views?.[Math.min(i, (views?.length ?? 1) - 1)]
   const counts = useMemo(() => {
@@ -78,8 +79,9 @@ export function EvidenceViews({ kind, id, at, target }: {
     for (const b of v?.boxes ?? []) m[b.cls] = (m[b.cls] ?? 0) + 1
     return m
   }, [v])
-  if (isPending) return <div className="aspect-square w-full animate-pulse rounded-[var(--ns-r-control)] bg-line" />
-  if (isError || !v) return <p className="t-small ink3 rounded-[var(--ns-r-control)] p-4" style={{ boxShadow: 'inset 0 0 0 1px var(--ns-line)' }}>No Street View evidence stored for this item.</p>
+  if (isPending) return <div className="t-small ink3 flex aspect-square w-full animate-pulse items-center justify-center rounded-[var(--ns-r-control)] bg-line" role="status">Loading the evidence photos…</div>
+  if (isError) return <p className="t-small ink2 rounded-[var(--ns-r-control)] p-4" style={{ boxShadow: 'inset 0 0 0 1px var(--ns-line)' }}>Couldn’t load the evidence photos: the API didn’t answer. <button className="link" onClick={() => refetch()}>Try again</button></p>
+  if (!v) return <p className="t-small ink3 rounded-[var(--ns-r-control)] p-4" style={{ boxShadow: 'inset 0 0 0 1px var(--ns-line)' }}>No Street View evidence stored for this item.</p>
   const name = TARGET_NAME[target]
   const toggle = (c: string) => setHidden((h) => { const n = new Set(h); if (n.has(c)) n.delete(c); else n.add(c); return n })
   return (
@@ -96,9 +98,9 @@ export function EvidenceViews({ kind, id, at, target }: {
           <button key={x.key} onClick={() => setI(k)} aria-pressed={k === i} className="btn h-7">{x.label}</button>
         ))}
         <div className="flex-1" />
-        <button className={cn('btn', dive ? 'btn-solid' : 'btn-sodium')} onClick={() => setDive(dive ? null : { pano: v.pano_id, heading: v.heading, pitch: v.pitch, fov: v.fov, at })}>
+        {hasMap && <button className={cn('btn', dive ? 'btn-solid' : 'btn-sodium')} onClick={() => setDive(dive ? null : { pano: v.pano_id, heading: v.heading, pitch: v.pitch, fov: v.fov, at })}>
           <Rotate3d /> {dive ? 'Back to map' : 'Live 360°'}
-        </button>
+        </button>}
       </div>
       <HowWeKnow label="How do we know? (everything the detector found)" open={all} onOpenChange={setAll}
         summary={<>The detector marked {plural(v.boxes.length, 'thing')} in this photo. Each box says what it is and how sure the detector was{v.target === 'box' ? `; the orange box is this ${kind === 'asset' ? 'object' : kind === 'unmapped' ? 'sign' : 'building'}` : ''}.</>}

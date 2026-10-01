@@ -181,8 +181,19 @@ class DbStore:
                 self._cache.clear()
 
     def slugs(self):
+        """P7 R3: the same query also returns every area's version (as _version), so cached bundles that did not change are
+        confirmed here in one round trip; /areas then needs no per-area version check (was 1.4-4.5 s through the pooler)."""
         with self.pool.connection() as c:
-            return [r[0] for r in c.execute("select slug from areas order by slug")]
+            rows = c.execute("""select a.slug, a.id, a.updated_at, (select max(updated_at) from review_items r where r.area_id = a.id),
+                                       (select count(*) from review_items r where r.area_id = a.id)
+                                from areas a order by a.slug""").fetchall()
+        now = time.monotonic()
+        with self._lock:
+            for slug, *ver in rows:
+                hit = self._cache.get(slug)
+                if hit and tuple(hit[0]) == tuple(ver):
+                    self._cache[slug] = (hit[0], now, hit[2])
+        return [r[0] for r in rows]
 
     def patch_review(self, slug, item, version):
         """Apply one review decision to the cached bundle in place (review fix 12: no full reload after each write).

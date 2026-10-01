@@ -388,16 +388,20 @@ function StreetsTable({ h }: { h: HoodData }) {
   )
 }
 
+/** P7 R3 (A2): the photo dollars are list price; the cloud-AI (AWS) cost stays as measured */
+const SV_LIST_PRICE = 'Photo cost is at Google’s list price — Google’s free monthly allowance may cover it.'
+
 function CostTime({ h }: { h: HoodData }) {
   const c = h.cost
   const sv = c.lines.find((l) => l.key === 'street_view')
   if (c.live) return <LiveCost h={h} />
   const time = c.model_card?.gpu_minutes != null ? `About ${c.model_card.gpu_minutes} min on a Colab GPU` : 'Time: not recorded for this run'
   const money = sv?.value != null
-    ? `about ${sv.value.toFixed(2)} in Street View photos (${sv.photos != null ? fmt.format(sv.photos) : '—'} photos)` : 'Street View cost not recorded'
+    ? `about $${sv.value.toFixed(2)} in Street View photos (${sv.photos != null ? fmt.format(sv.photos) : '—'} photos)` : 'Street View cost not recorded'
   return (
     <Section id="cost" title="Time and cost">
       <p className="t-body" title={sv?.source ?? undefined}>{time}; {money}.</p>
+      {sv?.value != null && <p className="t-small ink2 mt-1">{SV_LIST_PRICE}</p>}
       {sv?.source && <p className="t-small ink3 mt-1">Where the photo count comes from: {sv.source}.</p>}
     </Section>
   )
@@ -421,6 +425,7 @@ function LiveCost({ h }: { h: HoodData }) {
       </p>
       {t.badge ? <p className="t-small mt-1" style={{ color: 'var(--ns-sodium)' }}>This analysis was {t.badge}.</p>
         : <p className="t-small ink3 mt-1">Measured during this analysis. Photo prices from the team’s model card.</p>}
+      {sv && <p className="t-small ink2 mt-1">{SV_LIST_PRICE} The cloud-AI cost is as measured.</p>}
       <div className="mt-4"><StageTimeline stages={t.stage_seconds} badge={t.badge} total={t.total_minutes} live /></div>
     </Section>
   )

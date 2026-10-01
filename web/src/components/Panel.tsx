@@ -1,5 +1,6 @@
 /** The one panel (docs/DESIGN.md): it appears only for a question, a selection, a key number, a street or "What stands
  *  out", and shows exactly one of them. Plain language; technical detail sits behind "How do we know?" (D16). */
+import { useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, Inbox, Route, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -236,4 +237,9 @@ function useAreaName(slug: string | null) {
   return detail?.name ? shortArea(detail.name) : slug ?? ''
 }
 
-const Loading = () => <div className="space-y-2 p-5">{[0, 1, 2, 3].map((i) => <div key={i} className="h-10 animate-pulse rounded-[var(--ns-r-control)] bg-line" />)}</div>
+function Loading() {
+  const { error } = useAreaData()
+  const qc = useQueryClient()
+  if (error) return <p className="t-small ink2 p-5" role="alert">Couldn’t load this area’s results: the API didn’t answer. <button className="link" onClick={() => qc.invalidateQueries()}>Try again</button></p>
+  return <div className="space-y-2 p-5" role="status"><p className="t-small ink3">Loading this area’s results…</p>{[0, 1, 2, 3].map((i) => <div key={i} className="h-10 animate-pulse rounded-[var(--ns-r-control)] bg-line" />)}</div>
+}

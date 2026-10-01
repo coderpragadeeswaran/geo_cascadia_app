@@ -40,7 +40,7 @@ stops at once and says so.
   backend\.venv\Scripts\python tools\build_pkg_zip.py     # writes geo_cascadia_pkg_p7a.zip and checks every entry name
   ```
   It contains every `.py` file of `pipeline/geo_cascadia` (no `__pycache__`), and the tool fails if any entry is not
-  under `geo_cascadia_pkg/geo_cascadia/`. Then restart the runtime and run S0, S1a and S1b again.
+  under `geo_cascadia_pkg/geo_cascadia/`. Then restart the runtime and run S0, S1a, S1ba and S1bb again.
 - **Shared Drive folder (Kaggle, another account):** copy the whole `pipeline/geo_cascadia` folder over the
   `geo_cascadia/` folder shown above.
 
@@ -60,7 +60,7 @@ cd backend; .venv\Scripts\python -m uvicorn app.main:app --port 8000
 cd web; npm run dev                      # http://localhost:5173
 
 # 3. tunnel: a new https URL every time it starts
-cloudflared tunnel --url http://localhost:8000
+cloudflared tunnel --url http://127.0.0.1:8000   # 127.0.0.1, not localhost: on Windows localhost can resolve to IPv6 (::1) and the tunnel answers 502
 ```
 
 Copy the `https://….trycloudflare.com` address that cloudflared prints. The worker token is `WORKER_TOKEN` in
@@ -73,7 +73,7 @@ No CORS or Maps-key change is needed: the worker talks to the API server-to-serv
 ## 3a. Colab (GPU)
 
 1. Runtime → Change runtime type → **T4 GPU**.
-2. Run your setup cells **S0** (install package), **S1a** (deps) and **S1b** (keys). They define `cfg` and `run_area`.
+2. Run your setup cells **S0** (install package), **S1a** (deps), **S1ba** (keys) and **S1bb** (config; worker/colab_setup_cells.md). They define `cfg` and `run_area`.
    - S1a needs these lines. They fixed the OCR crash of the real run (D37, D39):
      ```
      !pip install -q "transformers==4.57.6"
@@ -83,7 +83,7 @@ No CORS or Maps-key change is needed: the worker talks to the API server-to-serv
      ```
      Why: transformers 4.x loads TensorFlow whenever it is installed (Colab has it pre-installed), and TensorFlow
      crashed Paddle (sign reading) with a segfault, even on CPU. After changing S1a, use Runtime → Restart session, then
-     run S0, S1a and S1b again.
+     run S0, S1a, S1ba and S1bb again.
    - At start the worker prints the transformers version and warns if it is not the tested one. If TensorFlow is
      installed it warns and prints the exact fix.
 3. New cell: paste all of `worker/colab_worker.py`, then run it.

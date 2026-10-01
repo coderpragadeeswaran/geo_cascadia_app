@@ -347,7 +347,7 @@ A trigger `review_events_no_change` refuses every UPDATE and DELETE.
 - **Laptop (every session), three terminals:**
   1. API on :8000;
   2. web on :5173;
-  3. `cloudflared tunnel --url http://localhost:8000`. It prints a new `https://….trycloudflare.com` each time.
+  3. `cloudflared tunnel --url http://127.0.0.1:8000` (not `localhost`: Windows may resolve it to IPv6, P7 R3). It prints a new `https://….trycloudflare.com` each time.
 - **Colab (T4 GPU):**
   - **S0** installs the pipeline package from the newest zip in `/MyDrive/alldataset` (it deletes `geo_cascadia_pkg/` there
     first, then extracts). The zip's entries must be `geo_cascadia_pkg/geo_cascadia/<file>.py`. Build it with
@@ -362,7 +362,7 @@ A trigger `review_events_no_change` refuses every UPDATE and DELETE.
     %env TRANSFORMERS_NO_TF=1
     ```
     Then Runtime → Restart session and run S0/S1a/S1b again.
-  - **S1b** sets the keys and defines `cfg` and `run_area`. The owner's notebook splits this into S1ba / S1bb. Those cells are **not in the repository yet**; the owner will paste them into `worker/colab_setup_cells.md` ([§18](05_EXPLAIN_AND_DEFEND.md#18-still-to-do-p7)).
+  - **S1ba** puts the keys in the environment (Colab secrets: fresh AWS SSO keys, the Google server key) and **S1bb** builds `cfg` and imports `run_area`. `worker/colab_setup_cells.md` describes every cell (S0, S1a, S1ba, S1bb, worker cell); the exact text of S0 / S1a / S1ba / S1bb is not in the repository yet and is marked "PASTE CELL HERE" there.
   - **Worker cell:** paste all of `worker/colab_worker.py`. It asks (hidden input): pipeline + weights (Enter = from the setup cells, or a shared Drive link), AWS keys, Google server key (Enter keeps the setup cells' key), backend URL (the tunnel), worker token. It never prints or stores them. Pasted values lose spaces and quotes (D37).
   - At start: prints the transformers version (warns if not 4.57.6); warns if TensorFlow is installed; a `[mem]` line; the optional **OCR self-test** (loads the reader in a child process, reads a drawn "HOTEL", frees memory); a free Street View metadata call to test the key (D39, D40).
 - **Kaggle:** same cell; pipeline from the Drive link; it offers to install packages.
@@ -515,7 +515,7 @@ stateDiagram-v2
 | **Ward 29 full run (the real one)** | **11.5 min on a T4 · 1,420 photos ≈ $9.94 · cloud AI $0.0887** | owner's fresh run, 28 Sep 2026, router on (D41) |
 | Ward 29 cloud AI benchmark, with / without the local router | $0.056 / $0.089 | model_card (earlier measurement) |
 | Ward 29 names: routed vs cloud on every photo | $0.0079 vs $0.105 | model_card |
-| Ward 29 photos as Under the Hood counts them (planned views only) | 1,154 × $0.007 = $8.08 (under-counts; P7 fix) | computed |
+| Ward 29 photos as Under the Hood counts them (since P7.2) | 1,154 views + 266 building photos = 1,420 × $0.007 ≈ $9.94, captioned "at Google's list price — Google's free monthly allowance may cover it" (P7 R3) | computed from the run files |
 | Ward 29 photos, full run incl. building crops | 1,154 + 266 = 1,420: the run files agree with the owner's count | computed |
 | **Ward 29 all-in, full run** | **≈ $10.03** (photos $9.94 + cloud AI $0.0887; Places not priced) | computed from the above |
 | Vadakku Masi Veethi (383 m, live) | 162 photos $1.13; cloud $0.0134; 35 Google look-ups (price not in model card) | run counters |
@@ -533,28 +533,40 @@ stateDiagram-v2
 | Minutes per average Ward 29 street (483 m) on CPU | — | 18 (full OCR), 3–5 (fast) | model_card |
 | Vadakku Masi Veethi stage times (GPU) | panoramas 0.0 s (reported), area 0.9, plan 1.5, detect 10.8, geometry 8.0, **OCR 118.1**, **cloud 74.5**, Google 11.4, match 7.2 s | — | run file |
 
-### 13.3 How the estimate is made, and why it is ~2× too low
-- `views.job_estimate` scales **by length** from Ward 29:
-  - photos = length × (1,154 planned views / 4,829 m);
-  - GPU minutes = 11.5 × length / 4,829;
-  - CPU minutes = model_card's per-street minutes × (length / 483 m);
-  - cloud-AI calls are **not** included.
-- Vadakku Masi Veethi, 383 m:
+### 13.3 How the estimate is made (P7.2, P7 R2)
+- **From the real camera plan.** Clicking a street starts the pipeline's own first three stages in the background on the
+  laptop (Street View search, map outlines and streets, camera plan) with the pipeline's default settings. No photo is
+  bought: Street View metadata look-ups are free (D46). The result is cached on disk per street, so the warm-up tool
+  (`tools/warm_osm_cache.py`) can fill it the day before a demo.
+- **Photos** = planned views + one building photo per building faced (the worker's cost-cap rule; an upper bound).
+- **Cost** = photos × $0.007 (model card) + photos × the measured cloud-AI cost per photo of completed live jobs.
+  Google business look-ups are counted, not priced.
+- **GPU minutes** = start-up + photos × 0.49 s. The per-photo rate is the Ward 29 full run (11.5 min / 1,420 photos);
+  the start-up (3.8 min) is the median of the completed live GPU jobs' time minus their photos at that rate (D47).
+  Two measured inputs, one formula; not fitted.
 
-| | Estimate | Actual | Ratio |
-|---|---|---|---|
-| Photos | 92 | 162 | 1.8× |
-| Street View cost | $0.64 | $1.13 | 1.8× |
-| GPU minutes | 0.9 | 4.0 pipeline / 6.2 job | 4–7× |
+| Street | Estimate | Real |
+|---|---|---|
+| Ward 29 (study area, 10 streets) | 1,505 photos · 16.0 min | 1,420 photos · 11.5 min (a pipeline run without job start-up) |
+| Kattabomman Street Extention | 35 photos · 4.1 min | 33 photos · 3.1 min |
+| Vadakku Masi Veethi | 167 photos · 5.2 min | 162 photos · 6.1 min |
 
-- **Why it is low:** Ward 29's average hides dense commercial streets (Vadakku Masi Veethi planned 118 views for 383 m, i.e. 0.31 per metre, vs Ward 29's 0.24). It also leaves out the building-crop photos, cloud calls, model loading and OCR on 654 sign crops.
-- The worker's **cost cap uses the real plan** (views + faced buildings) and so is closer. A better estimate from the real planner is on the to-do list ([§18](05_EXPLAIN_AND_DEFEND.md#18-still-to-do-p7)).
+- Photos come out a few per cent high (the building-photo count is an upper bound); time is within about ±1 min on
+  short streets and high on a large area, where the fixed start-up counts once, not per street.
+- **If Google can't be reached** while planning, the estimate fails with a plain message and is not cached (P7 R3:
+  before this, a network failure could be cached as "no Street View, 0 photos"). With no Google server key the sheet
+  says so; Start still works and the cost cap protects you.
 
 ### 13.4 Memory (D3, D21; production build, JS heap after GC)
 - Target ≤ 60 MB in normal use.
-- Measured: area 24.8–24.9 MB, street 42.0–43.2 MB, evidence view 56.3–63.1 MB (60–63 MB accepted), Night ↔ Daylight while zoomed in 63.8–73.5 MB (accepted; the switch first flies out to area zoom).
-- Device-pixel ratio capped at 1.5. The 2D switch saves memory (evidence view about 44 MB).
-- These numbers predate P6; a re-check is on the to-do list.
+- **Re-measured 1 Oct (P7 R3, after P6 and P7; `web/scripts/heap.ts`, Chrome DevTools Protocol, 2 runs):**
+  Ward 29 loaded and idle 21.6 / 25.4 MB; the guided tour's building step (evidence at object zoom) 44.5 / 45.3 MB;
+  after the whole tour (every page visited, back on the map) 45.6 / 46.3 MB.
+- **What holds it** (sampling heap profiler, live objects after GC): at street / object zoom about two-thirds is Google
+  Maps JS (its vector-tile data), 8–9% deck.gl, 2–4% React, the rest our own code and the UI kit; at area level Google
+  Maps is 34–45%.
+- Earlier (D21): evidence view 56.3–63.1 MB (60–63 accepted), Night ↔ Daylight while zoomed in 63.8–73.5 MB (accepted;
+  the switch first flies out to area zoom). Device-pixel ratio capped at 1.5; the 2D switch saves memory.
 
 ---
 

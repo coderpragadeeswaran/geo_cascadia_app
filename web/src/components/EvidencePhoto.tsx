@@ -16,8 +16,9 @@ export function EvidencePhoto({ view, label, crosshair, className, children }: {
   view: EvidenceView; label?: string; crosshair?: boolean; className?: string; children?: React.ReactNode }) {
   const { data: cfg } = useConfig()
   const [state, setState] = useState<{ src: string; s: 'ok' | 'error' } | null>(null)
-  const src = cfg ? staticUrl(cfg.maps_js_key, view) : null
-  const s = state && state.src === src ? state.s : 'loading'
+  const src = cfg?.maps_js_key ? staticUrl(cfg.maps_js_key, view) : null
+  const noKey = !!cfg && !cfg.maps_js_key
+  const s = noKey ? 'nokey' : state && state.src === src ? state.s : 'loading'
   const hasBox = [view.x1, view.y1, view.x2, view.y2].every((v) => typeof v === 'number')
   return (
     <figure className={cn('relative aspect-square w-full overflow-hidden rounded-[var(--ns-r-control)] bg-black', className)}>
@@ -25,7 +26,8 @@ export function EvidencePhoto({ view, label, crosshair, className, children }: {
         <img key={src} src={src} alt={label ?? 'Street View evidence'} className={cn('absolute inset-0 size-full object-cover transition-opacity duration-300', s === 'ok' ? 'opacity-100' : 'opacity-0')}
           onLoad={() => setState({ src, s: 'ok' })} onError={() => setState({ src, s: 'error' })} referrerPolicy="strict-origin-when-cross-origin" />
       )}
-      {s === 'loading' && <div className="absolute inset-0 animate-pulse bg-white/5" />}
+      {s === 'loading' && <div className="t-small absolute inset-0 flex animate-pulse items-center justify-center bg-white/5 text-white/60" role="status">Loading the Street View photo…</div>}
+      {s === 'nokey' && <div className="t-small absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 text-center text-white/70"><ImageOff className="size-5" /> Street View photos need the Google Maps browser key (not set on the API)</div>}
       {s === 'error' && <div className="t-small absolute inset-0 flex flex-col items-center justify-center gap-2 text-white/70"><ImageOff className="size-5" /> No Street View image for this view</div>}
       {s === 'ok' && (
         <svg viewBox="0 0 640 640" className="pointer-events-none absolute inset-0 size-full" aria-hidden>

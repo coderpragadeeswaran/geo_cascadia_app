@@ -117,7 +117,7 @@ with the sodium accent included because it shares the map with the statuses, che
   panel** is open: a selection's evidence, a drive, a question's result, a key number's list, a street, or "What stands
   out" (`store/ui.ts` `panelOf`). It stops above Google's attribution.
 - **A 64 px left rail** (icon + label) reaches **Review · Under the Hood · Trust · Jobs**. The active item is marked
-  with a sodium bar, and the rail holds no other chrome.
+  with a sodium bar. At the bottom: **Tour (?)** (the guided tour) and the Night / Daylight toggle.
 - **Review:** queue (priority first) | the evidence view with its box | the decision column (A / R / E, J / K).
 - **Trust:** "what we measured" (detector per class with n, use, floors n=36, names routed vs all-VLM) and "tried and
   dropped", every number from `model_card.json`.
@@ -144,19 +144,32 @@ driving order per branch (D20: stops ordered along the merged road line, strictl
   next stop's image is preloaded; the panel says each stop you stop at loads one billed Street View image.
 
 ## Under the Hood as a scroll story
-Seven chapters, each a big counted-up figure, one sentence and a kept-vs-dropped bar (kept = sodium, dropped =
-hatched):
-1. 733 panoramas (2 user photospheres excluded)
-2. 203 camera stops (13 dropped: inside a footprint)
-3. 1,154 views (111 face no building outline)
-4. 5,554 detections (4,617 usable; 937 excluded)
-5. 381 buildings (221 use classified, 160 not)
-6. 268 poles & streetlights (20 triangulated, 248 approximate; 11 dark stretches)
-7. 260 items for a person
+As built (P5, D29–D31): a **coverage & summary** panel, then **ten chapters**, each a figure counted from the run's own
+files, one plain sentence, a kept-vs-dropped bar and "see real examples":
+01 Streets planned · 02 Camera positions · 03 Photos fetched · 04 Objects detected · 05 Signs read · 06 Local or cloud AI ·
+07 Floors and use · 08 Positions · 09 Matched · 10 Findings. Then: the whole pipeline (funnel), what got dropped and why,
+street by street, street names, and time and cost (photo cost at Google's list price — the free monthly allowance may
+cover it; cloud-AI cost as measured, P7 R3). Compare all runs side by side. The design preview's seven chapters
+(`/design-preview`) are the first version and are kept only there.
 
-Pipeline-internal counts come from `run_report.json`. Countable facts are computed from the records (D2): the story
-shows **20** triangulated and explains the report's 29. There are no timings (D1). Reduced motion shows final
+Countable facts are computed from the records (D2): the story shows **20** triangulated and explains the report's 29.
+Timings of the three original runs carry the "resumed run, not representative" badge (D1). Reduced motion shows final
 values without animation.
+
+## Guided tour (P7.5)
+Seven steps in plain words, on the real data: the key numbers → a building's evidence → Review → Analyse a street → Jobs →
+Trust (Gate 1 "Not verified") → done. One `bg2` sheet with a sodium edge, bottom-left over the map (top-right on the
+Analyse step, clear of its bottom sheet); the step's target gets a sodium ring. Started from **?** (Tour) at the bottom of
+the rail; opens by itself once, on the first visit (`gc.tourSeen`). Esc closes, ← → and Enter step, focus sits on Next.
+Each step says what is missing instead of failing (no area, no building, no worker, no model card).
+
+## States (P7 R3)
+- **Loading** always says what loads ("Loading the Street View photo…", "Loading this area's results…"), not a bare pulse.
+- **Errors** say what failed in plain words and offer "Try again"; a missing record says so instead of loading forever.
+- **The API stops answering:** a sodium banner at the top ("The API isn't answering … What is on screen stays").
+- **No Maps browser key / Map ID:** the app opens without the map ("The map can't be shown", with links to Review, Under
+  the Hood, Trust and Jobs); Street View photos say the key is missing; Live 360° is hidden.
+- `.btn-solid:hover` mixes sodium 86% with ink (the old glow hover was 2.4:1 in Daylight).
 
 ## Base map: Google Cloud settings for your Map ID
 With a Map ID, the map's own look (land, roads, labels, POIs, Google's buildings) is controlled **only in Google

@@ -112,7 +112,7 @@ All measured accuracy/benchmark/negative results. Render it; never restate numbe
 ```
 web (React, laptop :5173) ──HTTP──> backend (FastAPI, laptop :8000) ──SQL──> Supabase Postgres + PostGIS
                                        ▲  job queue table
-                                       │  exposed by `cloudflared tunnel --url http://localhost:8000`
+                                       │  exposed by `cloudflared tunnel --url http://127.0.0.1:8000` (127.0.0.1: Windows may resolve localhost to IPv6)
                                   Colab worker (GPU or CPU) polls /worker/next → run_area() → posts progress + export
 ```
 - Pre-loaded areas work with no worker online. A new street becomes a **job**; if no worker is online the UI
@@ -128,8 +128,8 @@ evidence jsonb, review_status, PRIMARY KEY(area_id,id))`
 `unmapped_businesses(area_id, id, name, geom point, sightings, evidence jsonb)`
 `streetlight_gaps(area_id, id, street, geom linestring, length_m, poles_inside, gap_type)`
 `review_items(id serial, area_id, item_type, ref_id, priority, reasons text[], status('pending'|'approved'|'rejected'|'appealed'),
-reviewer, note, appeal_photo_url, updated_at)`
-`jobs(id uuid, kind('street_click'|'polygon'), input jsonb, status('queued'|'running'|'done'|'failed'|'expired_token'|'no_street_view'),
+reviewer, note, appeal_photo_url, updated_at)` — the appeal photo is stored as a private Storage path; a 10-minute signed link is made on request (D11)
+`jobs(id uuid, kind('street_click'|'polygon'), input jsonb, status('queued'|'running'|'done'|'failed'|'expired_token'|'no_street_view'|'needs_approval'),
 stage, done, total, message, area_id, created_at, started_at, finished_at, worker_id)`
 Loader: `backend/load_area.py <area folder>` — idempotent upsert of export.json + run_report.json.
 
@@ -152,26 +152,29 @@ Loader: `backend/load_area.py <area folder>` — idempotent upsert of export.jso
 A single Colab cell to paste **after** the owner's existing setup cells (S0 install package, S1a deps, S1b keys → gives `cfg`, `run_area`, `D`).
 Loop: claim job → `click_to_street`/polygon → `run_area(poly, out_dir, cfg, name, way_ids=…, progress=post)` → upload export + JSONs.
 Map pipeline errors to job statuses: `NO_STREET_VIEW`, `NO_STREETS`, `NO_CAMERAS` → `no_street_view` with the message;
-`AWS token expired` → `expired_token` then stop (owner refreshes keys, re-runs; `run_area` resumes). Heartbeat every 30 s.
+`AWS token expired` → `expired_token` then stop (owner refreshes keys, re-runs; `run_area` resumes). Heartbeat every 15 s; a running job silent for 2 min is "interrupted" and claimable again (D34). Display statuses
+add cancelled / cancelling / interrupted (D29, D35). A failed result upload is retried with back-off (P7 R3).
 
 ## 9. THE APP — design brief (this is where "exceptional" matters)
 
 ### 9.1 Feel
 Think **Life360 / Google Earth / Apple Maps look-around**, not an admin dashboard. The map *is* the app: full-bleed,
-everything else floats over it on translucent "glass" panels. Motion is purposeful: camera fly-to, smooth tilt into 3D,
+everything else floats over it (the app uses flat "Night Survey" panels, not glass: docs/DESIGN.md, D15). Motion is purposeful: camera fly-to, smooth tilt into 3D,
 cross-fade into Street View. Calm dark theme by default (light theme toggle), one accent colour, clear status colours
-(matched = teal, discrepancy = amber, no record = red, review = violet, approximate = hollow/dashed). Typography:
-Inter or Geist; numbers in tabular figures. Everything keyboard-accessible; works at 1366×768 (the owner's laptop) and scales up.
+(as built, D15/D22: matched = dusk slate, differs = glacier, not in register = peony, review = chalk dashed outline,
+approximate = hollow/dashed; one accent, sodium orange). Typography as built: Anek Tamil (Latin + Tamil) and Martian Mono for
+numbers (tabular). Everything keyboard-accessible; works at 1366×768 (the owner's laptop) and scales up.
 
 ### 9.2 Stack
 React 18 + Vite + TypeScript, Tailwind + shadcn/ui, Framer Motion, `@vis.gl/react-google-maps` (vector map with a **Map ID**
 so tilt/rotation/3D buildings work), `deck.gl` + `@deck.gl/google-maps` `GoogleMapsOverlay` for data layers
 (3D extruded footprints, icon layers, heat/hexbin, animated paths), TanStack Query + TanStack Table, Zustand (one global
-selection/filter store), `cmdk` command palette, Recharts (bars/donuts) + `@nivo/sankey` (pipeline funnel). Keep bundle lean.
+selection/filter store), `cmdk` command palette, Recharts (bars/donuts) + our own SVG funnel/Sankey (Nivo was not installed: lean bundle). Keep bundle lean.
 
 ### 9.3 Zoom-driven map experience (the signature interaction)
 - **City level (z ≤ 13):** dark vector map; analysed areas glow as outlined polygons with a count badge; pulsing dot for running jobs.
-- **Area level (z 14–16):** switch to **hybrid satellite**; streets coloured by health (discrepancies per km); streetlight gaps as
+- **Area level (z 14–16):** (as built, D15: Night stays on the dark roadmap — Cloud dark styles don't apply to satellite;
+  satellite is a Daylight option in Layers); streets coloured by health (discrepancies per km); streetlight gaps as
   glowing dashed red segments; hexbin density of findings; hover a street → tooltip with its mini-KPIs.
 - **Street level (z 17–18):** tilt to ~45°; building footprints **extruded in 3D by observed floor count** (unknown floors = flat,
   hatched), coloured by match status; poles/streetlights as crisp icons with **uncertainty circles** (dashed for approximate);
@@ -221,7 +224,9 @@ selection/filter store), `cmdk` command palette, Recharts (bars/donuts) + `@nivo
 5. **Jobs** — history of analyses with status, duration, cost, link to area and to Under the Hood.
 
 ### 9.5 Demo mode
-A "Guided tour" button that plays the spec's example queries one by one with map fly-throughs and captions
+As built (P7.5): a seven-step tour from the **?** button on the rail (opens once on the first visit): key numbers → a
+building's evidence → Review → Analyse a street → Jobs → Trust (Gate 1 "Not verified") → done. Esc closes, ← → step.
+Original brief: a "Guided tour" button that plays the spec's example queries one by one with map fly-throughs and captions
 (each step real data, skippable). Must run fully on pre-computed data with no worker.
 
 ### 9.6 Compliance in the UI

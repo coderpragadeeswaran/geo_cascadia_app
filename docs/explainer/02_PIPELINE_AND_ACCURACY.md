@@ -504,7 +504,7 @@ Test set: 150 hand-labelled Ward 29 photos, never used for training (MC). Traini
 | Triangulated only (cameras alone) | 36 | 5.28 | 9.69 | 38.9% |
 | Wall hit (camera ray on the map wall) | 224 | 2.58 | 6.86 | 63.8% |
 | Wall centre (IS the reference point) | 121 | 0.01 | 0.01 | 100% (by construction) |
-| All buildings (pooled) | 381 | 1.58 | 6.58 | 73.0%: **do not quote** |
+| All buildings (pooled) | 381 | — | — | not quoted (counts the 121 wall-centre points) |
 | Baseline: outline centroid for every building | 381 | 7.03 | 14.19 | 6.8% |
 
 | Other areas: camera-derived | n | median | p90 | ≤ 3.5 m |
@@ -512,10 +512,10 @@ Test set: 150 hand-labelled Ward 29 photos, never used for training (MC). Traini
 | Trichy (unseen city) | 49 | 3.64 | 10.02 | 49.0% |
 | Tiruppur | 1 | 18.44 | 18.44 | 0% (the 4,867 m² outline) |
 
-**Why the 73% "all buildings" number must not be quoted:** 121 of the 381 buildings use *wall centre*, which **is** the reference point, so they score 0 m by construction. Pooling them in lifts the pass rate from 60% to 73% without any camera measurement.
+**Why no pooled "all buildings" figure is quoted:** 121 of the 381 buildings use *wall centre*, which **is** the reference point, so they score 0 m by construction. Pooling them in would lift the pass rate above the camera-derived 60% without any camera measurement. The model card still stores the pooled row; Trust does not show it (P7 R3).
 
 **Other tables in the model card, and why they are weaker:**
-- **"vs OSM wall"** (distance to the nearest point of the wall): wall hit is on the wall by construction (0 m), so "all buildings 95.3%" is circular. Trust never shows a pooled "vs OSM wall" figure (D27).
+- **"vs OSM wall"** (distance to the nearest point of the wall): wall hit is on the wall by construction (0 m), so "all buildings 95.3%" is circular. Trust never shows a pooled "vs OSM wall" figure (D27; a regression that showed it was removed in P7 R3).
 - **"vs Google pin"**: n=24 in Ward 29; production rule median 12.0 m (D26). The pins themselves sit a median 7.7 m from the OSM wall. The block was **computed before D33 and not re-run**.
 - **Self-consistency** (a precision measure, not accuracy): Ward 29 17 buildings, median 2.51 m, p90 7.46 m; Trichy 9, 3.14 m, 5.45 m.
 - **Status: not verified.** No reference accurate to about 1 m exists (surveyed points or hand-marked facade points). The owner ruled out manual labelling (D26). An evaluation tool is ready for surveyed points.

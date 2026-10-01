@@ -28,9 +28,9 @@ export function EvidenceDrawer({ sel }: { sel: AnyProps }) {
   const { records } = useAreaData()
   const body = (() => {
     switch (sel.kind) {
-      case 'building': { const b = records?.buildings.find((x) => x.id === sel.id); return b ? <BuildingBody b={b} /> : <Loading /> }
-      case 'pole': case 'streetlight': { const a = records?.assets.find((x) => x.id === sel.id); return a ? <AssetBody a={a} /> : <Loading /> }
-      case 'unmapped_business': { const u = records?.unmapped.find((x) => x.id === sel.id); return u ? <UnmappedBody u={u} /> : <Loading /> }
+      case 'building': { const b = records?.buildings.find((x) => x.id === sel.id); return b ? <BuildingBody b={b} /> : records ? <Gone /> : <Loading /> }
+      case 'pole': case 'streetlight': { const a = records?.assets.find((x) => x.id === sel.id); return a ? <AssetBody a={a} /> : records ? <Gone /> : <Loading /> }
+      case 'unmapped_business': { const u = records?.unmapped.find((x) => x.id === sel.id); return u ? <UnmappedBody u={u} /> : records ? <Gone /> : <Loading /> }
       case 'missing_asset_record': return <MissingBody p={sel} />
       case 'streetlight_gap': return <GapBody p={sel} />
       default: return null
@@ -44,7 +44,9 @@ export function EvidenceDrawer({ sel }: { sel: AnyProps }) {
   )
 }
 
-const Loading = () => <div className="space-y-2 p-5">{[0, 1, 2].map((i) => <div key={i} className="h-16 animate-pulse rounded-[var(--ns-r-control)] bg-line" />)}</div>
+const Loading = () => <div className="space-y-2 p-5" role="status"><p className="t-small ink3">Loading the details…</p>{[0, 1, 2].map((i) => <div key={i} className="h-16 animate-pulse rounded-[var(--ns-r-control)] bg-line" />)}</div>
+/** the area's records are loaded but this item is not among them (another area is open, or it was re-analysed) */
+const Gone = () => <p className="t-small ink2 p-5">This item is not in the loaded results for this area. It may belong to another area, or the area was analysed again. Close this panel and pick it on the map.</p>
 const Body = ({ children }: { children: React.ReactNode }) => <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6">{children}</div>
 const Synthetic = () => <span className="tag">synthetic register (demo)</span>
 const Row = ({ k, children }: { k: string; children: React.ReactNode }) => (

@@ -145,6 +145,29 @@ def basis_text(rates):
     return " ".join(parts)
 
 
+class StreetViewUnreachable(RuntimeError):
+    pass
+
+
+SV_META_URL = "https://maps.googleapis.com/maps/api/streetview/metadata"
+
+
+def street_view_unreachable(poly, key):
+    """P7 R3: one free metadata call at the area's centre. None when Google answers (OK / ZERO_RESULTS / NOT_FOUND), so an
+    empty search really means no imagery; otherwise the plain reason it could not be checked."""
+    import requests
+    c = poly.representative_point()
+    try:
+        r = requests.get(SV_META_URL, params={"location": f"{c.y:.6f},{c.x:.6f}", "radius": 50, "source": "outdoor", "key": key},
+                         timeout=10)
+        st = (r.json() or {}).get("status")
+    except Exception:                                             # noqa: BLE001 - network, proxy, bad JSON
+        st = None
+    if st in ("OK", "ZERO_RESULTS", "NOT_FOUND"):
+        return None
+    return "Google Street View could not be reached, so the cost can't be estimated right now. You can still start; the cost cap protects you."
+
+
 def plan_street(polygon, way_ids, data_dir, maps_key):
     """run_area stages 1-3 (panoramas, area, plan) for a job polygon, exactly as the worker runs them; no photo bought."""
     from geo_cascadia.area import Area
@@ -156,6 +179,11 @@ def plan_street(polygon, way_ids, data_dir, maps_key):
     t0 = time.monotonic()
     panos, _ = StreetView(cfg.maps_key).discover(poly, cfg.grid_step_m, cfg.search_radius_m)
     if not panos:
+        # the pipeline's search treats a refused or failed look-up like "no imagery" (D40): only say "no Street View" when
+        # Google itself answers so; otherwise fail (not cached), so a network blip never sticks as a 0-photo estimate
+        why = street_view_unreachable(poly, cfg.maps_key)
+        if why:
+            raise StreetViewUnreachable(why)
         return {"panoramas": 0, "plan": [], "buildings": [], "note": "Google has no outdoor Street View on this street"}
     t1 = time.monotonic()
     area = Area(poly, f"{cfg.data_dir}/overpass_cache", cfg.ray_max_range_m)
@@ -201,8 +229,9 @@ def start(polygon, way_ids, *, data_dir, maps_key, model_card, cap_usd, lines=No
             except (OSError, ValueError):
                 pass
         if not maps_key:
-            _JOBS[k] = {"status": "failed", "error": "No Google server key on the backend (GOOGLE_PLACES_SERVER_KEY), so the "
-                        "camera plan can't be made here.", "t0": time.monotonic()}
+            # shown on the Analyse sheet (plain words, D48); the owner's fix: GOOGLE_PLACES_SERVER_KEY in backend/.env
+            _JOBS[k] = {"status": "failed", "error": "The app's server has no Google key, so the cost can't be estimated here. "
+                        "You can still start; the cost cap protects you.", "t0": time.monotonic()}
             return status(k)
         _JOBS[k] = {"status": "running", "t0": time.monotonic(), "data_dir": data_dir, "model_card": model_card, "cap_usd": cap_usd}
 
@@ -219,7 +248,9 @@ def start(polygon, way_ids, *, data_dir, maps_key, model_card, cap_usd, lines=No
                 _JOBS[k].update(status="done", plan=keep)
         except Exception as e:                                    # noqa: BLE001 - shown to the person, never a 500
             msg = str(e)
-            if "Overpass" in msg:
+            if isinstance(e, StreetViewUnreachable):
+                pass
+            elif "Overpass" in msg:
                 msg = "OpenStreetMap is slow or busy, so the camera plan could not be made. Try again in a minute."
             with _LOCK:
                 _JOBS[k].update(status="failed", error=msg[:300])

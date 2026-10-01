@@ -23,3 +23,17 @@ Daylight. Each line: what to do → what you should see. Round 3 appends below.
 15. **Street-name picker.** Hood → Street names → pick another name for a street → map, findings table and charts use it after reload; pick the default again → back. Offline mode → button reads "Offline — read only".
 16. **Sign rule on Trust.** Trust → Which building a sign belongs to → rule, Google check (14 closer / 6 further), the AI check box labelled "AI visual check (Claude Code), not a human check".
 17. **Human spot-check.** Open the spot-check → step through 20 signs; mark each; the tally updates and survives a reload (this browser only); compare with the hidden AI verdicts.
+
+## Round 3
+18. **Tour, first visit.** A fresh browser profile (or delete `gc.tourSeen` in DevTools → Application → Local storage) → the tour opens by itself after the opening flight; reload → it does not open again; **Tour (?)** at the bottom of the rail starts it.
+19. **Tour by keyboard only.** Enter / → step, ← goes back, Esc closes from any step (on Review and in Analyse too: Esc closes only the tour). Focus is on Next at each step. Repeat in Daylight.
+20. **Tour on the projector.** Step through at the demo resolution: the card never covers what its step talks about (Analyse: card top-right, sheet at the bottom).
+21. **Tunnel on 127.0.0.1.** `cloudflared tunnel --url http://127.0.0.1:8000` → open `<tunnel URL>/health` in a browser → JSON, not 502; the worker cell connects.
+22. **Worker upload retry (re-paste the worker cell first).** During a real job, turn Wi-Fi off just before "uploading N result files…" and on again after ~20 s → the cell prints "upload failed …; retrying in 5 s (try 1 of 5)…", then "✓ … done"; the area appears.
+23. **Warm cache on the demo laptop.** The day before: `tools\warm_osm_cache.py` ends with "Everything cached", and `--check` says "all answered from the cache". On the day, click each demo street in Analyse → the street and its estimate appear within about a second.
+24. **No map key.** Blank `GOOGLE_MAPS_BROWSER_KEY` in `backend/.env`, restart the API → "The map can't be shown" with four working links; Review shows "Street View photos need the Google Maps browser key". Restore the key.
+25. **API restart mid-demo.** Stop the API while the app is open, click Jobs → orange banner "The API isn't answering…"; start the API, click Review → the banner goes.
+26. **Hood cost caption.** Under the Hood → Ward 29 → Time and cost: "about $9.94 … (1,420 photos)" and "Photo cost is at Google's list price — Google's free monthly allowance may cover it."
+27. **Trust.** Detector: the sign-box sentence (6 of 20, AI check). Gate 1: no pooled "all buildings" row in the two map-referenced tables, and the note says why; "73%" nowhere.
+28. **Daylight buttons.** Hover the orange solid buttons (Next, Finish, Approve) in Daylight → the text stays readable.
+29. **Colab cells.** Paste the exact S0, S1a, S1ba and S1bb cell text into `worker/colab_setup_cells.md` (the "PASTE CELL HERE" blocks).

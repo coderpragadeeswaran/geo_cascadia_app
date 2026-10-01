@@ -52,7 +52,8 @@ export function DrivePanel() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
   if (q.isError) return (
-    <div className="p-5"><p className="t-body">No camera stops are recorded on this street, so it can’t be driven.</p>
+    <div className="p-5"><p className="t-body">{(q.error as { status?: number } | null)?.status === 404
+      ? 'No camera stops are recorded on this street, so it can’t be driven.' : 'Couldn’t load the drive: the API didn’t answer. Close it and try again.'}</p>
       <button className="btn btn-line mt-3" onClick={() => setDrive(null)}>Back</button></div>
   )
   if (!drive || !data || !branch || !stop) return <p className="t-small ink3 p-5">Loading the drive…</p>

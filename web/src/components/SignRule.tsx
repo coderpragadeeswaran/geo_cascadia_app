@@ -28,8 +28,22 @@ const STORE = 'signSpotcheck.v1'
 
 const readHuman = (): Record<number, Verdict> => { try { return JSON.parse(localStorage.getItem(STORE) ?? '{}') } catch { return {} } }
 
+const useSignLinks = () => useQuery({ queryKey: ['trust-sign-links'], queryFn: () => api<SignLinks>('/trust/sign-links'), staleTime: 60_000 })
+
+/** P7 R3 (A4): what the sign spot-check found about the detector's sign boxes themselves (no retraining; said as found) */
+export function SignBoxNote() {
+  const { data } = useSignLinks()
+  const ai = data?.ai_check, n = data?.spotcheck?.samples.length
+  if (!ai || !n) return null
+  return (
+    <p className="t-small ink2 mt-3 max-w-[760px]">
+      <b>Sign boxes are not always shop signs.</b> In a {n}-photo check, {ai.not_shop_signs} of the {n} boxes counted as signs weren’t shop signs (billboards, a gate, a house number, a STOP sign, a pole poster). {ai.who}; the detector was not retrained. <button className="link" onClick={() => document.getElementById('signs')?.scrollIntoView({ block: 'start' })}>See the check</button>
+    </p>
+  )
+}
+
 export function SignRule() {
-  const { data, isPending, isError } = useQuery({ queryKey: ['trust-sign-links'], queryFn: () => api<SignLinks>('/trust/sign-links'), staleTime: 60_000 })
+  const { data, isPending, isError } = useSignLinks()
   const [open, setOpen] = useState(false)
   if (isPending) return <div className="h-24 animate-pulse rounded-[var(--ns-r-control)] bg-line" />
   if (isError || !data?.model_card) return <p className="t-small ink2">The sign-linking check is not in the model card.</p>

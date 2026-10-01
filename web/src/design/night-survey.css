@@ -40,7 +40,7 @@
 .ns .btn-sodium { color: var(--ns-sodium); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ns-sodium) 55%, transparent); }
 .ns .btn-sodium:hover { background: var(--ns-sodium-soft); color: var(--ns-sodium); }
 .ns .btn-solid { background: var(--ns-sodium); color: var(--ns-bg0); }
-.ns .btn-solid:hover { background: var(--ns-sodium-glow); color: var(--ns-bg0); }
+.ns .btn-solid:hover { background: color-mix(in srgb, var(--ns-sodium) 86%, var(--ns-ink)); color: var(--ns-bg0); }   /* P7 R3: the glow hover was 2.4:1 in Daylight */
 .ns .btn-line { box-shadow: inset 0 0 0 1px var(--ns-line-strong); }
 .ns .btn[aria-pressed="true"]:not(.btn-solid) { color: var(--ns-sodium); background: var(--ns-sodium-soft); }
 .ns .btn:disabled { opacity: 0.4; cursor: default; pointer-events: none; }

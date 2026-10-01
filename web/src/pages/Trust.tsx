@@ -9,7 +9,7 @@
  *    limits and how questions are answered. Anchors: #/trust/<id> (results, use, floors, names, streetlights, detector,
  *    positions, gate1, matching, cost, rejected, consistency, gap-checks, limits, questions). */
 import { ArrowRight, CircleCheck, CircleX, Minus } from 'lucide-react'
-import { SignRule } from '@/components/SignRule'
+import { SignBoxNote, SignRule } from '@/components/SignRule'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useConsistency, useRegisterTests, useTrust, type ConsistencyRow, type Experiment, type RegisterTests, type TrustCard, type TrustNum } from '@/api/p5'
 import { useAreas, useModelCard } from '@/api/queries'
@@ -180,6 +180,7 @@ export default function Trust() {
                 {(m.detector.benchmark as Any[]).filter((b) => b.downstream).map((b) => <p key={b.model} className="t-small ink2">Why {b.model} was not adopted: {b.downstream}.</p>)}
               </div>
             </div>
+            <SignBoxNote />
             <p className="t-small ink3 mt-3">{trust.data.confusion_note}</p>
           </Sec>
 
@@ -434,14 +435,16 @@ function rowInfo(k: string) {
   return { label, map, circular: /^wall_centre/.test(k), pooled: /^all buildings/.test(k) }
 }
 const statRows = (o: Any) => Object.entries(o ?? {}).filter(([, v]) => v && typeof v === 'object' && typeof (v as Any).n === 'number' && (v as Any).n > 0) as [string, Any][]
-function MethodTable({ data, slugs, nm, target, front }: { data: Any; slugs: string[]; nm: (s: string) => string; target: number; front?: boolean }) {
+/** noPooled (P7 R3): leave out the pooled "all buildings" row where the reference is the map itself: it mixes in points that
+ *  score 0 m by construction (front-wall centre; wall hit vs the wall line), so it flatters the result (D27, D33). */
+function MethodTable({ data, slugs, nm, target, front, noPooled }: { data: Any; slugs: string[]; nm: (s: string) => string; target: number; front?: boolean; noPooled?: boolean }) {
   return (
     <table className="w-full"><tbody>
       <Tr head cells={['area · method', 'n', 'median', 'p90', `≤ ${target} m`]} />
       {slugs.flatMap((s) => {
         const a = data?.[s] ?? {}
         const head = a.status ? [<tr key={s + 's'} className="rule-b"><td colSpan={5} className="t-small ink3 py-1.5">{nm(s)} · {a.status}</td></tr>] : []
-        return [...head, ...statRows(a).filter(([k]) => k !== 'pin_vs_osm_wall').map(([k, x]) => {
+        return [...head, ...statRows(a).filter(([k]) => k !== 'pin_vs_osm_wall' && !(noPooled && rowInfo(k).pooled)).map(([k, x]) => {
           const r = rowInfo(k)
           return <Tr key={s + k} cells={[<span key="l" className="t-small">{nm(s)} · {r.label}{r.map && <> <Badge>uses the map</Badge></>}
             {front && r.circular && <span className="ink3"> — this is the reference point itself (0 m by construction)</span>}
@@ -507,12 +510,13 @@ function Gate1({ g, names }: { g: Any; names: Record<string, string> }) {
       {front && <>
         <h3 className="t-micro mt-6 mb-1">vs the centre of the OSM front wall (the organiser’s reference)</h3>
         <p className="t-small ink2 mb-1">Distance from each predicted point to the midpoint of the building’s road-facing wall on OpenStreetMap. Methods marked “uses the map” take their point from the footprint itself; the front-wall-centre method is that point, so it scores 0 m by construction and is not evidence of accuracy. The camera-derived row is the fair measure.</p>
-        <MethodTable data={front} slugs={slugs} nm={nm} target={g.target_m} front />
+        <MethodTable data={front} slugs={slugs} nm={nm} target={g.target_m} front noPooled />
+        <p className="t-small ink3 mt-1">No pooled “all buildings” figure is shown: it would count the front-wall-centre points, which score 0 m by construction.</p>
       </>}
 
       <h3 className="t-micro mt-6 mb-1">vs the OSM wall line (distance to the road-facing wall anywhere along it)</h3>
       <p className="t-small ink2 mb-1">The pass rate rose mainly because implausible points (&gt;10 m from the wall) were rejected, and the check and the score use the same wall, so this is a comparison, not accuracy.</p>
-      <MethodTable data={wall} slugs={slugs} nm={nm} target={g.target_m} />
+      <MethodTable data={wall} slugs={slugs} nm={nm} target={g.target_m} noPooled />
 
       <h3 className="t-micro mt-6 mb-1">vs Google pin (Places, sign name within 50 m)</h3>
       <p className="t-small ink3 mb-1">Computed before the front-wall-centre change and not re-run (it needs new Google look-ups); the middle-of-the-outline rows there refer to the old fallback.</p>

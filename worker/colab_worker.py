@@ -792,14 +792,49 @@ def run_job(api, job, base_cfg, run_area, state):
     names = sorted(glob.glob(os.path.join(out, "*.json"))) + glob.glob(os.path.join(out, "export.geojson"))
     names = [p for p in names if os.path.getsize(p) <= 40 * 1024 * 1024]
     print(f"  uploading {len(names)} result files…")
-    files = [("files", (os.path.basename(p), open(p, "rb"), "application/json")) for p in names]
-    try:
-        api.call_or_ask("/worker/result", files=files, data={"job": job["id"], "worker_id": state["id"]})
-    finally:
-        for _, (_, fh, _) in files:
-            fh.close()
+    upload_result(api, job["id"], state["id"], names)
     forget(job, out)
     print(f"✓ {name}: done — it appears in the app's area list.")
+
+
+UPLOAD_RETRY_S = (5, 15, 30, 60, 120)    # P7 R3: a failed result upload (network blip, tunnel hiccup) is sent again
+
+
+def upload_result(api, job_id, worker_id, names):
+    """POST /worker/result with retries and backoff. The files are opened again for every try (a failed try has already
+    read them, and a retry would send them empty). If an earlier try reached the backend but its answer was lost, the
+    backend answers 409 "job is done": the result is already delivered. After the last retry, ask for a new tunnel URL
+    (Enter = keep retrying), as the other calls do. The run's files stay on disk/Drive until the upload succeeds."""
+    tries, sent = 0, False                       # sent: an earlier try may have reached the backend
+    while True:
+        files = [("files", (os.path.basename(p), open(p, "rb"), "application/json")) for p in names]
+        try:
+            return api.call("/worker/result", files=files, data={"job": job_id, "worker_id": worker_id})
+        except SystemExit:
+            raise
+        except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as e:
+            resp = getattr(e, "response", None)
+            code = getattr(resp, "status_code", None)
+            if code == 409 and sent and "job is done" in (resp.text or ""):
+                print("  the backend already has this result (an earlier try got through)")
+                return None
+            if code and code < 500 and code != 404:          # 404: an old tunnel URL, as in call_or_ask
+                raise
+            sent = True
+            if tries < len(UPLOAD_RETRY_S):
+                w = UPLOAD_RETRY_S[tries]
+                tries += 1
+                why = f"HTTP {code}" if code else type(e).__name__
+                print(f"  upload failed ({why}); retrying in {w} s (try {tries} of {len(UPLOAD_RETRY_S)})…")
+                time.sleep(w)
+                continue
+            new = ask("The backend is not responding. Paste the new tunnel URL (Enter = keep retrying): ")
+            if new:
+                api.url = new.rstrip("/")
+            tries = 0
+        finally:
+            for _, (_, fh, _) in files:
+                fh.close()
 
 
 def prune_drive(api):

@@ -13,12 +13,14 @@
 
 ### 10.1 The shell
 - **The map is home.** One Google map stays mounted under every page (D3). Explore, Analyse and "Drive the street" are **modes** of the map. Review, Under the Hood, Trust and Jobs are drawn over it.
-- **Left rail (64 px):** Explore · Review (with a badge = items waiting in this area) · Under the hood · Trust · Jobs · Night/Daylight.
+- **Left rail (64 px):** Explore · Review (with a badge = items waiting in this area) · Under the hood · Trust · Jobs · **Tour (?)** · Night/Daylight.
+- **Guided tour (P7.5):** seven plain steps on the real data (the key numbers → a building's evidence → Review → Analyse a street → Jobs → Trust, Gate 1 "Not verified" → done). It opens by itself once on the first visit; Esc closes it; ← → step. It works with no worker and says so.
+- **When something is missing (P7 R3):** with no Google browser key the app opens without the map ("The map can't be shown") and Review, Under the Hood, Trust and Jobs still work; if the API stops answering, a banner says so and what is on screen stays.
 - **Top bar:**
   - area switcher (originals first, a "new" tag on live streets);
   - the **ask bar**;
   - Ctrl+K command palette: Places search to jump anywhere ("powered by Google"), questions, pages;
-  - the **worker indicator**: "Worker · GPU/CPU" with the current stage, or "No worker";
+  - the **analysis indicator**: "Analysis on" with the current stage, or "Analysis off" (D48 plain words);
   - the offline badge.
 - **Map controls:**
   - band pills City / Area / Street / Object (fly to that zoom);
@@ -412,7 +414,7 @@ Sections (sticky navigation), every number quoted from the model card with where
 | Google business name | Places, looked up live | GOOGLE | — |
 | "How do we know?" route + accuracy line | route from the record; accuracy from the model card | MODEL (route) / measured numbers | — |
 | Hood / Trust numbers | computed from records and the runs' saved results; the model card | OUR CODE / measured | — |
-| Job estimate | length × Ward 29 rates | OUR RULES (about 2× too low) | real planner estimate ([§18](05_EXPLAIN_AND_DEFEND.md#18-still-to-do-p7)) |
+| Job estimate | the real camera plan (pipeline stages 1–3, no photo bought) × measured rates | OUR RULES (photos a few % high; time high on a large area) | [§13.3](04_BACKEND_DB_WORKER.md#133-how-the-estimate-is-made-p72-p7-r2) |
 | Hood photo cost for Ward 29 ($8.08) | planned photos × $0.007 | OUR CODE (misses 266 building crops) | use the real full-run count, 1,420 ([§18](05_EXPLAIN_AND_DEFEND.md#18-still-to-do-p7)) |
 
 ### 9.8 Traced examples (real IDs)

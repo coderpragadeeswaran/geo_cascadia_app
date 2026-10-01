@@ -305,7 +305,7 @@ def test_plan_estimate_needs_the_server_key(offline):
     """P7.2: the estimate is the real camera plan; without a Google server key it says so (never a length formula)"""
     lat, lon = _sathy_click()
     r = offline.post("/jobs/plan-estimate", json={"lat": lat, "lon": lon})
-    assert r.status_code == 200 and r.json()["status"] == "failed" and "server key" in r.json()["error"]
+    assert r.status_code == 200 and r.json()["status"] == "failed" and "no Google key" in r.json()["error"]
     assert offline.get(f"/jobs/plan-estimate/{r.json()['key']}").json()["status"] == "failed"
     assert offline.post("/jobs/estimate", json={"length_m": 1000}).status_code in (404, 405)
 
