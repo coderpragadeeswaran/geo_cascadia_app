@@ -147,7 +147,7 @@ def build(run_dir):
         f"{sg['crops']} sign crops: {sum(v for k, v in sg['tiers'].items() if 'OCR' in k)} read locally, "
         f"{sum(v for k, v in sg['tiers'].items() if 'VLM' in k)} escalated; {sg['buildings_named']} buildings named, "
         f"{sg['google_confirmed']} confirmed by Google.",
-        f"{R['unmapped_businesses']['kept']} businesses found on unmapped frontage (approximate points).",
+        f"{R['unmapped_businesses']['kept']} businesses found with no analysed building (signs on frontage with no analysed building outline).",
         f"{R['review']['items']} items sent to human review."]
     return R
 

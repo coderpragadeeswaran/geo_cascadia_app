@@ -51,8 +51,8 @@ export function areaSentences(r: Records, k: Kpis, gaps: GapProps[]): Sentence[]
   }
   if (k.unmapped_businesses) {
     out.push({ key: 'unmapped', tone: 'unmapped', action: { kpi: 'unmapped_businesses' },
-      text: `${plural(k.unmapped_businesses, 'business', 'businesses')} ${k.unmapped_businesses === 1 ? 'has' : 'have'} no building on the map`,
-      sub: 'shop signs read on frontage with no building outline' })
+      text: `${plural(k.unmapped_businesses, 'business', 'businesses')} ${k.unmapped_businesses === 1 ? 'has' : 'have'} no analysed building`,
+      sub: 'shop signs on no building outline, or on a building outside the analysed ones' })
   }
   if (k.use_not_classified) {
     out.push({ key: 'unknown', tone: 'unknown', action: { kpi: 'use_not_classified' },
@@ -111,7 +111,7 @@ export function kpiSentence(key: string, k: Kpis): string {
     case 'sign_text_unverified': return `${plural(n, 'sign')} to double-check`
     case 'low_confidence_observations': return `${plural(n, 'item')} sent to a person to check`
     case 'waiting_for_review': return `${plural(n, 'item')} waiting for a person to check`
-    case 'unmapped_businesses': return `${plural(n, 'business', 'businesses')} with no building on the map`
+    case 'unmapped_businesses': return `${plural(n, 'business', 'businesses')} with no analysed building`
     case 'streets_covered': return `${plural(n, 'street')} analysed`
     default: return ''
   }

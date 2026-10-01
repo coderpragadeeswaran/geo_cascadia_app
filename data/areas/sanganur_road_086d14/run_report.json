@@ -1,5 +1,5 @@
 {
- "run_dir": "sanganur_road_086d14.upload-182721",
+ "run_dir": "sanganur_road_086d14",
  "area": "Sanganur Road",
  "generated": "2026-09-27T19:12:54.291275+00:00",
  "pipeline": {
@@ -106,10 +106,10 @@
   },
   "use_values": {
    "other": 3,
-   "commercial": 36,
+   "commercial": 34,
    "institutional": 1,
    "residential": 5,
-   "not observed": 7
+   "not observed": 9
   },
   "floors_status": {
    "measured": 35,
@@ -137,17 +137,17 @@
    "advertisement": 10,
    "notice": 4
   },
-  "buildings_named": 45,
+  "buildings_named": 43,
   "name_route": {
-   "tier2_ocr": 24,
-   "tier3_vlm+ocr_gate": 21
+   "tier2_ocr": 26,
+   "tier3_vlm+ocr_gate": 17
   },
   "name_quality": {
-   "fragment": 10,
-   "good": 31,
-   "tamil_unverified": 4
+   "good": 28,
+   "fragment": 12,
+   "tamil_unverified": 3
   },
-  "google_confirmed": 10
+  "google_confirmed": 8
  },
  "unmapped_businesses": {
   "sign_candidates_checked_by_vlm": 0,
@@ -157,35 +157,46 @@
  },
  "matching": {
   "match_status": {
-   "matched": 38,
-   "discrepancy": 13,
-   "no_record": 1
+   "matched": 45,
+   "no_record": 2,
+   "discrepancy": 5
   },
   "discrepancy_types": {
-   "use_change": 4,
-   "extra_floor": 5,
-   "area_understated": 2,
+   "missing_record": 2,
    "location_shift": 2,
-   "missing_record": 1
+   "area_understated": 1,
+   "use_change": 2
   },
   "planted_error_scores": {
+   "missing_record": {
+    "planted": 2,
+    "caught": 2,
+    "missed": 0,
+    "false_alarms": 0
+   },
    "location_shift": {
     "planted": 2,
-    "tp": 2,
-    "fp": 0,
-    "fn": 0
+    "caught": 2,
+    "missed": 0,
+    "false_alarms": 0
    },
    "area_understated": {
-    "planted": 2,
-    "tp": 2,
-    "fp": 0,
-    "fn": 0
-   },
-   "missing_record": {
     "planted": 1,
-    "tp": 1,
-    "fp": 0,
-    "fn": 0
+    "caught": 1,
+    "missed": 0,
+    "false_alarms": 0
+   },
+   "use_change": {
+    "planted": 2,
+    "caught": 2,
+    "missed": 0,
+    "false_alarms": 0
+   },
+   "extra_floor": {
+    "planted": 0,
+    "caught": 0,
+    "missed": 0,
+    "false_alarms": 0
    }
   },
   "asset_register_scores": {
@@ -205,22 +216,22 @@
     "fp": 0
    }
   },
-  "register_note": "SYNTHETIC property + asset registers with planted errors (no open municipal data)"
+  "register_note": "SYNTHETIC property register copying the observations + planted mistakes (D42); matched by location (D43); SYNTHETIC asset register"
  },
  "review": {
-  "items": 32,
+  "items": 26,
   "by_priority": {
-   "1": 1,
-   "2": 9,
-   "4": 2,
-   "5": 4,
+   "1": 2,
+   "2": 2,
+   "4": 4,
+   "5": 2,
    "6": 16
   },
   "by_reason": {
-   "high-severity discrepancy": 1,
+   "high-severity discrepancy": 2,
+   "building seen from one view only": 4,
+   "attribute discrepancy \u2014 verify on imagery": 2,
    "floor count low confidence (roofline not visible)": 4,
-   "attribute discrepancy \u2014 verify on imagery": 9,
-   "building seen from one view only": 7,
    "single-detection asset": 16
   }
  },
@@ -251,8 +262,8 @@
   "The detector drew 886 boxes; 748 were usable for positioning.",
   "Located 33 poles/streetlights; 2 triangulated from 2+ cameras, 31 approximate (single camera).",
   "52 buildings registered; 42 had a usable view for use/floors, 0 had no building box at all.",
-  "410 sign crops: 169 read locally, 48 escalated; 45 buildings named, 10 confirmed by Google.",
-  "0 businesses found on unmapped frontage (approximate points).",
-  "32 items sent to human review."
+  "410 sign crops: 169 read locally, 48 escalated; 43 buildings named, 8 confirmed by Google.",
+  "0 businesses found with no analysed building (signs on frontage with no analysed building outline).",
+  "26 items sent to human review."
  ]
 }

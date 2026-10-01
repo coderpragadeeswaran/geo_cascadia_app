@@ -153,26 +153,7 @@
    "matched": 1
   },
   "discrepancy_types": {},
-  "planted_error_scores": {
-   "location_shift": {
-    "planted": 0,
-    "tp": 0,
-    "fp": 0,
-    "fn": 0
-   },
-   "area_understated": {
-    "planted": 0,
-    "tp": 0,
-    "fp": 0,
-    "fn": 0
-   },
-   "missing_record": {
-    "planted": 0,
-    "tp": 0,
-    "fp": 0,
-    "fn": 0
-   }
-  },
+  "planted_error_scores": null,
   "asset_register_scores": {
    "location_shift": {
     "planted": 1,
@@ -190,7 +171,7 @@
     "fp": 0
    }
   },
-  "register_note": "SYNTHETIC property + asset registers with planted errors (no open municipal data)"
+  "register_note": "SYNTHETIC property register copying the observations + planted mistakes (D42); matched by location (D43); SYNTHETIC asset register"
  },
  "review": {
   "items": 13,
@@ -229,7 +210,7 @@
   "Located 20 poles/streetlights; 0 triangulated from 2+ cameras, 20 approximate (single camera).",
   "1 buildings registered; 1 had a usable view for use/floors, 0 had no building box at all.",
   "132 sign crops: 65 read locally, 12 escalated; 1 buildings named, 0 confirmed by Google.",
-  "14 businesses found on unmapped frontage (approximate points).",
+  "14 businesses found with no analysed building (signs on frontage with no analysed building outline).",
   "13 items sent to human review."
  ]
 }

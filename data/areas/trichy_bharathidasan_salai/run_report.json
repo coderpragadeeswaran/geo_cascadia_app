@@ -141,69 +141,80 @@
    "none": 2,
    "notice": 2
   },
-  "buildings_named": 54,
+  "buildings_named": 49,
   "name_route": {
-   "tier2_ocr": 27,
-   "tier3_vlm+ocr_gate": 26,
-   "tier3_vlm_unverified": 1
+   "tier3_vlm+ocr_gate": 22,
+   "tier2_ocr": 27
   },
   "name_quality": {
-   "fragment": 15,
-   "good": 37,
+   "good": 31,
+   "fragment": 16,
    "tamil_unverified": 2
   },
-  "google_confirmed": 13
+  "google_confirmed": 11
  },
  "unmapped_businesses": {
   "sign_candidates_checked_by_vlm": 90,
-  "kept": 36,
+  "kept": 22,
   "vlm_said_not_business": 23,
   "examples": [
    "maa kauvery",
    "maa kauvery",
    "ashley land",
-   "sims",
    "prasar bharati",
    "Indian Oil",
    "M.L AUTOMOBILE",
-   "sri om silks",
-   "kannan",
-   "cycle world",
+   "Mangalam Travel & Tours",
+   "hot chicken",
+   "sudhip annips",
    "bsnl",
-   "sri sri sri"
+   "trichyappallcity corporation",
+   "tyres alignment balancing nitrogen"
   ]
  },
  "matching": {
   "match_status": {
-   "matched": 43,
-   "discrepancy": 21,
-   "no_record": 2
+   "matched": 56,
+   "discrepancy": 9,
+   "no_record": 1
   },
   "discrepancy_types": {
-   "extra_floor": 9,
-   "area_understated": 2,
-   "use_change": 12,
-   "location_shift": 4,
-   "missing_record": 2
+   "area_understated": 3,
+   "use_change": 2,
+   "location_shift": 3,
+   "missing_record": 1,
+   "extra_floor": 1
   },
   "planted_error_scores": {
+   "missing_record": {
+    "planted": 0,
+    "caught": 0,
+    "missed": 0,
+    "false_alarms": 1
+   },
    "location_shift": {
-    "planted": 4,
-    "tp": 4,
-    "fp": 0,
-    "fn": 0
+    "planted": 5,
+    "caught": 3,
+    "missed": 2,
+    "false_alarms": 0
    },
    "area_understated": {
-    "planted": 2,
-    "tp": 2,
-    "fp": 0,
-    "fn": 0
+    "planted": 3,
+    "caught": 3,
+    "missed": 0,
+    "false_alarms": 0
    },
-   "missing_record": {
+   "use_change": {
     "planted": 2,
-    "tp": 2,
-    "fp": 0,
-    "fn": 0
+    "caught": 2,
+    "missed": 0,
+    "false_alarms": 0
+   },
+   "extra_floor": {
+    "planted": 0,
+    "caught": 0,
+    "missed": 0,
+    "false_alarms": 1
    }
   },
   "asset_register_scores": {
@@ -223,24 +234,22 @@
     "fp": 1
    }
   },
-  "register_note": "SYNTHETIC property + asset registers with planted errors (no open municipal data)"
+  "register_note": "SYNTHETIC property register copying the observations + planted mistakes (D42); matched by location (D43); SYNTHETIC asset register"
  },
  "review": {
-  "items": 79,
+  "items": 64,
   "by_priority": {
-   "1": 6,
-   "2": 15,
-   "3": 1,
-   "4": 8,
+   "1": 1,
+   "2": 3,
+   "4": 11,
    "5": 1,
    "6": 48
   },
   "by_reason": {
-   "high-severity discrepancy": 6,
-   "attribute discrepancy \u2014 verify on imagery": 19,
-   "building seen from one view only": 7,
+   "high-severity discrepancy": 1,
    "floor count low confidence (roofline not visible)": 13,
-   "name read by VLM only (not supported by OCR)": 1,
+   "attribute discrepancy \u2014 verify on imagery": 3,
+   "building seen from one view only": 1,
    "single-detection asset": 48
   }
  },
@@ -271,8 +280,8 @@
   "The detector drew 2403 boxes; 2226 were usable for positioning.",
   "Located 87 poles/streetlights; 2 triangulated from 2+ cameras, 85 approximate (single camera).",
   "66 buildings registered; 44 had a usable view for use/floors, 7 had no building box at all.",
-  "1267 sign crops: 537 read locally, 95 escalated; 54 buildings named, 13 confirmed by Google.",
-  "36 businesses found on unmapped frontage (approximate points).",
-  "79 items sent to human review."
+  "1267 sign crops: 537 read locally, 95 escalated; 49 buildings named, 11 confirmed by Google.",
+  "22 businesses found with no analysed building (signs on frontage with no analysed building outline).",
+  "64 items sent to human review."
  ]
 }

@@ -102,7 +102,7 @@ def test_question_answered_on_selected_street(offline, ward29):
     # a question that names its own street keeps it; a by-street chart covers every street
     assert q(offline, "buildings not in the register on Korathottam Road", scope_street=st)["parsed_filters"]["street"] == "Korathottam Road"
     chart = q(offline, "chart of unmatched buildings by street", scope_street=st)
-    assert "street" not in chart["parsed_filters"] and chart["total"] == 19
+    assert "street" not in chart["parsed_filters"] and chart["total"] == sum(b["match_status"] == "no_record" for b in ward29["buildings"]) == 27
 
 
 # ------------------------------------------------------------------ 4. a stale pooled connection is retried, the reason logged

@@ -52,7 +52,7 @@ export function Key() {
                   {near && !flat && <li className="t-small ink3 py-[3px] pl-[30px]">Height = floors × {FLOOR_HEIGHT_M} m (display only); faded = floor estimate</li>}
                 </>
               )}
-              {layers.unmapped && near && <Item sw={<span className="size-2.5 rounded-full" style={{ boxShadow: `inset 0 0 0 1.5px ${c.ink2}` }} />}>Business with no building on the map</Item>}
+              {layers.unmapped && near && <Item sw={<span className="size-2.5 rounded-full" style={{ boxShadow: `inset 0 0 0 1.5px ${c.ink2}` }} />}>Business with no analysed building</Item>}
               {layers.assets && near && layers.uncertainty && <Item sw={<span className="size-3 rounded-full" style={{ border: `1px dashed ${c.ink2}` }} />}>Approximate position</Item>}
               {layers.missing && near && <Item sw={<span className="size-3 rounded-[3px]" style={{ border: `1.5px dashed ${c.noRecord}` }} />}>In the register, not seen</Item>}
               {layers.review && near && <Item sw={<span className="h-2.5 w-4 rounded-[2px]" style={{ border: `1.5px dashed ${c.review}` }} />}>Waiting for review</Item>}

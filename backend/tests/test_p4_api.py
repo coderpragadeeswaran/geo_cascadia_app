@@ -21,9 +21,9 @@ def test_chips_round_trip_through_queryengine(client):
     t = q(client, text=Q1).json()
     f = q(client, filters=t["parsed_filters"]).json()
     assert f["parsed_filters"] == t["parsed_filters"] and f["total"] == t["total"] == 0
-    assert [s["count"] for s in f["why_empty"]] == [381, 19, 1, 1, 0]
+    assert [s["count"] for s in f["why_empty"]] == [381, 27, 5, 2, 0]      # after D42-D44 + the safer sign rule (was 381, 19, 1, 1, 0)
     relaxed = q(client, filters={**t["parsed_filters"], "floors_op": ">=", "floors_n": 1}).json()   # edit a chip
-    assert relaxed["parsed_filters"]["floors_op"] == ">=" and relaxed["total"] == 1
+    assert relaxed["parsed_filters"]["floors_op"] == ">=" and relaxed["total"] == 2          # 1 before D42-D44
     for slug in AREAS:
         streets = {b["street"] for b in raw_export(slug)["buildings"]} | {g["street"] for g in raw_export(slug)["streetlight_gaps"]}
         for st in streets:

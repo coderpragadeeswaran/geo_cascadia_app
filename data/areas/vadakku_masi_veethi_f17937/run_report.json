@@ -1,0 +1,276 @@
+{
+ "run_dir": "vadakku_masi_veethi_f17937",
+ "area": "Vadakku Masi Veethi",
+ "generated": "2026-09-30T06:10:00.416571+00:00",
+ "pipeline": {
+  "detector": "YOLOv8s v8s_640_s2",
+  "ocr": "PaddleOCR en+ta (full)",
+  "vlm": "apac.amazon.nova-lite-v1:0",
+  "name_gate": 0.7,
+  "footprints": "OSM",
+  "reference": "Google Places (New)"
+ },
+ "imagery": {
+  "panoramas_found": 51,
+  "google_car": 36,
+  "user_photospheres": 15,
+  "cameras_planned": 19,
+  "cameras_dropped": {},
+  "views_planned": 118,
+  "views_by_type": {
+   "perpendicular": 31,
+   "oblique": 58,
+   "unmapped": 7,
+   "tilt": 22
+  },
+  "views_facing_mapped_building": 111,
+  "views_facing_no_mapped_building": 7,
+  "views_fetched_ok": 118,
+  "street_view_requests": 162,
+  "street_view_cost_usd_notional": 1.13,
+  "by_street": {
+   "Vadakku Masi Veethi": {
+    "cameras": 19,
+    "views": 118
+   }
+  }
+ },
+ "maps": {
+  "footprints": {
+   "osm": 1,
+   "microsoft": 105
+  },
+  "osm_built_fraction": 0.003,
+  "buildings_registered": 49,
+  "buildings_by_source": {
+   "microsoft": 48,
+   "osm": 1
+  },
+  "verdict": "full: footprints on most frontages"
+ },
+ "detection": {
+  "boxes_total": 1254,
+  "by_class": {
+   "signboard": 654,
+   "building": 468,
+   "pole": 125,
+   "lamp_head": 7
+  },
+  "used_for_geometry": 1014,
+  "excluded_from_geometry": {
+   "tilted view": 196,
+   "user photosphere": 44
+  },
+  "mean_conf_by_class": {
+   "building": 0.672,
+   "lamp_head": 0.284,
+   "pole": 0.472,
+   "signboard": 0.602
+  }
+ },
+ "assets": {
+  "located": 30,
+  "by_type": {
+   "pole": 29,
+   "streetlight": 1
+  },
+  "by_confidence": {
+   "medium": 14,
+   "low": 14,
+   "high": 2
+  },
+  "triangulated_2plus_cameras": 2,
+  "single_camera_approximate": 28,
+  "register_status": {
+   "discrepancy": 5,
+   "unconfirmed_detection": 14,
+   "matched": 8,
+   "unrecorded_asset": 3
+  },
+  "streetlight_gaps_60m": 2,
+  "missing_asset_records": 0
+ },
+ "buildings": {
+  "registered": 49,
+  "with_a_building_box": 59,
+  "no_building_box_detected": 0,
+  "box_rejected_by_quality_gate": {
+   "implausibly tall box": 2,
+   "thin sliver at image edge": 8,
+   "roof cut off at top": 5
+  },
+  "usable_view": 44,
+  "vlm_said_wrong_target": 0,
+  "use_route": {
+   "tier1_local_clip": 24,
+   "tier3_vlm": 20
+  },
+  "use_values": {
+   "residential": 9,
+   "commercial": 32,
+   "institutional": 1,
+   "not observed": 4,
+   "mixed": 3
+  },
+  "floors_status": {
+   "measured": 37,
+   "not_measured": 9,
+   "low_confidence": 3
+  },
+  "floor_values": {
+   "3": 16,
+   "2": 20,
+   "4": 2,
+   "1": 2
+  }
+ },
+ "signs": {
+  "crops": 654,
+  "tiers": {
+   "read by OCR (Tier 2)": 259,
+   "no readable text": 335,
+   "escalated to VLM (Tier 3)": 60
+  },
+  "ocr_seconds_per_crop": 0.14,
+  "ocr_mode": "full",
+  "vlm_name_calls": 46,
+  "vlm_name_verdicts": {
+   "business": 41,
+   "advertisement": 4,
+   "none": 1
+  },
+  "buildings_named": 42,
+  "name_route": {
+   "tier2_ocr": 22,
+   "tier3_vlm+ocr_gate": 20
+  },
+  "name_quality": {
+   "fragment": 15,
+   "good": 25,
+   "tamil_unverified": 2
+  },
+  "google_confirmed": 13
+ },
+ "unmapped_businesses": {
+  "sign_candidates_checked_by_vlm": 13,
+  "kept": 4,
+  "vlm_said_not_business": 2,
+  "examples": [
+   "havells gallery",
+   "krishnaven associates",
+   "finflex press",
+   "hotel milagu"
+  ]
+ },
+ "matching": {
+  "match_status": {
+   "matched": 41,
+   "no_record": 4,
+   "discrepancy": 4
+  },
+  "discrepancy_types": {
+   "missing_record": 4,
+   "use_change": 3,
+   "location_shift": 1,
+   "area_understated": 1
+  },
+  "planted_error_scores": {
+   "missing_record": {
+    "planted": 4,
+    "caught": 3,
+    "missed": 1,
+    "false_alarms": 1
+   },
+   "location_shift": {
+    "planted": 1,
+    "caught": 0,
+    "missed": 1,
+    "false_alarms": 1
+   },
+   "area_understated": {
+    "planted": 1,
+    "caught": 1,
+    "missed": 0,
+    "false_alarms": 0
+   },
+   "use_change": {
+    "planted": 2,
+    "caught": 2,
+    "missed": 0,
+    "false_alarms": 1
+   },
+   "extra_floor": {
+    "planted": 0,
+    "caught": 0,
+    "missed": 0,
+    "false_alarms": 0
+   }
+  },
+  "asset_register_scores": {
+   "location_shift": {
+    "planted": 2,
+    "tp": 2,
+    "fp": 1
+   },
+   "type_mismatch": {
+    "planted": 2,
+    "tp": 2,
+    "fp": 0
+   },
+   "missing_asset": {
+    "planted": 1,
+    "tp": 0,
+    "fp": 0
+   }
+  },
+  "register_note": "SYNTHETIC property register copying the observations + planted mistakes (D42); matched by location (D43); SYNTHETIC asset register"
+ },
+ "review": {
+  "items": 25,
+  "by_priority": {
+   "1": 5,
+   "2": 2,
+   "4": 3,
+   "5": 1,
+   "6": 14
+  },
+  "by_reason": {
+   "high-severity discrepancy": 5,
+   "attribute discrepancy \u2014 verify on imagery": 3,
+   "building seen from one view only": 4,
+   "floor count low confidence (roofline not visible)": 3,
+   "single-detection asset": 14
+  }
+ },
+ "cost_time": {
+  "stage_seconds": {
+   "panoramas": 0.0,
+   "area": 0.9,
+   "plan": 1.5,
+   "detect": 10.8,
+   "geometry": 8.0,
+   "ocr": 118.1,
+   "vlm": 74.5,
+   "reference": 11.4,
+   "match": 7.2
+  },
+  "total_minutes": 4.0,
+  "vlm_calls": 123,
+  "vlm_cost_usd": 0.0134,
+  "places_calls": 35,
+  "device": "gpu",
+  "buildings_use_local": 24,
+  "buildings_use_vlm": 20
+ },
+ "story": [
+  "Found 51 Street View panoramas (15 user photospheres, excluded from geometry).",
+  "Planned 19 camera stops and 118 views instead of a full 12-heading sweep.",
+  "7 views face frontage with no building outline in OSM \u2014 map coverage verdict: full: footprints on most frontages.",
+  "The detector drew 1254 boxes; 1014 were usable for positioning.",
+  "Located 30 poles/streetlights; 2 triangulated from 2+ cameras, 28 approximate (single camera).",
+  "49 buildings registered; 44 had a usable view for use/floors, 0 had no building box at all.",
+  "654 sign crops: 259 read locally, 60 escalated; 42 buildings named, 13 confirmed by Google.",
+  "4 businesses found with no analysed building (signs on frontage with no analysed building outline).",
+  "25 items sent to human review."
+ ]
+}

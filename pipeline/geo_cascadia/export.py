@@ -3,6 +3,7 @@ Street View evidence, register match and review status. Plus a GeoJSON for the m
 import os, json, datetime
 from collections import defaultdict
 from .geo import bearing_between
+from .poleunc import camera_distance, uncertainty_for
 
 NAME_ROUTE = {"ocr": "tier2_ocr", "vlm_verified_by_ocr": "tier3_vlm+ocr_gate", "vlm_unverified": "tier3_vlm_unverified"}
 
@@ -10,6 +11,17 @@ NAME_ROUTE = {"ocr": "tier2_ocr", "vlm_verified_by_ocr": "tier3_vlm+ocr_gate", "
 def _crop_view(f):
     pano, head, pitch, _ = os.path.basename(f)[:-4].rsplit("_", 3)
     return {"pano_id": pano, "heading": float(head), "pitch": float(pitch), "fov": 90}
+
+
+def single_camera_basis(dist_m, cfg):
+    """D45: plain basis of a single-camera asset's uncertainty (the band of config.single_cam_unc_bands it falls in)"""
+    u = uncertainty_for(dist_m, cfg)
+    where = f"one camera, {dist_m:.0f} m away" if dist_m is not None else "one camera, distance unknown"
+    if dist_m is not None and dist_m <= cfg.single_cam_unc_bands[0][0]:
+        return (f"single-camera estimate ({where}): 8 in 10 single-camera estimates of two-camera poles at this distance "
+                f"were within {u:g} m of the two-camera point (a consistency check, not surveyed truth)")
+    return (f"single-camera estimate ({where}): an earlier surveyed check found a typical (median) error of 4.55 m for "
+            f"poles 8–15 m from the camera, so the circle is ±{u:g} m; about half of such estimates fall inside it")
 
 
 PREDICTED_KEYS = ("lat", "lon", "method", "n_cameras", "uncertainty_m", "reason")
@@ -56,9 +68,11 @@ def build_export(area_name, cfg, buildings, results, views, vlm_bld, ocr_res, as
                          "google_place_id": m.get("google_place_id")},
                 "shop_units": m.get("shop_units"),
                 "condition": {"value": m.get("condition"), "withheld": True, "why": cfg.validation["condition"]}},
-            "register": {"source": "SYNTHETIC", "property_id": m.get("property_id"), "record_use": m.get("record_use"),
-                         "record_floors": m.get("record_floors"), "record_area_m2": m.get("record_area"),
-                         "record_dist_m": m.get("record_dist_m")},
+            "register": {"source": m.get("register_source") or "SYNTHETIC", "property_id": m.get("property_id"),
+                         "record_use": m.get("record_use"), "record_floors": m.get("record_floors"),
+                         "record_area_m2": m.get("record_area"), "record_dist_m": m.get("record_dist_m"),
+                         # D43: paired by location (never by id): how sure the pairing is, and the gap to the next building
+                         "match_confidence": m.get("match_confidence"), "match_margin_m": m.get("match_margin_m")},
             "match_status": m["match_status"], "discrepancies": m["discrepancies"], "reasons": m["reasons"],
             "evidence_basis": m.get("evidence", {}), "severity": m["severity"], "google_flags": m.get("ref_flags", []),
             "review": {"queued": bool(rq), "priority": min((q["priority"] for q in rq), default=None),
@@ -78,12 +92,13 @@ def build_export(area_name, cfg, buildings, results, views, vlm_bld, ocr_res, as
                "pitch": 0, "fov": 60, "source": P[pid].get("source")} for pid in a.get("pano_ids", [])[:4] if pid in P]
         unc = a.get("max_residual_m")
         pos = (round(a["lat"], 7), round(a["lon"], 7))
+        cam_d = camera_distance(a, P)                     # D45: single-camera uncertainty grows with camera distance
         ast.append({"id": f"asset-{i:04d}", "type": a["cls"], "lat": a["lat"], "lon": a["lon"], "street": a.get("street"),
                     "confidence": a.get("confidence"), "n_detections": a.get("n_detections"), "cameras_used": a.get("cameras_used"),
                     "method": a.get("method"),
-                    "uncertainty_m": round(max(unc, 0.5), 2) if unc is not None else cfg.single_cam_uncertainty_m,
-                    "uncertainty_basis": "triangulation residual (2+ cameras)" if unc is not None else
-                                         "single-camera estimate: 86% of monocular distances within 3.5 m (measured)",
+                    "uncertainty_m": round(max(unc, 0.5), 2) if unc is not None else uncertainty_for(cam_d, cfg),
+                    "uncertainty_basis": "triangulation residual (2+ cameras)" if unc is not None else single_camera_basis(cam_d, cfg),
+                    "camera_distance_m": cam_d,
                     "route": "tier1_yolo + geometry", "register": {"source": "SYNTHETIC", **a.get("register", {})},
                     "review": {"queued": pos in qa, "priority": qa[pos]["priority"] if pos in qa else None,
                                "reasons": qa[pos]["reasons"] if pos in qa else [], "status": "pending" if pos in qa else None},

@@ -81,12 +81,12 @@ def test_5_click_building_and_asset_evidence(client, ward29):
 
 
 def test_counts_computed_from_records(client, ward29):
-    """D2/D9: summary counts come from records (20 triangulated; 135 not classified after D32), not story text."""
+    """D2/D9: summary counts come from records (20 triangulated; 139 not classified after D44 with the safer sign rule), not story text."""
     r = client.get("/areas/ward29").json()
     s = r["summary"]
     assert s["assets_triangulated"] == sum(a["method"] == "triangulated" for a in ward29["assets"]) == 20
     unknown = sum(b["attributes"]["use"]["value"] is None for b in ward29["buildings"])
-    assert s["use_not_classified"] == unknown == 135                                   # 160 before D32 (use from sign text)
+    assert s["use_not_classified"] == unknown == 139                                   # 160 before D32, 135 before D44, 142 with the first D44 rule
     assert r["dashboard"]["kpi"]["use_not_classified"] == unknown
     assert r["dashboard"]["charts"]["building_use"]["not classified"] == unknown
     assert any("triangulated" in c["field"] and c["stored"] == 29 and c["computed"] == 20 for c in r["consistency"])

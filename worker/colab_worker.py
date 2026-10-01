@@ -252,9 +252,16 @@ class StreetViewTrace:
 
 
 def check_pipeline(run_area):
-    """This worker needs the P6 version of the package (live progress + cost cap). An older copy on Drive lacks them."""
+    """This worker needs the P7a version of the package (live progress, cost cap, OCR process; D42-D45 register, location
+    matching, sign links, pole uncertainty). An older copy on Drive lacks them."""
     params = inspect.signature(run_area).parameters
-    if not {"plan_check", "on_stage", "ocr_runner"} <= set(params):
+    try:                                   # P7a (D42-D45): the register, location matching, sign links, pole uncertainty
+        import importlib, importlib.util
+        mod = importlib.import_module(run_area.__module__.rsplit(".", 1)[0])
+        p7a = all(importlib.util.find_spec(f"{mod.__name__}.{m}") for m in ("register", "signlink", "poleunc"))
+    except Exception:
+        p7a = False
+    if not {"plan_check", "on_stage", "ocr_runner"} <= set(params) or not p7a:
         raise SystemExit("The pipeline package is older than this worker. Copy pipeline/geo_cascadia from the repo to your "
                          "Drive folder (worker/README.md, 'Shared Drive folder'), re-run the setup cells, then this cell.")
 

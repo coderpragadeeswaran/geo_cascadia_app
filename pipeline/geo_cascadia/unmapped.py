@@ -1,5 +1,9 @@
-"""Businesses on frontages with no building outline: signs become approximate map points.
-Kept only if the VLM says the sign is a BUSINESS and OCR supports the name (same gate as building names)."""
+"""Businesses with no analysed building: signs become map points.
+Kept only if the VLM says the sign is a BUSINESS and OCR supports the name (same gate as building names).
+
+D44: a candidate is a read sign whose OWN line of sight (signlink) hits no outline, or hits an outline that is not one of
+the analysed (registered) buildings. With no outline the point is placed `assumed_dist_m` along the camera ray
+(approximate); on an unanalysed outline it is the ray's hit on that outline (`on_outline` = its id)."""
 import os, json, math
 from concurrent.futures import ThreadPoolExecutor
 from .geo import pixel_to_bearing
@@ -12,16 +16,20 @@ PLACE = {loose(w) for w in ("coimbatore tiruppur tirupur tiruchirappalli trichy 
                              "select welcome open closed sale offer new").split()}
 
 
-def unmapped_businesses(dets, ocr_res, frame, vlm, cfg, out_dir, assumed_dist_m=12.0, merge_m=15.0):
+def unmapped_businesses(dets, ocr_res, frame, vlm, cfg, out_dir, assumed_dist_m=12.0, merge_m=15.0, registered=None):
+    """registered: ids of the analysed buildings (D44). None = the pre-D44 rule (only signs with no outline)."""
     det_by_crop = {d["crop"]: d for d in dets if d.get("crop")}
     pts = []
     for r in ocr_res:
         d = det_by_crop.get(r["file"])
-        if not d or d.get("footprint_faced") is not None or r["tier"] not in (2, 3): continue
-        b = pixel_to_bearing(d["heading"], d["u"], d["W"], d["fov"])
+        fp = r.get("fp")
+        on_other = fp is not None and registered is not None and fp not in registered
+        if not d or (fp is not None and not on_other) or r["tier"] not in (2, 3): continue
+        b = r.get("sign_bearing") or pixel_to_bearing(d["heading"], d["u"], d["W"], d["fov"])
+        dist = r["sign_dist_m"] if on_other and r.get("sign_dist_m") else assumed_dist_m
         cx, cy = frame.xy(d["camera_lat"], d["camera_lon"])
-        pts.append({"r": r, "d": d, "x": cx + assumed_dist_m * math.sin(math.radians(b)),
-                    "y": cy + assumed_dist_m * math.cos(math.radians(b)), "key": loose(r.get("best", ""))})
+        pts.append({"r": r, "d": d, "x": cx + dist * math.sin(math.radians(b)), "on_outline": fp if on_other else None,
+                    "y": cy + dist * math.cos(math.radians(b)), "key": loose(r.get("best", ""))})
     groups = []                                                     # one VLM call per physical sign
     for p in sorted(pts, key=lambda p: -(p["r"].get("h", 0) * p["r"].get("det_conf", 0))):
         for g in groups:
@@ -55,7 +63,10 @@ def unmapped_businesses(dets, ocr_res, frame, vlm, cfg, out_dir, assumed_dist_m=
         la, lo = frame.ll(g["x"], g["y"]); d = g["d"]
         out.append({"_x": g["x"], "_y": g["y"], "id": f"ub-{len(out):04d}", "type": "unmapped_business", "name": nm, "ocr_text": g["r"].get("best"),
                     "lat": round(la, 7), "lon": round(lo, 7), "street": d["street"], "sightings": g["n"],
-                    "position": f"approximate (~{assumed_dist_m:.0f} m along the camera ray; no building outline here)",
+                    "on_outline": g.get("on_outline"),
+                    "position": (f"on an OpenStreetMap outline that is not one of the analysed buildings ({g['on_outline']})"
+                                 if g.get("on_outline") else
+                                 f"approximate (~{assumed_dist_m:.0f} m along the camera ray; no building outline here)"),
                     "evidence": {k: d[k] for k in ("pano_id", "heading", "pitch", "fov", "x1", "y1", "x2", "y2")}})
     weak = [o for o in out if len(o["name"].split()) == 1 and o["sightings"] < 2]   # one word, seen once = too weak
     dropped["single_word_single_sighting"] = len(weak)

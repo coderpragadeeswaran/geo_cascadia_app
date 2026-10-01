@@ -79,7 +79,7 @@ export const KPI_DEFS: KpiDef[] = [
   { key: 'names_confirmed_by_google', label: 'Also on Google Maps', apply: { google: true } },
   { key: 'sign_text_unverified', label: 'Signs to double-check', one: 'Sign to double-check', apply: { nameQ: 'unverified' } },
   { key: 'waiting_for_review', label: 'Waiting for review', tone: 'review', apply: { review: true } },
-  { key: 'unmapped_businesses', label: 'Businesses with no mapped building', one: 'Business with no mapped building', apply: { subject: 'unmapped' } },
+  { key: 'unmapped_businesses', label: 'Businesses with no analysed building', one: 'Business with no analysed building', apply: { subject: 'unmapped' } },
   { key: 'streets_covered', label: 'Streets', one: 'Street', overview: true },
 ]
 /** singular / plural KPI label for a count (walkthrough 2 fix 5) */

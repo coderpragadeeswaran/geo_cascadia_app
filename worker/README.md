@@ -29,9 +29,20 @@ A fresh Google account needs nothing except a link to this folder. Share it as "
                                          the cloud model, which costs more)
 ```
 
-**Important:** copy `pipeline/geo_cascadia` again after this phase. The worker needs the new `run_area` (live progress
-and the cost cap) and `vlm.py` / `export.py` (the floors call's cost is now recorded). With an older copy the worker
+**Important: update the package after every pipeline change (now: P7a, package 0.2.0).** With an older copy the worker
 stops at once and says so.
+
+- **Colab with your setup cells (S0):** S0 takes the newest zip in `/MyDrive/alldataset`, deletes
+  `/MyDrive/alldataset/geo_cascadia_pkg` and extracts the zip there. The zip's entries must be
+  `geo_cascadia_pkg/geo_cascadia/<file>.py`. Build it from the repo root and upload the file to `/MyDrive/alldataset`
+  (S0 picks the newest zip):
+  ```powershell
+  backend\.venv\Scripts\python tools\build_pkg_zip.py     # writes geo_cascadia_pkg_p7a.zip and checks every entry name
+  ```
+  It contains every `.py` file of `pipeline/geo_cascadia` (no `__pycache__`), and the tool fails if any entry is not
+  under `geo_cascadia_pkg/geo_cascadia/`. Then restart the runtime and run S0, S1a and S1b again.
+- **Shared Drive folder (Kaggle, another account):** copy the whole `pipeline/geo_cascadia` folder over the
+  `geo_cascadia/` folder shown above.
 
 PaddleOCR and CLIP download their own models on first use (internet needed, a few hundred MB).
 

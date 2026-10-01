@@ -3,7 +3,6 @@ floors (2-image few-shot, variant A), and the stage-5 freeze (N15)."""
 import os, io, re, json, time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from PIL import ImageDraw
 from .textmatch import support
 
 NAME_PROMPT = (
@@ -142,6 +141,7 @@ def run_building_attrs(views, sv, vlm, cfg, out_dir, progress=lambda *a, **k: No
     todo = [q for q in views if q["reliable"] and q["fp"] not in done]
 
     def crop(q):
+        from PIL import ImageDraw                             # imported here so finalize_buildings runs without PIL (P7a)
         path = f"{crop_dir}/{q['fp']}.jpg"
         if os.path.exists(path): return path
         img = sv.image(q["pano_id"], heading=q["heading"], pitch=q["pitch"], fov=q["fov"])

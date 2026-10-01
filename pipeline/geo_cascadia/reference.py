@@ -100,13 +100,29 @@ def places_crosscheck(area, plan, buildings, final, cfg, out_dir, progress=lambd
                 h = r / 2; todo += [(cx + dx * h, cy + dy * h, h) for dx, dy in ((1, 1), (1, -1), (-1, 1), (-1, -1))]
         if n % 10 == 0: json.dump(cache, open(cache_p, "w")); progress("places", n, len(centres))
     json.dump(cache, open(cache_p, "w"))
+    return crosscheck_with_places(area, buildings, final, places, cfg), {"places_calls": calls, "places_found": len(places),
+                                                                        "kept": len(_kept(area, places))}
 
+
+def places_from_cache(cache):
+    """every place a run's Nearby searches returned ({id: place}), from its places_cache.json (no call)"""
+    return {p["id"]: p for got in cache.values() for p in (got or [])}
+
+
+def _kept(area, places):
     P = []
     for p in places.values():
         c = _cat(p)
         if c is None: continue
         x, y = area.L(p["location"]["latitude"], p["location"]["longitude"])
         P.append({"id": p["id"], "name": p.get("displayName", {}).get("text", ""), "type": p.get("primaryType"), "cat": c, "x": x, "y": y})
+    return P
+
+
+def crosscheck_with_places(area, buildings, final, places, cfg):
+    """The comparison half of places_crosscheck (split out in P7a so it can be re-applied from a run's cached places):
+    sign names vs Google businesses within places_radius_m, per building. Unchanged logic."""
+    P = _kept(area, places)
     B = {b["building_id"]: b for b in buildings}
     by_b = defaultdict(list)
     blds = [(b["building_id"], *area.L(b["lat"], b["lon"]), b["area_m2"]) for b in buildings]
@@ -127,4 +143,4 @@ def places_crosscheck(area, plan, buildings, final, cfg, out_dir, progress=lambd
                                  "google_name": hit["name"] if hit else None, "google_place_id": hit["id"] if hit else None,
                                  "google_commercial": bool(ref), "google_businesses": [{"place_id": p["id"], "name": p["name"],
                                  "type": p["type"]} for p in ref], "ref_flags": flags}
-    return out, {"places_calls": calls, "places_found": len(places), "kept": len(P)}
+    return out

@@ -48,7 +48,7 @@ def _slug_key(s):
 class RunFiles:
     """The run files of each area, loaded once per file change (small slices only)."""
     NAMES = ("panos", "plan", "plan_anomalies", "_views_done", "detections", "ocr", "building_views", "vlm_unmapped",
-             "live_run")
+             "live_run", "sign_links")
 
     def __init__(self, areas_dir):
         self.dir = areas_dir
@@ -74,6 +74,14 @@ class RunFiles:
         F["detections"] = dets
         F["ocr"] = [{k: o.get(k) for k in ("file", "fp", "pano_id", "heading", "pitch", "det_conf", "tier", "reason", "best",
                                           "clean", "best_conf")} for o in F.get("ocr") or []]
+        # D44: a sign moves off the outline its photo faced only when its own line of sight clearly hits another (sign_links.json)
+        links = F.get("sign_links")
+        if links:
+            for o in F["ocr"]:
+                k = os.path.basename(o.get("file") or "")
+                if k in links:
+                    o["fp_planned"], o["fp"] = o["fp"], links[k]["fp"]
+            F["signs_relinked"] = sum(1 for v in links.values() if v["fp"] != v["planned"])
         with self._lock:
             self._cache[slug] = (stamp, F)
         return F
@@ -235,6 +243,19 @@ def facts(bundle, F, model_card=None):
         put(f"match_{k}", ms.get(k, 0), f"buildings[].match_status == {k}")
     put("matched_use_unknown", sum(b.get("match_status") == "matched" and attr(b, "use").get("value") is None for b in B),
         "matched, but use not known (so use was not compared)")
+    # D43: records are paired with buildings by location; how sure each pairing is
+    mc_ = Counter((b.get("register") or {}).get("match_confidence") for b in B if (b.get("register") or {}).get("property_id"))
+    for k in ("high", "medium", "low"):
+        put(f"register_pair_{k}", mc_.get(k, 0), f"buildings[].register.match_confidence == {k} (paired by location, D43)")
+    put("register_unmatched", ((bundle["meta"].get("run") or {}).get("register_matching") or {}).get("records_unmatched") or 0,
+        "meta.run.register_matching.records_unmatched: register records with no building nearby")
+    # D44: a sign moves off the aimed outline only when its own line of sight (±4°) clearly hits another one
+    put("signs_relinked", F.get("signs_relinked", 0), "sign_links.json: signs whose own line of sight, and the lines 4° "
+        "either side, clearly hit another outline than the one their photo was aimed at (rule own_ray)")
+    # D45: single-camera circles by camera distance
+    sc = [a for a in A if a.get("method") != "triangulated"]
+    put("assets_single_near", sum(1 for a in sc if (a.get("camera_distance_m") or 99) <= 8),
+        "single-camera assets within 8 m of their camera (smaller circle, D45)")
     dt = Counter(d for b in B for d in b.get("discrepancies") or [] if d != "missing_record")
     n["discrepancy_types"], src["discrepancy_types"] = dict(dt), "buildings[].discrepancies"
     put("gaps", len(G), "export.json streetlight_gaps[] (60 m)")
@@ -343,7 +364,7 @@ def story(n, verdict, stored):
          f"{n['buildings_no_box']:,} had no building box at all.", "buildings"),
         (f"{_pl(n['sign_crops'], 'sign crop')}: {n['signs_ocr']:,} read locally, {n['signs_vlm']:,} escalated; "
          f"{_pl(n['named'], 'building')} named, {n['named_google']:,} confirmed by Google.", "signs"),
-        (f"{_pl(n['unmapped_kept'], 'business', 'businesses')} found on unmapped frontage (approximate points).", "unmapped"),
+        (f"{_pl(n['unmapped_kept'], 'business', 'businesses')} found with no analysed building (signs on frontage with no analysed building outline).", "unmapped"),
         (f"{_pl(n['review_items'], 'item')} sent to human review.", "review"),
     ]
     why = {
@@ -711,8 +732,9 @@ def examples(bundle, F, key, outline_at=None):
                "footprint_centre": "no road-facing wall could be found on the map: the middle of the outline is used"}[grp]
         return [_ref("building", b, why) for b in _spread([b for b in B if (b.get("predicted_position") or {}).get("method") == grp])]
     if head == "match":
-        why = {"matched": "a register entry is within 15 m and agrees", "discrepancy": "the register entry differs (synthetic register)",
-               "no_record": "no register entry within 15 m (synthetic register)"}[grp]
+        why = {"matched": "the register record paired with it by location (within 15 m) agrees",
+               "discrepancy": "the register record paired with it differs (synthetic register: a planted mistake)",
+               "no_record": "no register record was paired with it by location (synthetic register)"}[grp]
         return [_ref("building", b, why) for b in _spread([b for b in B if b.get("match_status") == grp])]
     if key == "gaps":
         G = sorted(bundle["streetlight_gaps"], key=lambda g: -(g.get("length_m") or 0))

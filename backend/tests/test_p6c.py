@@ -172,6 +172,18 @@ def test_worker_refuses_a_package_without_the_hook(W):
         W.g["check_pipeline"](old)
 
 
+def test_worker_needs_the_p7a_package(W):
+    """P7a: a package without the D42-D45 modules (register, signlink, poleunc) is refused; the repo's package is accepted"""
+    def new(polygon, out_dir, cfg=None, on_stage=None, plan_check=None, ocr_runner=None):
+        pass
+    new.__module__ = "geo_cascadia.run_area"
+    assert W.g["check_pipeline"](new) is None
+    stale = lambda polygon, out_dir, cfg=None, on_stage=None, plan_check=None, ocr_runner=None: None
+    stale.__module__ = "old_pkg_without_p7a.run_area"
+    with pytest.raises(SystemExit):
+        W.g["check_pipeline"](stale)
+
+
 def test_the_ocr_process_rebuilds_the_same_config(W):
     """The real OCR process does Config(**spec["cfg"]): every setting survives the JSON trip except the key (left out
     on purpose) and the class ids (default, unused by OCR)."""

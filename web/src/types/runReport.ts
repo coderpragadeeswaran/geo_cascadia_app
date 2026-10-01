@@ -13,6 +13,8 @@ const num = z.number().nullable()
 export function makeRunReportSchemas(mode: SchemaMode) {
   const obj = <T extends z.ZodRawShape>(shape: T) => (mode === 'strict' ? z.strictObject(shape) : z.looseObject(shape))
   const Score = obj({ planted: z.number(), tp: z.number(), fp: z.number(), fn: z.number().optional() })
+  /** D42: planted-mistake recovery (caught / missed / false alarms per kind) */
+  const Recovery = obj({ planted: z.number(), caught: z.number(), missed: z.number(), false_alarms: z.number() })
 
   const RunReport = obj({
     run_dir: z.string(),
@@ -56,7 +58,7 @@ export function makeRunReportSchemas(mode: SchemaMode) {
     }),
     matching: obj({
       match_status: Counts, discrepancy_types: Counts,
-      planted_error_scores: z.record(z.string(), Score).nullable(),
+      planted_error_scores: z.record(z.string(), z.union([Score, Recovery])).nullable(),
       asset_register_scores: z.record(z.string(), Score).nullable(),
       register_note: z.string().nullable(),
     }),

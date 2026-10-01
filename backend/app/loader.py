@@ -206,6 +206,9 @@ def load_area(conn, folder, slug=None, source_job_id=None):
         _replace(cur, "missing_asset_records", ("area_id", "asset_no"),
                  ["area_id", "asset_no", "street", "geom", "why"], rows, area_id, {"geom": PT}, key_name="asset_no")
 
+        # P7a: what the queue held before this load, so every removed / added item is reported (never lost silently)
+        prev = {(r[0], r[1]): {"id": r[2], "status": r[3], "reviewer": r[4], "note": r[5]} for r in cur.execute(
+            "select item_type, ref_id, id, status, reviewer, note from review_items where area_id = %s", (area_id,)).fetchall()}
         # review_queue -> review_items. Asset rows have no id: join by (lat, lon rounded to 7 dp, type) (D7).
         asset_by_key = {(round(a["lat"], 7), round(a["lon"], 7), a["type"]): a["id"] for a in A}
         items, unjoined = [], 0
@@ -230,6 +233,13 @@ def load_area(conn, folder, slug=None, source_job_id=None):
         keep = [f"{it[1]}:{it[2]}" for it in items]
         cur.execute("delete from review_items where area_id = %s and status = 'pending' "
                     "and not (item_type || ':' || ref_id = any(%s))", (area_id, keep))
+        now = {(it[1], it[2]) for it in items}
+        review_diff = {
+            "removed_pending": [{"item_type": k[0], "ref_id": k[1], **v} for k, v in prev.items() if k not in now and v["status"] == "pending"],
+            # a decided item whose finding left the queue is KEPT (with its decision) and reported, never deleted
+            "kept_decided_not_in_queue": [{"item_type": k[0], "ref_id": k[1], **v} for k, v in prev.items()
+                                          if k not in now and v["status"] != "pending"],
+            "added": [{"item_type": k[0], "ref_id": k[1]} for k in sorted(now - set(prev))]}
 
         # review_status on objects mirrors review_items (null = not in the review queue)
         for table, kind in (("buildings", "building"), ("assets", "asset")):
@@ -240,7 +250,7 @@ def load_area(conn, folder, slug=None, source_job_id=None):
                             (select 1 from review_items r where r.area_id = t.area_id and r.item_type = %s and r.ref_id = t.id)""",
                         (area_id, kind))
 
-    return {"slug": slug, "area_id": area_id, "polygon_source": poly_src, "review_unjoined": unjoined}
+    return {"slug": slug, "area_id": area_id, "polygon_source": poly_src, "review_unjoined": unjoined, "review_diff": review_diff}
 
 
 def db_counts(conn, area_id):

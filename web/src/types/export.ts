@@ -73,9 +73,11 @@ export function makeExportSchemas(mode: SchemaMode) {
       reason: z.string().nullable().optional(),          // e.g. "triangulation rejected: implausible (14.2 m from footprint)"
     }).nullable().optional(),
     register: obj({
-      source: z.literal('SYNTHETIC'),
+      source: z.enum(['SYNTHETIC', 'IMPORTED']),
       property_id: z.string().nullable(), record_use: z.string().nullable(), record_floors: z.number().int().nullable(),
       record_area_m2: z.number().nullable(), record_dist_m: z.number().nullable(),
+      // D43: paired with the building by location (never by id): how sure, and the gap to the next-best building
+      match_confidence: z.enum(['high', 'medium', 'low']).nullable().optional(), match_margin_m: z.number().nullable().optional(),
     }),
     match_status: MatchStatus,
     discrepancies: z.array(z.string()),
@@ -94,13 +96,14 @@ export function makeExportSchemas(mode: SchemaMode) {
         ocr_text: z.string().nullable(), ocr_conf: z.number().nullable(), tier: z.number().int(),
       }).nullable(),
     }),
-    cost: obj({ vlm_calls: z.number().int(), vlm_usd: z.number() }),
+    cost: obj({ vlm_calls: z.number().int(), vlm_usd: z.number(), recorded: z.boolean().optional() }),   // P6: exact cost recorded
   })
 
   const Asset = obj({
     id: z.string(), type: AssetType, lat: z.number(), lon: z.number(), street: z.string().nullable(),
     confidence: Confidence, n_detections: z.number().int(), cameras_used: z.number().int(), method: AssetMethod,
     uncertainty_m: z.number(), uncertainty_basis: z.string(), route: z.string(),
+    camera_distance_m: z.number().nullable().optional(),   // D45: single-camera assets, distance from their camera
     register: obj({
       source: z.literal('SYNTHETIC'), status: AssetRegisterStatus, flags: z.array(z.string()),
       // present only when a register record was paired (matched / discrepancy)
@@ -123,6 +126,7 @@ export function makeExportSchemas(mode: SchemaMode) {
     id: z.string(), type: z.literal('unmapped_business'), name: z.string(), ocr_text: z.string(),
     lat: z.number(), lon: z.number(), // approximate
     street: z.string(), sightings: z.number().int(), position: z.string(), evidence: BoxView,
+    on_outline: z.string().nullable().optional(),        // D44: the sign hits an outline that is not an analysed building
   })
 
   /** Asset rows carry no asset id: join on (lat, lon rounded to 7 dp, asset_cls = type) — D6. */
@@ -140,6 +144,9 @@ export function makeExportSchemas(mode: SchemaMode) {
   ])
 
   const PlantedScore = obj({ planted: z.number(), tp: z.number(), fp: z.number(), fn: z.number().optional() })
+  /** D42: planted-mistake recovery (caught / missed / false alarms per kind) */
+  const Recovery = obj({ planted: z.number(), caught: z.number(), missed: z.number(), false_alarms: z.number() })
+  const Pairing = obj({ records: z.number(), paired_right: z.number(), paired_wrong: z.number(), unpaired: z.number(), right_pct: z.number().nullable() })
 
   const Coverage = obj({
     panoramas: z.number(), user_photospheres: z.number(), cameras_planned: z.number(), views_planned: z.number(),
@@ -159,8 +166,13 @@ export function makeExportSchemas(mode: SchemaMode) {
     floors_examples_found: z.boolean().optional(),
     stage_seconds: Counts, total_minutes: z.number(),
     validation: z.record(z.string(), z.string()),
-    planted_error_scores: z.record(z.string(), PlantedScore),
+    planted_error_scores: z.record(z.string(), z.union([PlantedScore, Recovery])).nullable(),
     asset_register_scores: z.record(z.string(), PlantedScore),
+    // D43 / D44 / P7a re-apply
+    register_matching: obj({ records: z.number(), records_unmatched: z.number(),
+      pairing: obj({ all: Pairing, pin_moved: Pairing, pin_not_moved: Pairing }).nullable() }).nullable().optional(),
+    signs_relinked: z.number().optional(),
+    p7a_reapplied: z.record(z.string(), z.union([z.boolean(), z.number(), z.string()])).optional(),
   })
 
   const Meta = obj({
@@ -207,6 +219,8 @@ export function makeExportSchemas(mode: SchemaMode) {
     streetlight_gaps: z.array(StreetlightGap),
     review_queue: z.array(ReviewQueueItem),
     unmapped_businesses: z.array(UnmappedBusiness).optional(), // absent in older runs
+    // D43: register records with no building nearby
+    register_unmatched: z.array(obj({ property_id: z.string(), lat: z.number(), lon: z.number(), street: z.string().nullable(), why: z.string() })).optional(),
   })
 
   return {

@@ -3,7 +3,7 @@
  *  which stays in frame up close) is projected through the panorama's current point of view (heading, pitch, zoom →
  *  horizontal field of view 2·atan(2^(1−zoom)), checked against a static evidence photo) with the same pinhole model as
  *  the evidence photos. Google's deprecated google.maps.Marker is not used. Shows the selected object (sodium) and findings within
- *  60 m: buildings not in / differing from the register, streetlights, businesses with no mapped building. */
+ *  60 m: buildings not in / differing from the register, streetlights, businesses with no analysed building. */
 import { useMap } from '@vis.gl/react-google-maps'
 import { useEffect, useMemo, useState } from 'react'
 import { useAreaData } from '@/lib/useAreaData'

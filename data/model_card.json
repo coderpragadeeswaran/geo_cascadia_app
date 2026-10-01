@@ -52,6 +52,70 @@
                "names_routed_vs_all_vlm_usd": {"routed": 0.0079, "all_vlm_every_view": 0.105},
                "street_view_price_usd_per_image": 0.007,
                "cpu_fallback_per_street_min": {"full_ocr": 18, "fast_ocr_estimate": "3-5"}},
+ "single_camera_by_distance": {
+  "_note": "Single-camera pole/streetlight position error by camera distance: for poles triangulated from 2+ cameras, each camera's own estimate vs the triangulated point (a consistency check, not surveyed truth). Only poles two cameras agreed on are in the sample, so far-off single estimates are under-represented and real errors can be larger. tools/pole_uncertainty.py.",
+  "generated": "2026-10-01",
+  "n": 63,
+  "samples_per_area": {
+   "sanganur_road_086d14": 3,
+   "tiruppur_uthukuli_road": 0,
+   "trichy_bharathidasan_salai": 4,
+   "unnamed_road_off_4th_street_5772fa": 0,
+   "vadakku_masi_veethi_f17937": 4,
+   "ward29": 52
+  },
+  "bands": [
+   {
+    "band_m": [
+     0,
+     8
+    ],
+    "n": 20,
+    "median_m": 1.28,
+    "p80_m": 2.39,
+    "surveyed_median_m": 1.64
+   },
+   {
+    "band_m": [
+     8,
+     11
+    ],
+    "n": 11,
+    "median_m": 1.93,
+    "p80_m": 3.51,
+    "surveyed_median_m": 4.55
+   },
+   {
+    "band_m": [
+     11,
+     15
+    ],
+    "n": 32,
+    "median_m": 1.57,
+    "p80_m": 3.03,
+    "surveyed_median_m": 4.55
+   }
+  ],
+  "used_uncertainty_m": [
+   {
+    "up_to_m": 8.0,
+    "plus_minus_m": 2.4,
+    "basis": "80th percentile (consistency)"
+   },
+   {
+    "up_to_m": 11.0,
+    "plus_minus_m": 5.0,
+    "basis": "surveyed median (notebook)"
+   },
+   {
+    "up_to_m": 15.0,
+    "plus_minus_m": 5.0,
+    "basis": "surveyed median (notebook)"
+   }
+  ],
+  "rule": "the map circle = the larger of the band's 80th percentile (consistency check) and the notebook's surveyed median for that distance rounded up to 0.5 m, made non-decreasing with distance. The surveyed check is larger at 8-15 m (median 4.55 m), so those circles are ±5 m and hold about half of such estimates, not 8 in 10",
+  "notebook_surveyed_check": "history chat 1: 0-8 m median 1.64 m (86% within 3.5 m); 8-15 m median 4.55 m (n=1469 detections)"
+ },
  "gate1_position": {
   "_note": "Automatic evaluation, NOT hand labels (tools/eval_gate1.py). Target: predicted building position within 3.5 m (FarmwiseAI Gate 1). Official rule (D27, D28): triangulated wall-corner midpoint with >= 2 cameras, else wall_hit (best ray on the road-facing wall; uses the map footprint), else wall_centre (midpoint of the road-facing wall, D33), else footprint_centre (no road-facing wall). Development runs (box centre vs wall corners, D26): data/areas/<slug>/gate1_eval.json.",
   "organiser_guidance": "Organiser guidance: OpenStreetMap footprints are accepted as the reference; the position is the centre of the building's front.",

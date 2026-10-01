@@ -67,6 +67,20 @@ export interface ConsistencyRow {
 }
 export const useTrust = () =>
   useQuery({ queryKey: ['trust'], queryFn: () => api<{ cards: TrustCard[]; experiments: Experiment[]; confusion_matrix: null; confusion_note: string }>('/trust'), staleTime: Infinity })
+/** D42/D43: per area, planted-mistake recovery and register pairing by location, computed from the records */
+export interface Recovery { planted: number; caught: number; missed: number; false_alarms: number }
+export interface PairingScore { records: number; paired_right: number; paired_wrong: number; unpaired: number; right_pct: number | null }
+export interface RegisterTestArea {
+  area: string; name: string; buildings: number; register_source: string | null; available: boolean
+  recovery?: Record<string, Recovery>; planted_total?: number; records?: number; records_unmatched?: number | null
+  pairing?: { all: PairingScore; pin_moved: PairingScore; pin_not_moved: PairingScore }; match_confidence?: Record<string, number>
+}
+export interface RegisterTests {
+  areas: RegisterTestArea[]; note: string
+  total: { recovery: Record<string, Recovery>; pairing: { records: number; paired_right: number; moved: number; moved_right: number; right_pct: number | null; moved_right_pct: number | null } }
+}
+export const useRegisterTests = () =>
+  useQuery({ queryKey: ['trust-register'], queryFn: () => api<RegisterTests>('/trust/register'), staleTime: 60_000 })
 export const useConsistency = () =>
   useQuery({ queryKey: ['trust-consistency'], queryFn: () => api<{ rows: ConsistencyRow[] }>('/trust/consistency').then((r) => r.rows), staleTime: 60_000 })
 

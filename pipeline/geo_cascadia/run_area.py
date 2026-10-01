@@ -13,6 +13,8 @@ from .ocr import run_ocr
 from .vlm import VLM, run_names, run_building_attrs, finalize_buildings
 from .reference import street_names, places_crosscheck
 from .match import synthetic_property_register, match_properties, score_planted, asset_layer, review_queue
+from .register import observed_register, match_by_location, recovery_scores, pairing_accuracy, hide_truth
+from .signlink import link_signs, relink_ocr, relink_vlm_names, ocr_names as sign_ocr_names
 from .signuse import fill_use_from_signs
 from .textmatch import name_quality
 from .workspace import build_dashboard, QueryEngine
@@ -105,10 +107,15 @@ def run_area(polygon, out_dir, cfg=None, area_name="area", street_filter=None, p
     stage("geometry")
     # 6. OCR
     ocr_res, ocr_names, ocr_stats = (ocr_runner or run_ocr)(dets, cfg, out_dir, progress)
+    # D44: a sign moves off the outline its photo was aimed at only when its OWN line of sight clearly hits another one
+    sign_links = link_signs(dets, area, cfg.sign_link_margin_deg)
+    save("sign_links", sign_links)
+    ocr_res = relink_ocr(ocr_res, sign_links)
+    ocr_names = sign_ocr_names(ocr_res)
     stage("ocr")
     # 7. VLM
     vlm = VLM(cfg)
-    vnames = run_names(ocr_res, vlm, cfg, out_dir, progress)
+    vnames = relink_vlm_names(run_names(ocr_res, vlm, cfg, out_dir, progress), ocr_res)
     router = None
     if cfg.use_router_path and os.path.exists(cfg.use_router_path):
         from .localuse import UseRouter
@@ -118,7 +125,8 @@ def run_area(polygon, out_dir, cfg=None, area_name="area", street_filter=None, p
     # D32: a building whose use is still unknown but has a readable business sign is commercial (rule, no model call)
     final, sign_use_stats = fill_use_from_signs(final, ocr_res, cfg)
     print("use from sign text:", sign_use_stats)
-    ub, ub_stats = unmapped_businesses(dets, ocr_res, area.frame, vlm, cfg, out_dir)
+    ub, ub_stats = unmapped_businesses(dets, ocr_res, area.frame, vlm, cfg, out_dir,
+                                       registered={b["building_id"] for b in buildings})
     save("unmapped_businesses", ub); print("unmapped businesses:", ub_stats)
     save("final_attributes", final)
     stage("vlm")
@@ -130,8 +138,15 @@ def run_area(polygon, out_dir, cfg=None, area_name="area", street_filter=None, p
     stage("reference")
     # 9. registers + matching (street kinds use OSM names, display uses resolved names)
     kind = {r["name"]: r["kind"] for r in area.streets}
-    register, truth = synthetic_property_register(buildings, kind, cfg)
-    results = match_properties(buildings, final, register, cfg)
+    # D42: the synthetic register copies the observations except the planted mistakes; D43: paired by location
+    if cfg.register_mode == "random":
+        register, truth = synthetic_property_register(buildings, kind, cfg)
+        results, reg_unmatched, reg_pairs = match_properties(buildings, final, register, cfg), [], None
+    else:
+        register, truth = observed_register(buildings, final, bpos, cfg, area_name)
+        results, reg_unmatched, reg_pairs = match_by_location(buildings, final, hide_truth(register), bpos, cfg)
+        save("planted_register_mistakes", truth)
+        save("register_synthetic", register)              # with the hidden truth (building_id), for the pairing check
     for m in results:
         x = xref.get(m["building_id"], {})
         m.update(name_verified_google=x.get("name_verified"), google_name=x.get("google_name"),
@@ -140,10 +155,15 @@ def run_area(polygon, out_dir, cfg=None, area_name="area", street_filter=None, p
         if m["name_quality"] != "good": m["ref_flags"] = [f for f in m["ref_flags"] if f != "sign_not_in_google_within_40m"]
     A, missing, gaps, asset_score = asset_layer(assets, plan, area, cfg)
     nm = lambda s: names.get(s, s)
-    for coll in (results, A, missing, buildings, ub): [o.update(street=nm(o.get("street"))) for o in coll]
+    for coll in (results, A, missing, buildings, ub, reg_unmatched): [o.update(street=nm(o.get("street"))) for o in coll]
     for g in gaps.values(): [o.update(street=nm(o["street"])) for o in g]
     queue = review_queue(results, A)
-    planted = score_planted(results, truth)
+    if reg_pairs is None:
+        planted, reg_scores = score_planted(results, truth), None
+    else:
+        planted = recovery_scores(results, truth)
+        reg_scores = {"pairing": pairing_accuracy(reg_pairs, register, truth), "records": len(register),
+                      "records_unmatched": len(reg_unmatched)}
     stage("match")
     # 10. dashboard + export
     tiers = Counter(r["tier"] for r in ocr_res)
@@ -158,12 +178,14 @@ def run_area(polygon, out_dir, cfg=None, area_name="area", street_filter=None, p
                  "vlm_calls": vlm.calls, "vlm_cost_usd": round(vlm.cost(), 4), "places_calls": pstats["places_calls"],
                  "device": cfg.device, "floors_examples_found": shots_ok, "stage_seconds": T,
                  "total_minutes": round((time.time() - t0) / 60, 1),
-                 "validation": cfg.validation, "planted_error_scores": planted, "asset_register_scores": asset_score}
+                 "validation": cfg.validation, "planted_error_scores": planted, "asset_register_scores": asset_score,
+                 "register_matching": reg_scores, "signs_relinked": sum(1 for v in sign_links.values() if v["fp"] != v["planned"])}
     dash = build_dashboard(results, A, gaps, queue, run_stats)
     dash["kpi"]["unmapped_businesses"] = len(ub)
     exp = build_export(area_name, cfg, buildings, results, views, vbld, ocr_res, A, missing, gaps, queue, dash, panos, run_stats,
                        positions=bpos)
     exp["unmapped_businesses"] = ub; exp["meta"]["counts"]["unmapped_businesses"] = len(ub)
+    exp["register_unmatched"] = reg_unmatched             # D43: register records with no building nearby
     save("dashboard", dash); save("export", exp)
     json.dump(to_geojson(exp), open(f"{out_dir}/export.geojson", "w"))
     stage("export")

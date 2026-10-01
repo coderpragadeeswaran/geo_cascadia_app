@@ -1,5 +1,5 @@
 {
- "run_dir": "unnamed_road_off_4th_street_5772fa.upload-3b22fb",
+ "run_dir": "unnamed_road_off_4th_street_5772fa",
  "area": "Unnamed road off 4th Street",
  "generated": "2026-09-28T06:02:43.620007+00:00",
  "pipeline": {
@@ -148,40 +148,52 @@
  },
  "unmapped_businesses": {
   "sign_candidates_checked_by_vlm": 2,
-  "kept": 1,
+  "kept": 0,
   "vlm_said_not_business": 0,
-  "examples": [
-   "m.m. refrigeration"
-  ]
+  "examples": []
  },
  "matching": {
   "match_status": {
-   "matched": 19,
-   "discrepancy": 6
+   "matched": 20,
+   "no_record": 2,
+   "discrepancy": 3
   },
   "discrepancy_types": {
-   "use_change": 2,
-   "extra_floor": 3,
-   "area_understated": 1
+   "missing_record": 2,
+   "area_understated": 1,
+   "use_change": 1,
+   "location_shift": 1
   },
   "planted_error_scores": {
+   "missing_record": {
+    "planted": 2,
+    "caught": 2,
+    "missed": 0,
+    "false_alarms": 0
+   },
    "location_shift": {
-    "planted": 0,
-    "tp": 0,
-    "fp": 0,
-    "fn": 0
+    "planted": 1,
+    "caught": 1,
+    "missed": 0,
+    "false_alarms": 0
    },
    "area_understated": {
     "planted": 1,
-    "tp": 1,
-    "fp": 0,
-    "fn": 0
+    "caught": 1,
+    "missed": 0,
+    "false_alarms": 0
    },
-   "missing_record": {
+   "use_change": {
+    "planted": 1,
+    "caught": 1,
+    "missed": 0,
+    "false_alarms": 0
+   },
+   "extra_floor": {
     "planted": 0,
-    "tp": 0,
-    "fp": 0,
-    "fn": 0
+    "caught": 0,
+    "missed": 0,
+    "false_alarms": 0
    }
   },
   "asset_register_scores": {
@@ -201,18 +213,21 @@
     "fp": 0
    }
   },
-  "register_note": "SYNTHETIC property + asset registers with planted errors (no open municipal data)"
+  "register_note": "SYNTHETIC property register copying the observations + planted mistakes (D42); matched by location (D43); SYNTHETIC asset register"
  },
  "review": {
-  "items": 19,
+  "items": 18,
   "by_priority": {
-   "2": 5,
+   "1": 2,
+   "2": 1,
    "4": 1,
+   "5": 1,
    "6": 13
   },
   "by_reason": {
-   "attribute discrepancy \u2014 verify on imagery": 5,
+   "high-severity discrepancy": 2,
    "building seen from one view only": 3,
+   "attribute discrepancy \u2014 verify on imagery": 1,
    "floor count low confidence (roofline not visible)": 1,
    "single-detection asset": 13
   }
@@ -245,7 +260,7 @@
   "Located 16 poles/streetlights; 1 triangulated from 2+ cameras, 15 approximate (single camera).",
   "25 buildings registered; 18 had a usable view for use/floors, 0 had no building box at all.",
   "53 sign crops: 8 read locally, 1 escalated; 3 buildings named, 0 confirmed by Google.",
-  "1 businesses found on unmapped frontage (approximate points).",
-  "19 items sent to human review."
+  "0 businesses found with no analysed building (signs on frontage with no analysed building outline).",
+  "18 items sent to human review."
  ]
 }

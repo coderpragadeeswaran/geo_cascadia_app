@@ -23,7 +23,7 @@ from .settings import ROOT, Settings
 
 sys.path.insert(0, os.path.join(ROOT, "pipeline"))   # geo_cascadia (import only — never modified)
 
-from . import drive, evidence, gaps, hood, minimap, trust, views  # noqa: E402
+from . import drive, evidence, gaps, hood, minimap, registertest, trust, views  # noqa: E402
 from .storage import StorageError  # noqa: E402
 from .store import Data, OfflineError  # noqa: E402
 
@@ -324,7 +324,18 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             raise HTTPException(404, "data/model_card.json not found")
         return {"offline": not D.db_online, "cards": trust.cards(card), "experiments": trust.experiments(card),
                 "confusion_matrix": None,
-                "confusion_note": "model_card.json has precision and recall per class, not a confusion matrix, so none is drawn."}
+                "confusion_note": "model_card.json has precision and recall per class, not a confusion matrix, so none is drawn.",
+                # D45: single-camera pole error by camera distance (model_card, written by tools/pole_uncertainty.py)
+                "single_camera_by_distance": card.get("single_camera_by_distance")}
+
+    @app.get("/trust/register", tags=["trust"])
+    def trust_register(D: Data = Depends(get_data)):
+        """D42/D43: per area, planted-mistake recovery (caught / missed / false alarms per kind) and how often a register
+        record was paired by location with its own building — computed from the records and the run's files."""
+        def fn(s):
+            return registertest.all_tests([b for b in (s.bundle(x) for x in s.slugs()) if b], settings.areas_dir)
+        res, off = D.read(fn)
+        return {"offline": off, **res}
 
     @app.get("/trust/consistency", tags=["trust"])
     def trust_consistency(D: Data = Depends(get_data)):

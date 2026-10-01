@@ -119,7 +119,7 @@ function OverviewPanel() {
 const NOUN: Record<string, (n: number) => string> = {
   unmatched_properties: () => 'not in the register', buildings_with_discrepancy: (n) => (n === 1 ? 'differs from the register' : 'differ from the register'),
   use_not_classified: () => 'use not known', streetlights: (n) => noun(n, 'streetlight'), poles: (n) => `${noun(n, 'pole')} with no lamp seen`,
-  unmapped_businesses: (n) => `${noun(n, 'business')} with no mapped building`, buildings_analysed: (n) => `${noun(n, 'building')} checked`,
+  unmapped_businesses: (n) => `${noun(n, 'business')} with no analysed building`, buildings_analysed: (n) => `${noun(n, 'building')} checked`,
   named_businesses: (n) => `${noun(n, 'shop name')} read clearly`, names_confirmed_by_google: () => 'also on Google Maps',
   sign_text_unverified: (n) => `${noun(n, 'sign')} to double-check`, low_confidence_observations: () => 'sent to review', waiting_for_review: () => 'waiting for review',
 }

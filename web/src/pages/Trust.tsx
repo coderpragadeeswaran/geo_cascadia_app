@@ -10,7 +10,7 @@
  *    positions, gate1, matching, cost, rejected, consistency, gap-checks, limits, questions). */
 import { ArrowRight, CircleCheck, CircleX, Minus } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useConsistency, useTrust, type ConsistencyRow, type Experiment, type TrustCard, type TrustNum } from '@/api/p5'
+import { useConsistency, useRegisterTests, useTrust, type ConsistencyRow, type Experiment, type RegisterTests, type TrustCard, type TrustNum } from '@/api/p5'
 import { useAreas, useModelCard } from '@/api/queries'
 import type { GapProps } from '@/api/types'
 import { CostPanel } from '@/components/CostPanel'
@@ -45,9 +45,68 @@ const frac = (x: TrustNum | null) => !x || typeof x.value !== 'number' ? null : 
 
 const NAV: [string, string][] = [
   ['results', 'What each result is worth'], ['rejected', 'Tried and dropped'], ['detector', 'Detector'], ['positions', 'Pole & light positions'],
-  ['gate1', 'Building position (Gate 1)'], ['matching', 'Register matching'], ['cost', 'Cost: routed vs all-VLM'],
+  ['gate1', 'Building position (Gate 1)'], ['register-tests', 'Register tests (planted mistakes)'], ['matching', 'Register matching (notebook)'], ['cost', 'Cost: routed vs all-VLM'],
   ['consistency', 'Stored vs computed'], ['gap-checks', 'Gap length checks'], ['limits', 'Limits of this data'], ['questions', 'How questions are answered'],
 ]
+
+/** D42/D43: caught / missed / false alarms per planted mistake kind, and pairing by location, per area (computed) */
+const KIND_PLAIN: Record<string, string> = {
+  missing_record: 'Record missing', location_shift: 'Pin in the wrong place', area_understated: 'Area too small',
+  use_change: 'Wrong use', extra_floor: 'Too few floors recorded',
+}
+function RegisterTestsView() {
+  const { data } = useRegisterTests()
+  if (!data) return <p className="t-small ink3">Loading…</p>
+  const t: RegisterTests['total'] = data.total
+  const areas = data.areas.filter((a) => a.available)
+  return (
+    <div className="space-y-5">
+      <div>
+        <h4 className="t-micro mb-1">Planted mistakes, all areas together</h4>
+        <table className="w-full max-w-[720px]"><tbody>
+          <Tr head cells={['planted mistake', 'planted', 'caught', 'missed', 'false alarms']} />
+          {Object.entries(t.recovery).map(([k, v]) => <Tr key={k} cells={[KIND_PLAIN[k] ?? k, v.planted, v.caught, v.missed, v.false_alarms]} />)}
+        </tbody></table>
+        <p className="t-small ink2 mt-2">Missed "pin in the wrong place" and the false alarms come from a moved pin that was paired with a
+          neighbouring building: the record then looks like it belongs there, and its own building looks unrecorded.</p>
+      </div>
+      <div>
+        <h4 className="t-micro mb-1">Records paired with their own building (ids hidden from the pairing)</h4>
+        <p className="t-body">{fmt.format(t.pairing.paired_right)} of {fmt.format(t.pairing.records)} records ({t.pairing.right_pct}%); of the {t.pairing.moved} records whose pin was planted 15–40 m away, {t.pairing.moved_right} ({t.pairing.moved_right_pct}%).</p>
+      </div>
+      <div>
+        <h4 className="t-micro mb-1">Per area</h4>
+        <table className="w-full"><tbody>
+          <Tr head cells={['area', 'records', 'paired right', 'moved pins paired right', 'mistakes planted', 'caught', 'false alarms']} />
+          {areas.map((a) => {
+            const rec = Object.values(a.recovery ?? {})
+            return <Tr key={a.area} cells={[shortArea(a.name), a.records ?? '—', a.pairing ? `${a.pairing.all.paired_right} (${a.pairing.all.right_pct}%)` : '—',
+              a.pairing && a.pairing.pin_moved.records ? `${a.pairing.pin_moved.paired_right} of ${a.pairing.pin_moved.records}` : '—',
+              a.planted_total ?? '—', rec.reduce((n, r) => n + r.caught, 0), rec.reduce((n, r) => n + r.false_alarms, 0)]} />
+          })}
+        </tbody></table>
+      </div>
+      <p className="t-small ink3">{data.note}</p>
+    </div>
+  )
+}
+
+/** D45: single-camera pole error by camera distance (model_card) and the circle the map draws */
+type PoleTable = { n: number; bands: { band_m: number[]; n: number; median_m: number | null; p80_m: number | null; surveyed_median_m?: number | null }[]; used_uncertainty_m: { up_to_m: number; plus_minus_m: number; basis?: string }[]; _note: string; notebook_surveyed_check: string }
+function PoleDistance({ t }: { t: PoleTable }) {
+  return (
+    <div className="mt-5">
+      <h4 className="t-micro mb-1">Single-camera poles: error by distance from the camera ({t.n} estimates)</h4>
+      <table className="w-full max-w-[720px]"><tbody>
+        <Tr head cells={['camera to pole', 'n', 'typical error (median)', '8 in 10 within', 'surveyed check (median)', 'circle on the map']} />
+        {t.bands.map((b, i) => { const u = t.used_uncertainty_m[i]; return <Tr key={i} cells={[`${b.band_m[0]}–${b.band_m[1]} m`, b.n, b.median_m != null ? `${b.median_m} m` : '—', b.p80_m != null ? `${b.p80_m} m` : '—', b.surveyed_median_m != null ? `${b.surveyed_median_m} m` : '—', `±${u?.plus_minus_m ?? '—'} m${u?.basis ? ` (${u.basis.startsWith('surveyed') ? 'surveyed check' : '8 in 10'})` : ''}`]} /> })}
+      </tbody></table>
+      <p className="t-small ink2 mt-2">A pole seen from one camera position is placed from where its base meets the ground in the photo. For poles that two cameras pinpointed, each camera's own estimate was compared with the pinpointed spot (the "8 in 10" column). That check leans small, because only poles two cameras agreed on are in it. So each circle uses the larger of the "8 in 10" value and the earlier surveyed check at that distance, never smaller for a farther pole.</p>
+      <p className="t-small ink2 mt-1">Between 8 and 15 m the surveyed check is larger (typical error 4.55 m), so those circles are ±5 m. That surveyed number is a median: about half of such poles fall inside the circle, not 8 in 10.</p>
+      <p className="t-small ink3 mt-1">{t._note} Earlier surveyed check: {t.notebook_surveyed_check}.</p>
+    </div>
+  )
+}
 
 /** L1: every topic is its own panel with a heading, a divider and space around it */
 function Sec({ id, title, children, lead }: { id: string; title: string; lead?: React.ReactNode; children: React.ReactNode }) {
@@ -131,11 +190,18 @@ export default function Trust() {
               <Tr cells={['Pin-noise stress (σ 0 m → 10 m)', `${m.positions.pin_noise_stress.sigma_0m} → ${m.positions.pin_noise_stress.sigma_10m}`]} />
             </tbody></table>
             <p className="t-small ink2 mt-2">Conclusion: {m.positions.independent_camera_check_n30.conclusion}.</p>
+            {m.single_camera_by_distance && <PoleDistance t={m.single_camera_by_distance} />}
           </Sec>
 
           {m.gate1_position && <Gate1 g={m.gate1_position} names={Object.fromEntries((areas ?? []).map((a) => [a.slug, shortArea(a.name)]))} />}
 
-          <Sec id="matching" title="Register matching (planted errors)" lead={m.matching_planted_errors.note}>
+          <Sec id="register-tests" title="Register tests: planted mistakes and pairing by location"
+            lead={<T plain="Each area's register is made-up: it copies what the photos show, except a few planted mistakes. Records are paired with buildings by position only (never by a shared ID). This tests the comparison logic end to end on made-up data; real accuracy needs a real register."
+              tech="D42/D43. GET /trust/register: planted_register_mistakes.json and register_synthetic.json (the hidden truth) vs the exported records, per area. Computed, not typed." />}>
+            <RegisterTestsView />
+          </Sec>
+
+          <Sec id="matching" title="Register matching (planted errors, notebook era)" lead={m.matching_planted_errors.note}>
             <table className="w-full max-w-[640px]"><tbody>
               <Tr head cells={['what', 'precision', 'recall']} />
               <Tr cells={['property geometry', pct(m.matching_planted_errors.property_geometry.P), pct(m.matching_planted_errors.property_geometry.R)]} />

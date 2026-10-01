@@ -25,3 +25,6 @@ Thumbs.db
 
 # local screenshots (contain Street View imagery: never stored outside Google, CLAUDE.md 9.6)
 docs/screenshots/
+
+# pipeline package zip for the Colab S0 cell (built by tools/build_pkg_zip.py, uploaded to Drive)
+geo_cascadia_pkg*.zip

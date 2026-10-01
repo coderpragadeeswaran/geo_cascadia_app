@@ -42,6 +42,10 @@ class Config:
     tilt_if_closer_m: float = 15.0
     oblique_deg: float = 35.0
     ray_max_range_m: float = 40.0
+    # D44 (validated in P7a): a sign moves off the building its photo was aimed at only when its own line of sight, and
+    # the two lines this many degrees either side of it, all hit the same OTHER outline first and none touches the aimed
+    # one; otherwise it stays (tools/validate_sign_links.py: vs Google pins, 4° beat the plain ray and 2°/3°)
+    sign_link_margin_deg: float = 4.0
 
     # ---- geometry ----
     cam_h: float = 2.5
@@ -51,7 +55,12 @@ class Config:
     merge_m: float = 5.0
     lamp_fuse_m: float = 1.5
     lamp_miss_m: float = 2.0
-    single_cam_uncertainty_m: float = 3.5               # measured: 86% of monocular distances within 3.5 m
+    single_cam_uncertainty_m: float = 3.5               # pre-D45 fixed value (kept for old tools); see single_cam_unc_bands
+    # D45: single-camera pole/streetlight uncertainty by camera distance: (upper edge m, ±m). Per band the LARGER of the
+    # 80th percentile of the single-camera error of triangulated poles (63 estimates, 6 areas; a consistency check) and
+    # the notebook's surveyed median for that distance rounded up to 0.5 m (8–15 m: 4.55 m → 5.0), made non-decreasing
+    # with distance (tools/pole_uncertainty.py, which also writes model_card.json "single_camera_by_distance").
+    single_cam_unc_bands: tuple = ((8.0, 2.4), (11.0, 5.0), (15.0, 5.0))
 
     # ---- OCR ----
     ocr_min_conf: float = 0.55
@@ -88,6 +97,11 @@ class Config:
     area_tol: float = 0.25
     synthetic_seed: int = 42
     disc_rate: float = 0.22
+    # D42: synthetic register = the observations + planted mistakes; D43: records paired to buildings by location
+    register_mode: str = "observed"                     # "observed" (D42) | "random" (the pre-D42 register, old tools)
+    register_limit_m: float = 50.0                      # a record farther than this from every free building pairs with none
+    register_area_weight_m: float = 10.0                # pairing cost: metres + this × |ln(record area / outline area)|
+    register_use_weight_m: float = 5.0                  # + this when the record's use category disagrees with the observed one
     asset_match_m: float = 6.0
     asset_shift_m: float = 25.0
 

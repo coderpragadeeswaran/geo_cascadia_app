@@ -54,6 +54,13 @@ export function makeModelCardSchemas(mode: SchemaMode) {
       street_view_price_usd_per_image: z.number(),
       cpu_fallback_per_street_min: z.record(z.string(), NumOrText),
     }),
+    // D45: single-camera pole error by camera distance (tools/pole_uncertainty.py)
+    single_camera_by_distance: obj({
+      _note: Text, generated: z.string(), n: z.number(), samples_per_area: z.record(z.string(), z.number()),
+      bands: z.array(obj({ band_m: z.array(z.number()), n: z.number(), median_m: z.number().nullable(), p80_m: z.number().nullable(), surveyed_median_m: z.number().nullable().optional() })),
+      used_uncertainty_m: z.array(obj({ up_to_m: z.number(), plus_minus_m: z.number(), basis: z.string().optional() })),
+      rule: Text, notebook_surveyed_check: Text,
+    }).optional(),
     // D26/D27: building position vs the Gate 1 target (tools/eval_gate1.py); per-area tables are keyed by area slug
     gate1_position: obj({
       _note: Text, generated: z.string(), target_m: z.number(), status: z.string(), status_note: Text,

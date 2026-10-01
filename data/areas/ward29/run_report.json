@@ -146,8 +146,8 @@
   },
   "use_values": {
    "residential": 140,
-   "commercial": 89,
-   "not observed": 135,
+   "commercial": 85,
+   "not observed": 139,
    "other": 12,
    "institutional": 3,
    "under_construction": 1,
@@ -183,69 +183,81 @@
    "notice": 11,
    "street_name": 3
   },
-  "buildings_named": 156,
+  "buildings_named": 145,
   "name_route": {
-   "tier3_vlm+ocr_gate": 86,
-   "tier2_ocr": 66,
-   "tier3_vlm_unverified": 4
+   "tier3_vlm+ocr_gate": 73,
+   "tier2_ocr": 71,
+   "tier3_vlm_unverified": 1
   },
   "name_quality": {
-   "good": 105,
-   "tamil_unverified": 3,
-   "fragment": 48
+   "good": 96,
+   "fragment": 44,
+   "tamil_unverified": 5
   },
-  "google_confirmed": 23
+  "google_confirmed": 25
  },
  "unmapped_businesses": {
   "sign_candidates_checked_by_vlm": 84,
-  "kept": 30,
+  "kept": 26,
   "vlm_said_not_business": 23,
   "examples": [
-   "sri lakshmi",
    "multi brands",
+   "walmark ply",
    "ponmani steel house",
    "Royal Baths",
    "super polish",
    "s.m. power tools",
    "laxmi textile",
-   "amaron",
    "baalaj metal screens",
-   "buddha",
    "bride wear",
-   "velocity car decors"
+   "sri lakshmi",
+   "cvm associates",
+   "mizu footwear"
   ]
  },
  "matching": {
   "match_status": {
-   "matched": 245,
-   "discrepancy": 117,
-   "no_record": 19
+   "matched": 304,
+   "no_record": 27,
+   "discrepancy": 50
   },
   "discrepancy_types": {
-   "use_change": 50,
-   "location_shift": 21,
-   "missing_record": 19,
-   "extra_floor": 36,
-   "area_understated": 20
+   "missing_record": 27,
+   "location_shift": 14,
+   "area_understated": 22,
+   "extra_floor": 8,
+   "use_change": 6
   },
   "planted_error_scores": {
+   "missing_record": {
+    "planted": 27,
+    "caught": 22,
+    "missed": 5,
+    "false_alarms": 5
+   },
    "location_shift": {
-    "planted": 21,
-    "tp": 21,
-    "fp": 0,
-    "fn": 0
+    "planted": 17,
+    "caught": 12,
+    "missed": 5,
+    "false_alarms": 2
    },
    "area_understated": {
     "planted": 20,
-    "tp": 20,
-    "fp": 0,
-    "fn": 0
+    "caught": 20,
+    "missed": 0,
+    "false_alarms": 2
    },
-   "missing_record": {
-    "planted": 19,
-    "tp": 19,
-    "fp": 0,
-    "fn": 0
+   "use_change": {
+    "planted": 6,
+    "caught": 6,
+    "missed": 0,
+    "false_alarms": 0
+   },
+   "extra_floor": {
+    "planted": 8,
+    "caught": 8,
+    "missed": 0,
+    "false_alarms": 0
    }
   },
   "asset_register_scores": {
@@ -265,24 +277,24 @@
     "fp": 0
    }
   },
-  "register_note": "SYNTHETIC property + asset registers with planted errors (no open municipal data)"
+  "register_note": "SYNTHETIC property register copying the observations + planted mistakes (D42); matched by location (D43); SYNTHETIC asset register"
  },
  "review": {
-  "items": 276,
+  "items": 218,
   "by_priority": {
-   "1": 26,
-   "2": 76,
-   "3": 3,
-   "4": 2,
-   "5": 12,
+   "1": 27,
+   "2": 14,
+   "3": 1,
+   "4": 3,
+   "5": 16,
    "6": 157
   },
   "by_reason": {
-   "high-severity discrepancy": 26,
-   "attribute discrepancy \u2014 verify on imagery": 83,
-   "building seen from one view only": 47,
+   "high-severity discrepancy": 27,
+   "building seen from one view only": 29,
    "floor count low confidence (roofline not visible)": 4,
-   "name read by VLM only (not supported by OCR)": 4,
+   "attribute discrepancy \u2014 verify on imagery": 14,
+   "name read by VLM only (not supported by OCR)": 1,
    "single-detection asset": 157
   }
  },
@@ -313,8 +325,8 @@
   "The detector drew 5554 boxes; 4617 were usable for positioning.",
   "Located 268 poles/streetlights; 29 triangulated from 2+ cameras, 239 approximate (single camera).",
   "381 buildings registered; 266 had a usable view for use/floors, 0 had no building box at all.",
-  "2065 sign crops: 807 read locally, 180 escalated; 156 buildings named, 23 confirmed by Google.",
-  "30 businesses found on unmapped frontage (approximate points).",
-  "276 items sent to human review."
+  "2065 sign crops: 807 read locally, 180 escalated; 145 buildings named, 25 confirmed by Google.",
+  "26 businesses found with no analysed building (signs on frontage with no analysed building outline).",
+  "218 items sent to human review."
  ]
 }

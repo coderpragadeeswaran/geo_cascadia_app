@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ApiError } from '@/api/client'
 import { useObjectDetail } from '@/api/queries'
 import type { AnyProps, Asset, Building, GapProps, MissingProps, ReviewItem, UnmappedBusiness } from '@/api/types'
-import { assetRegLabel, ASSET_REG, diffLabel, floorsStatusPlain, floorsText, googleFlagPlain, matchLabel, nameQualityPlain, reviewLabel, reviewReasons, useLabel } from '@/lib/labels'
+import { assetRegLabel, ASSET_REG, diffLabel, floorsStatusPlain, floorsText, googleFlagPlain, matchLabel, nameQualityPlain, reviewLabel, reviewReasons, useLabel, useNoun } from '@/lib/labels'
 import { RouteLine } from '@/lib/routes'
 import { miniStreets } from '@/lib/mini'
 import { useAreaData } from '@/lib/useAreaData'
@@ -85,13 +85,17 @@ function registerSummary(b: Building) {
   const d = (b.discrepancies ?? []).filter((x) => x !== 'missing_record').map(diffLabel)
   const r = b.match_status === 'matched' ? 'it matches the record.' : b.match_status === 'no_record' ? 'there is no record for it.'
     : `the record differs${d.length ? `: ${d.join(', ')}` : ''}.`
-  return `We compared this building with the property register (made-up demo data with planted mistakes): ${r}`
+  return `We compared this building with the property register (made-up demo data: it copies what the photos show, except a few planted mistakes; paired by location): ${r}`
 }
-/** the single-camera default's basis in plain words; the percentage comes from the stored basis ("86% of monocular …") */
-function singleCameraHint(basis: string | null | undefined) {
-  const m = basis ? /(\d+)%/.exec(basis) : null
-  return m ? `${m[1]}% of single-camera distances were within 3.5 m of a second camera's estimate (a consistency check, not surveyed positions)` : basis ?? undefined
+/** "Listed as a shop or business with 2 floors." Fields the register leaves empty are said to be not recorded (D42). */
+function registerLine(reg: NonNullable<Building['register']>) {
+  const u = reg.record_use
+  const what = !u ? 'Listed (use not recorded)' : ['commercial', 'residential', 'mixed', 'institutional', 'under_construction'].includes(u)
+    ? `Listed as ${withArticle(useNoun(u))}` : `Listed as ${withArticle(u.replace(/_/g, ' '))}`
+  return `${what}${reg.record_floors != null ? ` with ${plural(reg.record_floors, 'floor')}` : ', floors not recorded'}.`
 }
+/** D45: a single-camera asset's distance from its camera, in plain words ("one camera, 12 m away") */
+const singleCameraWhere = (a: Asset) => (a.camera_distance_m != null ? `one camera, ${Math.round(a.camera_distance_m)} m away` : 'one camera, distance unknown')
 function assetSummary(a: Asset) {
   const what = a.type === 'streetlight' ? 'streetlight' : 'pole'
   const times = a.n_detections != null ? plural(a.n_detections, 'time') : 'several times'
@@ -134,17 +138,18 @@ function BuildingBody({ b }: { b: Building }) {
         </Section>
         <Section title="What the register says" right={<Synthetic />}>
           {reg?.property_id ? (
-            <p className="t-body">{`${withArticle(reg.record_use ? reg.record_use.replace(/_/g, ' ') : 'property', true)}${reg.record_floors != null ? ` with ${plural(reg.record_floors, 'floor')}` : ''}.`}</p>
+            <p className="t-body">{registerLine(reg)}</p>
           ) : <p className="t-body">No record for this building.</p>}
           {!!b.reasons?.length && (
             <ul className="mt-2 space-y-1">{b.reasons.map((r) => <li key={r} className="t-small flex gap-2"><span className="mt-[7px] size-1.5 shrink-0 rounded-full" style={{ background: 'var(--ns-sodium)' }} />{plainReason(r)}</li>)}</ul>
           )}
           <HowWeKnow summary={registerSummary(b)} links={[{ page: 'trust', section: 'matching', label: 'How matching was tested' }]}>
             <Fact k="Record number"><span className="t-data">{reg?.property_id ?? '—'}</span></Fact>
-            <Fact k="Record says">{reg?.record_use?.replace(/_/g, ' ') ?? '—'} · {reg?.record_floors != null ? plural(reg.record_floors, 'floor') : '— floors'} · {reg?.record_area_m2 != null ? `${fmt.format(Math.round(reg.record_area_m2))} m²` : '—'}</Fact>
+            {reg?.property_id && <Fact k="Paired by" hint={reg.match_confidence ? `match confidence ${reg.match_confidence}` : undefined}>Location: the record's pin is {fmt1.format(reg.record_dist_m ?? 0)} m from this building{reg.match_confidence ? `, so the pairing is ${reg.match_confidence === 'high' ? 'clear' : reg.match_confidence === 'medium' ? 'likely' : 'uncertain'}` : ''}{reg.match_margin_m != null ? ` (the next building would fit ${fmt1.format(reg.match_margin_m)} m worse)` : ''}. Records are paired with buildings by position, never by a shared ID.</Fact>}
+            <Fact k="Record says">{reg?.record_use?.replace(/_/g, ' ') ?? 'use not recorded (not compared)'} · {reg?.record_floors != null ? plural(reg.record_floors, 'floor') : 'floors not recorded (not compared)'} · {reg?.record_area_m2 != null ? `${fmt.format(Math.round(reg.record_area_m2))} m²` : '—'}</Fact>
             <Fact k="Record's map pin">{reg?.record_dist_m != null ? `${fmt1.format(reg.record_dist_m)} m from the building outline` : '—'}</Fact>
             <Fact k="Result" hint={b.match_status}>{matchLabel(b.match_status, true, !!b.attributes?.use?.value)}{b.discrepancies?.length ? `: ${b.discrepancies.map(diffLabel).join(', ')}` : ''}</Fact>
-            <Fact k="Register" hint="SYNTHETIC">Made-up demo data with planted mistakes: no open property records were available</Fact>
+            <Fact k="Register" hint={reg?.source ?? 'SYNTHETIC'}>{reg?.source === 'IMPORTED' ? 'An imported property register' : 'Made-up demo data: it copies what the photos show, except a few planted mistakes (no open property records were available)'}</Fact>
           </HowWeKnow>
         </Section>
         <ReviewActions item={detail.data?.review_item ?? null} loading={detail.isPending} finding={b.match_status} />
@@ -166,14 +171,16 @@ function AssetBody({ a }: { a: Asset }) {
         <EvidenceViews kind="asset" id={a.id} at={{ lat: a.lat, lng: a.lon }} target={a.type === 'streetlight' ? 'lamp' : 'pole'} />
         <Section title="What we saw">
           <Row k="What">{a.type === 'streetlight' ? 'A streetlight (pole with a lamp)' : 'A pole with no lamp seen'}</Row>
-          <Row k="Position">{pinned ? `Pinpointed: seen from ${a.cameras_used} camera positions` : 'Approximate: seen from one camera position'}</Row>
+          <Row k="Position">{pinned ? `Pinpointed: seen from ${a.cameras_used} camera positions` : `Approximate: about ±${fmt1.format(a.uncertainty_m ?? 0)} m (${singleCameraWhere(a)})`}</Row>
           <HowWeKnow summary={assetSummary(a)} links={[{ page: 'trust', section: 'detector', label: 'Detector accuracy' }, { page: 'trust', section: 'positions', label: 'Position checks' },
             { page: 'hood', section: 'assets', label: 'How assets are located' }]}>
             <Fact k="Found by"><RouteLine route={a.route} /></Fact>
             <Fact k="Position" hint={a.method === 'triangulated' ? 'triangulated' : `${a.method?.replace(/_/g, ' ')}, single camera`}>{a.method === 'triangulated' ? `Measured where ${plural(a.cameras_used ?? 0, 'camera view')} cross` : 'Estimated from one camera, from where its base appears in the photo'}</Fact>
-            <Fact k="How far off" hint={a.method === 'triangulated' ? a.uncertainty_basis ?? undefined : singleCameraHint(a.uncertainty_basis)}>{a.method === 'triangulated'
+            <Fact k="How far off" hint={a.uncertainty_basis ?? undefined}>{a.method === 'triangulated'
               ? `±${fmt1.format(a.uncertainty_m ?? 0)} m: the camera views agree within about ${fmt.format(Math.ceil(a.uncertainty_m ?? 0))} m`
-              : `About ±${fmt1.format(a.uncertainty_m ?? 0)} m: a fixed default for single-camera estimates, not measured for this object.`}</Fact>
+              : a.camera_distance_m != null && a.camera_distance_m <= 8
+                ? `About ±${fmt1.format(a.uncertainty_m ?? 0)} m: ${singleCameraWhere(a)}. At that distance, 8 in 10 single-camera estimates of poles that two cameras pinpointed were within ${fmt1.format(a.uncertainty_m ?? 0)} m (a consistency check).`
+                : `About ±${fmt1.format(a.uncertainty_m ?? 0)} m: ${singleCameraWhere(a)}. An earlier surveyed check found a typical error of 4.55 m for poles 8–15 m from the camera, so about half of such poles fall inside this circle.`}</Fact>
             <Fact k="Times seen" hint={`${a.confidence ?? '—'} confidence`}>{a.n_detections != null ? `Found ${plural(a.n_detections, 'time')} in the photos` : '—'}, {a.confidence === 'high' ? 'so we are fairly sure' : a.confidence === 'medium' ? 'so we are somewhat sure' : a.confidence === 'low' ? 'so it needs a second look' : ''}</Fact>
             <Fact k="Map position"><span className="t-data">{a.lat.toFixed(6)}, {a.lon.toFixed(6)}</span></Fact>
             <Fact k="Where it stands"><DrawerMini obj={{ kind: 'asset', a }} /></Fact>
@@ -198,18 +205,20 @@ function AssetBody({ a }: { a: Asset }) {
 function UnmappedBody({ u }: { u: UnmappedBusiness }) {
   return (
     <>
-      <PanelHead eyebrow="Business with no mapped building" title={u.name ?? '—'} sub={u.street ?? undefined} />
+      <PanelHead eyebrow="Business with no analysed building" title={u.name ?? '—'} sub={u.street ?? undefined} />
       <Body>
         <EvidenceViews kind="unmapped" id={u.id} at={{ lat: u.lat, lng: u.lon }} target="sign" />
         <div className="mt-3"><DrawerMini obj={{ kind: 'unmapped', u }} /></div>
         <Section title="What we saw">
-          <p className="t-body">A shop sign was read here, but OpenStreetMap has no building outline at this spot, so it can’t be matched to the register.</p>
+          <p className="t-body">{u.on_outline
+            ? 'A shop sign was read here, on a building outline that is not one of the analysed buildings (no planned photo faced it), so it can’t be matched to the register.'
+            : 'A shop sign was read here, but OpenStreetMap has no building outline at this spot, so it can’t be matched to the register.'}</p>
           <Row k="Seen in">{u.sightings != null ? plural(u.sightings, 'photo') : '— photos'}</Row>
-          <Row k="Position">Approximate</Row>
+          <Row k="Position">{u.on_outline ? 'Where the sign’s line of sight meets that outline' : 'Approximate'}</Row>
           <HowWeKnow summary={<>The text reader read this sign in {u.sightings != null ? plural(u.sightings, 'photo') : 'the photos'}. OpenStreetMap has no building outline here, so its spot is only approximate.</>}
             links={[{ page: 'hood', section: 'signs', label: 'How signs are read' }]}>
             <Fact k="Sign text read" hint="OCR">“{u.ocr_text}”</Fact>
-            <Fact k="Position" hint={u.position ?? 'approximate'}>{(() => { const m = /~([\d.]+) m/.exec(u.position ?? ''); return m ? `About ${m[1]} m from the camera, along its line of sight` : 'Approximate' })()}: worked out from the camera, as there is no building outline to place it on</Fact>
+            <Fact k="Position" hint={u.position ?? 'approximate'}>{u.on_outline ? <>On the outline <span className="t-data">{u.on_outline}</span>, where the sign’s own line of sight meets it</> : <>{(() => { const m = /~([\d.]+) m/.exec(u.position ?? ''); return m ? `About ${m[1]} m from the camera, along its line of sight` : 'Approximate' })()}: worked out from the camera, as there is no building outline to place it on</>}</Fact>
             <Fact k="ID"><span className="t-data">{u.id}</span></Fact>
           </HowWeKnow>
         </Section>

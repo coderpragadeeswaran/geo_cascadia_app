@@ -1356,3 +1356,143 @@ Worker changes (no pipeline change):
 - the worker through the pipeline's real `StreetView.discover` with fake Google answers: no imagery, denied, quota,
   network, browser key, empty area, Retry after a denied key, three pieces, partial failures;
 - the backend statuses and `retryable`.
+
+## 2026-09-30 — owner answers while writing the project explainer
+
+### D41. Real Ward 29 full run, FarmwiseAI guidance, Google keys (owner facts)
+**1. Fresh full Ward 29 run.** The owner ran the full Ward 29 analysis in Colab on 28 Sep 2026, on a T4 GPU, with the local
+use router ON (as set in the setup cell): **11.5 min, 1,420 Street View images, cloud AI $0.0887**. This is the real
+full-run time and cost to quote.
+- 11.5 min matches `model_card.cost_time.ward29_full_run_gpu_minutes`.
+- 1,420 agrees with the saved run files: 1,154 planned photos + 266 building crops re-fetched for the use/floors step
+  (reliable rows in `building_views.json`). 1,420 × $0.007 ≈ $9.94.
+- model_card's earlier benchmark ($0.056 with the router, $0.089 without) is left unchanged. Why the fresh run with the
+  router on measured $0.0887 is not confirmed: that run's files are not in the repository.
+- The app still shows the original (resumed) Ward 29 files. Under the Hood's Ward 29 photo cost ($8.08, planned views only)
+  under-counts; using the real count is a P7 item.
+
+**2. FarmwiseAI doubt session (27 Sep 2026).**
+- OpenStreetMap footprints are accepted as the reference.
+- A building's position is the centre of the building's front as seen from the street (as applied in D33).
+- FarmwiseAI may provide property register data later. Until then the registers stay synthetic.
+
+**3. Google keys.**
+- ONE Google **server** key: API restrictions Street View Static API + Places API (New), plus Geocoding API if enabled;
+  application restriction **None**. It is used by `backend/.env` `GOOGLE_PLACES_SERVER_KEY`, by the Colab secret
+  `GOOGLE_MAPS_KEY` (setup cells) and by the worker cell (Enter keeps the setup cells' key).
+- The **browser** key is only for the map (referrer-restricted, served by `GET /config/public`); it is never given to
+  the worker.
+- The D40 "no Street View" incident was that server key being refused (REQUEST_DENIED). It worked after the Street View
+  Static API was added to the key's allowed APIs.
+
+**4. Conflicts between docs and code:** the code wins everywhere. The stale docs (CLAUDE.md colours / fonts / heartbeat /
+job statuses / Sankey, DESIGN.md chapter count, `docs/PAGES_REVIEW_HOOD_JOBS.md`) are not edited now; they are listed for
+P7 in `docs/explainer/05_EXPLAIN_AND_DEFEND.md` (Appendix B).
+
+## 2026-10-01 — P7a: the four findings from the explainer, fixed in the pipeline
+
+All four fixes are in the shared pipeline code (`pipeline/geo_cascadia/`, package 0.2.0), so live runs from the Colab
+worker get them; the worker refuses an older package copy. They were re-applied to all six areas (the three originals +
+the three app-analysed streets) from saved files only with `tools/p7a_reapply.py`: no YOLO / OCR / cloud-AI / Street View
+/ Places calls (OpenStreetMap, and for Vadakku Masi Veethi the Microsoft footprint tile, were fetched to rebuild the
+outlines; cached under data/cache/). Before writing, the tool checks the saved files reproduce the saved attributes and the
+saved register matching exactly (all six areas pass; `indic-transliteration` was added to the backend venv so Tamil names
+score the same as on Colab). The previous files are kept in data/cache/p7a_before/<slug>/. Seeded and deterministic per
+area (the seed includes the area name).
+
+### D42. A synthetic register that copies the observations, plus planted mistakes
+- `register.observed_register`: each record copies what was observed — use, floors, position (the building's predicted
+  position, D33), outline area — except ~22% planted mistakes: missing record, wrong use (commercial ↔ residential, only
+  when the use is known), too few floors (only with ≥ 2 measured floors), pin moved 15–40 m (redrawn until > 15 m from
+  the outline centre too), area too small (55–70%).
+- A use or floor count that is not known is left empty in the record → "not compared", never a fake difference.
+- Saved per area: `planted_register_mistakes.json` and `register_synthetic.json` (the records with the hidden building id).
+- Recovery metric (`register.recovery_scores`, `backend/app/registertest.py`, Trust › Register tests, `GET /trust/register`):
+  caught / missed / false alarms per kind per area, computed from the records. Note on Trust: "This tests the comparison
+  logic end to end on made-up data; real accuracy needs a real register."
+- All six areas (after the D44 margin rule below): 108 mistakes planted, 94 caught; false alarms 14 (missing record 7, pin
+  3, area 2, use 1, floors 1), all from a moved pin paired with a neighbouring building (first P7a apply: 109 / 95 / 14). Ward 29 differs 117 → 50, not in register 19 → 27, review items
+  276 → 218. The notebook-era model_card `matching_planted_errors` block is kept, labelled "notebook era".
+
+### D43. Register records paired with buildings by location
+- `register.match_by_location`: the building id is never used. Each record's pin vs every building within 50 m (its
+  predicted position and its outline centre, whichever is nearer); cost = metres + 10 × |ln(record area / outline area)|
+  + 5 m when the use category disagrees; one-to-one, cheapest first. Outcomes: matched · pin in the wrong place (> 15 m) ·
+  building with no record · record with no building nearby (`export.register_unmatched`). Match confidence high (≤ 5 m,
+  next building ≥ 5 m worse) / medium (≤ 15 m, ≥ 2 m worse) / low; shown in the drawer's "How do we know?".
+- Validation with ids hidden: 530 of 538 records (98.5%) paired with their own building; every record whose pin was not
+  moved (100%); 18 of the 26 moved pins (69.2%).
+- `tools/import_register.py` + `docs/REGISTER_IMPORT.md`: CSV / TSV / GeoJSON / Excel with a column-mapping JSON (id,
+  lat/lon or address with `--geocode`, use + value mapping, floors, area in m² or sq ft, street); report of rows loaded,
+  skipped and why; `--area` pairs and reports; `--apply` writes the comparison into the area (then reload). A CSV made from
+  Ward 29's synthetic register reproduces the app's outcome exactly (304 matched, 50 differ, 27 no record).
+
+### D44. Signs linked by their own line of sight
+- `signlink.link_signs`: each sign box casts its own ray from the camera (box centre, pitch-aware; 2–40 m, hits ≥ 1.5 m).
+  Names, the sign → use rule (D32), the Google check and the evidence "Sign" photo follow the link (`sign_links.json`,
+  with `rule` own_ray / kept_aimed). The cloud model's sign readings follow their crop (no new call).
+- **First rule (replaced the same day):** credit every sign to the first outline its ray hits, None when it hits none.
+  Ward 29: 966 of 2,065 crops (47%) changed building.
+- **Validation without any API call** (owner request; `tools/validate_sign_links.py`, `--plain` for the first rule): for
+  read signs whose name matches a Google listing in the run's cached Nearby searches (`textmatch.same_business`, listing
+  ≤ 60 m from the camera, nearest if several), the Google pin is the reference: is the old (aimed) or the new outline
+  nearer to it (pin-to-outline distance, 0 inside)? Pins are Google's, not surveyed.
+
+  | Rule | Area | Moves measured | Closer | Further | Same ±1 m | Median change |
+  |---|---|---|---|---|---|---|
+  | first rule | Ward 29 | 35 | 15 | 19 | 1 | +3.7 m (further) |
+  | first rule | all six | 86 | 44 | 39 | 3 | −1.6 m |
+  | **margin rule, 4°** | Ward 29 | 21 | 14 | 6 | 1 | −3.5 m |
+  | **margin rule, 4°** | all six | 62 | 40 | 20 | 2 | −6.8 m |
+
+  First rule, Ward 29: of the 966 moves, 383 to an outline < 5 m from the aimed one, 188 to one ≥ 5 m away, 395 to or from
+  no outline; moved signs sit a median 31.9° from the photo's aim (unmoved 18.8°), 671 of them ≥ 25°: photo-edge signs.
+  The moves did not improve agreement with Google in Ward 29 (Trichy improved, Sanganur got worse).
+- **Rule kept (margin rule):** a sign moves off the aimed outline only when its ray AND the rays ±`config.sign_link_margin_deg`
+  (4°) all hit the same other outline first, and none of the three touches the aimed outline anywhere along its length;
+  otherwise it keeps the aimed outline (None when the photo was aimed at no outline). 2° and 3° were tried: 2° gave Ward 29
+  14 closer / 11 further; 3° 14 / 9; 4° 14 / 6 and kept Trichy's gain (18 / 9). A ray that hits nothing no longer drops a
+  sign to "no outline".
+- Ward 29 with the margin rule: 570 of 2,065 crops (28%) changed building: 368 between two outlines (248 adjacent < 5 m,
+  120 farther) and 202 from a photo aimed at no outline. Read signs moved: 267 (171 between analysed buildings, 79 onto an
+  unanalysed outline). Use not known 135 → 139 (first rule 142), names read clearly 105 → 96 (84), Google-confirmed 25,
+  businesses with no analysed building 30 → 26 (29), sign → use 21 buildings. Not checked by eye yet.
+- A read sign linked to no outline, or to an outline that is not an analysed building, is a candidate "business with no
+  analysed building" (label renamed from "no mapped building"); on an unanalysed outline it is placed at the ray's hit.
+  In the re-apply, candidates the run never sent to the cloud model reuse its cached answer to the same prompt from the
+  naming step, or stay "not checked" (Ward 29: 17 with the margin rule; a live run checks them).
+- Places cross-check split into search + `reference.crosscheck_with_places` (unchanged logic) so it can run on a run's
+  cached places.
+
+### D45. Single-camera pole uncertainty by distance
+- `poleunc`: for the 25 poles and streetlights triangulated from 2+ cameras (all areas), each camera's own estimate vs the triangulated
+  point, by that camera's rough distance: 63 estimates. 0–8 m n=20 median 1.28 m, 80th pct 2.39 m; 8–11 m n=11, 1.93 /
+  3.51 m; 11–15 m n=32, 1.57 / 3.03 m. Bands chosen so every band has ≥ 10 estimates.
+- **Per band the larger of** the consistency 80th percentile and the notebook's surveyed median for that distance
+  (`poleunc.SURVEYED_MEDIAN_M`: 0–8 m 1.64 m, 8–15 m 4.55 m, n=1,469 detections), rounded up to 0.5 m, never smaller for
+  a farther pole (owner: ±3.5 m understated the surveyed 8–15 m error). `config.single_cam_unc_bands = ((8, 2.4), (11, 5.0),
+  (15, 5.0))`: 0–8 m keeps 2.4 (consistency), 8–15 m becomes 5.0 (surveyed).
+- Export: `uncertainty_m`, `camera_distance_m`, a plain basis (≤ 8 m: "8 in 10 … within 2.4 m"; beyond: "an earlier surveyed
+  check found a typical (median) error of 4.55 m for poles 8–15 m from the camera, so the circle is ±5 m; about half of
+  such estimates fall inside it"); map circle and "How do we know?" use it. `tools/pole_uncertainty.py --write` stores the
+  table in model_card.json `single_camera_by_distance` (now with `surveyed_median_m` per band and `basis` per circle).
+- Trust shows the table with a "surveyed check (median)" column and which value each circle uses, and says the
+  consistency check leans small and that the ±5 m circle holds about half of such poles (a median), not 8 in 10.
+- Ward 29 single-camera circles: 248 × ±3.5 m → 132 × ±2.4 m and 116 × ±5 m.
+
+### Reload and review items
+- `loader.load_area` now reports every review item added, removed (pending) and every DECIDED item whose finding left the
+  queue (kept, with its decision, never deleted); `backend/load_area.py --report`. P7a reload: 145 waiting items removed,
+  58 added, 309 kept; no decided item was affected (all 454 were waiting). Reload twice → no changes. The re-apply with
+  the D44 margin rule and the D45 bands: Trichy 3 waiting items removed, Ward 29 1 removed and 1 added; 364 items, all
+  waiting; a second reload → no changes.
+
+### Colab package zip
+- The owner's S0 cell extracts the newest zip in /MyDrive/alldataset (after deleting geo_cascadia_pkg/) and expects
+  entries `geo_cascadia_pkg/geo_cascadia/<file>.py`. `tools/build_pkg_zip.py` writes `geo_cascadia_pkg_p7a.zip` with that
+  prefix (every .py of pipeline/geo_cascadia, no __pycache__) and checks every entry name; git-ignored; worker/README.md
+  and explainer 04 §12.1 give the command.
+
+### Explainer wording
+- Files 00, 01, 02, 03 and 05 use plain descriptions only (no request paths, file, function, table or column names, no
+  code terms); OSM building IDs and asset IDs stay because the app shows them. Technical names live only in 04.
