@@ -29,8 +29,8 @@ web (React, :5173) ──> API (FastAPI, :8000) ──> Supabase Postgres + Post
    backend\.venv\Scripts\python tools\warm_osm_cache.py            # retries slow map servers until done; prints the time
    backend\.venv\Scripts\python tools\warm_osm_cache.py --check    # all network blocked: every demo click must say "from the cache"
    ```
-   On 1 Oct, with OpenStreetMap answering slowly, the main run took 28.4 min (most of it the cost estimates, ~5-10 min
-   per long street); run it again if it reports "NOT complete" (finished items are skipped). The caches live in `data/cache/` and survive API restarts.
+   It takes **about 30 min, longer when OpenStreetMap is busy — start it the day before** (1 Oct: 28.4 and 29.4 min;
+   most of it is the cost estimates). Run it again if it reports "NOT complete" (finished items are skipped). The caches live in `data/cache/` and survive API restarts.
 2. Run the checks below (Tests) once.
 
 ### On the day, in this order
@@ -40,11 +40,14 @@ web (React, :5173) ──> API (FastAPI, :8000) ──> Supabase Postgres + Post
    ```powershell
    backend\.venv\Scripts\python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
    ```
-   Then open the app once: the first load reads every area from the database (~20 s); after that pages answer in < 1 s.
-3. **T2 — web** (production build: about a third of the dev server's memory, D3):
+   **Start it early and open the app once** before the audience arrives: the first load after an API restart reads
+   every area from the database (~18 s); after that pages answer in under a second.
+3. **T2 — web: use the production preview for the demo, not `npm run dev`.** The preview is the build that was
+   measured (JS heap 22–46 MB); the dev server uses about three times the memory (D3) on the 8 GB laptop.
    ```powershell
-   cd web; npm run build; npx vite preview --port 5173 --strictPort     # http://localhost:5173  (dev: npm run dev)
+   cd web; npm run build; npx vite preview --port 5173 --strictPort     # http://localhost:5173
    ```
+   `npm run dev` is for development only (and for `web/scripts/screenshots.ts`, which needs the dev-only map hook).
    Port 5173 matters: the Maps browser key is restricted to it, and the API only accepts calls from it.
 4. **T3 — tunnel** (for the worker):
    ```powershell

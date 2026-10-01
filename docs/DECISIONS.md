@@ -1627,7 +1627,7 @@ draws map text.
   network failure during planning was cached as "no Street View, 0 photos". It happened to three demo streets while the
   blocked-network API ran. `planest.plan_street` now makes one free metadata call when the search is empty; unless
   Google answers OK / ZERO_RESULTS / NOT_FOUND, the estimate fails ("Google Street View could not be reached…") and is
-  not cached. The three bad files were deleted and re-planned: Dr Alagesan Road 314 photos ($2.22), "Unnamed road near 5th Street" 21 photos ($0.15) — not the cached 0; Pioneer Mills Cross Street kept failing on a busy OpenStreetMap at commit time (no estimate cached; the warm-up now retries estimates too, so a later run fills it). pytest covers it.
+  not cached. The three bad files were deleted and re-planned: Dr Alagesan Road 314 photos ($2.22), "Unnamed road near 5th Street" 21 photos ($0.15) — not the cached 0; Pioneer Mills Cross Street failed three times on a busy OpenStreetMap; the warm-up now retries estimates too, and a later run (29.4 min, "Everything cached") cached it: 63 photos, $0.45, 4.3 min. All six demo streets now have their street lookup and estimate cached. pytest covers it.
 - **Hood cost caption (A2):** "Photo cost is at Google's list price — Google's free monthly allowance may cover it."
   The cloud-AI (AWS) cost stays as measured. Also fixed: the original areas' line read "about 9.94" (the `$` was eaten
   by the template literal).
