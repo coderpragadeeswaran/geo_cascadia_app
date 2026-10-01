@@ -2,7 +2,7 @@
  *  map at this zoom band with the current layers and mode. */
 import { ChevronDown } from 'lucide-react'
 import { useState } from 'react'
-import { useAreaGeo } from '@/api/queries'
+import { useAreaGeo, useCameraBuildings } from '@/api/queries'
 import { colors } from '@/design/tokens'
 import { FLOOR_HEIGHT_M } from '@/map/layers'
 import { cn } from '@/lib/utils'
@@ -20,7 +20,9 @@ export function Key() {
   const mode = useUi((s) => s.mode)
   const analyse = useUi((s) => s.analyse)
   const drive = useUi((s) => !!s.drive)
-  const { data: geo } = useAreaGeo(useUi((s) => s.area))
+  const area = useUi((s) => s.area)
+  const { data: geo } = useAreaGeo(area)
+  const { data: camB } = useCameraBuildings(area)
   const c = colors[mode]
   const night = mode === 'night'
   const near = band === 'street' || band === 'object'
@@ -54,6 +56,10 @@ export function Key() {
               )}
               {layers.unmapped && near && <Item sw={<span className="size-2.5 rounded-full" style={{ boxShadow: `inset 0 0 0 1.5px ${c.ink2}` }} />}>Business with no analysed building</Item>}
               {layers.assets && near && layers.uncertainty && <Item sw={<span className="size-3 rounded-full" style={{ border: `1px dashed ${c.ink2}` }} />}>Approximate position</Item>}
+              {layers.cameraBuildings && (camB?.count ?? 0) > 0 && (
+                <Item sw={<span className="size-2.5 rotate-45 rounded-[1px]" style={{ boxShadow: `inset 0 0 0 1.5px ${night ? c.sodiumGlow : c.sodium}` }} />}>
+                  Building seen by camera only, no map outline · <span className="t-data">{camB!.count}</span>{near ? '' : ' (street zoom)'}</Item>
+              )}
               {layers.missing && near && <Item sw={<span className="size-3 rounded-[3px]" style={{ border: `1.5px dashed ${c.noRecord}` }} />}>In the register, not seen</Item>}
               {layers.review && near && <Item sw={<span className="h-2.5 w-4 rounded-[2px]" style={{ border: `1.5px dashed ${c.review}` }} />}>Waiting for review</Item>}
               {layers.streetHealth && <Item sw={<span className="h-1 w-5 rounded" style={{ background: `linear-gradient(90deg, ${c.ink3}, ${c.noRecord})` }} />}>Road colour: findings per km</Item>}

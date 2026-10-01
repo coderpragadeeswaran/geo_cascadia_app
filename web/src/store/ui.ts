@@ -7,7 +7,7 @@ import { applyMode } from '@/design/mode'
 import type { Mode } from '@/design/tokens'
 
 export type LayerKey =
-  | 'buildings' | 'assets' | 'uncertainty' | 'gaps' | 'unmapped' | 'missing'
+  | 'buildings' | 'assets' | 'uncertainty' | 'gaps' | 'unmapped' | 'missing' | 'cameraBuildings'
   | 'streetHealth' | 'density' | 'review' | 'coverage'
 /** base map in Daylight (Night is always the dark roadmap: Cloud dark-mode styles do not apply to satellite) */
 export type MapTypeMode = 'map' | 'satellite'
@@ -135,7 +135,7 @@ interface UiState {
 }
 
 const DEFAULT_LAYERS: Record<LayerKey, boolean> = {
-  buildings: true, assets: true, uncertainty: true, gaps: true, unmapped: true, missing: true,
+  buildings: true, assets: true, uncertainty: true, gaps: true, unmapped: true, missing: true, cameraBuildings: true,
   // declutter (docs/DESIGN.md): findings density and street-health colouring are opt-in; coverage lines belong to Analyse
   streetHealth: false, density: false, review: false, coverage: false,
 }

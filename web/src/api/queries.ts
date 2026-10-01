@@ -14,6 +14,15 @@ export const useAreaDetail = (slug: string | null) =>
   useQuery({ queryKey: ['area', slug], queryFn: () => api<AreaDetail>(`/areas/${slug}`), enabled: !!slug, staleTime: 30_000 })
 
 const ALL_LAYERS = 'buildings,assets,gaps,unmapped,missing,streets'
+/** P7.3: buildings found only by the camera (no map outline), from the run's files */
+export interface CameraBuilding { id: string; lat: number; lon: number; n_cameras: number | null; uncertainty_m: number | null; from: string | null }
+export const useCameraBuildings = (slug: string | null) =>
+  useQuery({
+    queryKey: ['camera-buildings', slug],
+    queryFn: () => api<{ points: CameraBuilding[]; count: number; available: boolean }>(`/areas/${slug}/camera-buildings`),
+    enabled: !!slug, staleTime: 5 * 60_000,
+  })
+
 export const useAreaGeo = (slug: string | null) =>
   useQuery({
     queryKey: ['geo', slug],
@@ -40,12 +49,18 @@ export const useObjectDetail = (area: string | null, kind: 'building' | 'asset' 
   })
 
 /** detection boxes on each evidence photo of an object (design pass B §2) */
+type EvidenceResponse = { views: EvidenceViewData[]; links?: BuildingLinks }
+/** P7.3: what the photos link to one building outline (sign boxes by their own line of sight, and the photos they are in) */
+export interface BuildingLinks { sign_boxes: number; photos: number; source: string }
+const evidenceQuery = (area: string | null, kind: 'building' | 'asset' | 'unmapped', id: string) => ({
+  queryKey: ['evidence', area, kind, id],
+  queryFn: () => api<EvidenceResponse>(`/areas/${area}/evidence/${kind}/${encodeURIComponent(id)}`),
+  enabled: !!area, staleTime: Infinity,
+})
 export const useEvidence = (area: string | null, kind: 'building' | 'asset' | 'unmapped', id: string) =>
-  useQuery({
-    queryKey: ['evidence', area, kind, id],
-    queryFn: () => api<{ views: EvidenceViewData[] }>(`/areas/${area}/evidence/${kind}/${encodeURIComponent(id)}`).then((r) => r.views),
-    enabled: !!area, staleTime: Infinity,
-  })
+  useQuery({ ...evidenceQuery(area, kind, id), select: (r: EvidenceResponse) => r.views })
+export const useBuildingLinks = (area: string | null, id: string) =>
+  useQuery({ ...evidenceQuery(area, 'building', id), select: (r: EvidenceResponse) => r.links ?? null })
 
 export const useModelCard = () =>
   useQuery({ queryKey: ['model-card'], queryFn: () => api<ModelCard>('/model-card'), staleTime: Infinity })

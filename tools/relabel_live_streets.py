@@ -67,7 +67,7 @@ def main():
                 continue
             click = ji.get("click") or {}
             r = resolve(cache, click["lat"], click["lon"], st.google_server_key)
-            if set(r["way_ids"]) != set(ji.get("way_ids") or []) or r.get("name_source") != "unnamed":
+            if set(r["way_ids"]) != set(ji.get("way_ids") or []) or r.get("name_source") not in ("unnamed", "google"):
                 print(f"{slug}: the click now resolves to another road ({r['street']}), skipped")
                 continue
             new, old = streetpick.plain_name(r["street"]), ji.get("street")

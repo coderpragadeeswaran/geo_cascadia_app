@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/api/client'
 import type { JobEstimate, PlanStatus } from '@/api/p5'
 import { post, useAreas } from '@/api/queries'
-import { deviceWord, JOB_STAGES, jobStatus, minutesParts, shortArea, STAGE_PLAIN, stageLine, timeLeft } from '@/lib/labels'
+import { deviceWord, JOB_STAGES, jobStatus, minutesParts, PLAN_SLOW_TEXT, planTooSlow, shortArea, STAGE_PLAIN, stageLine, timeLeft } from '@/lib/labels'
 import { fmt, noun, plural } from '@/lib/utils'
 import { streetKey, useAnalyse } from '@/map/analyse'
 import { flyToBounds } from '@/map/MapView'
@@ -57,13 +57,14 @@ function usePlanEstimate() {
   // poll while planning
   useEffect(() => {
     if (st?.status === 'done' && st.estimate) setLast(st.estimate)
-    if (st?.status !== 'running' || !st.key) return
+    if (st?.status !== 'running' || !st.key || planTooSlow(st)) return      // F3: stop waiting after PLAN_WAIT_S
     const t = setTimeout(() => {
       api<PlanStatus>(`/jobs/plan-estimate/${st.key}`).then((r) => setSt((cur) => (cur?.key === r.key ? r : cur))).catch(() => {})
     }, 1500)
     return () => clearTimeout(t)
   }, [st])
-  return { st, est: st?.status === 'done' ? st.estimate ?? null : last, busy: st?.status === 'running', retry: () => setNonce((n) => n + 1) }
+  return { st, est: st?.status === 'done' ? st.estimate ?? null : last, busy: st?.status === 'running' && !planTooSlow(st),
+    slow: planTooSlow(st), retry: () => setNonce((n) => n + 1) }
 }
 
 /** P7.2: the job's cost cap (default from the backend, $2). Above it the worker pauses the job for approval before any
@@ -225,6 +226,11 @@ export function AnalysePanel() {
                     <div className="rule-l pl-4"><dt className="t-micro">CPU only</dt><MinutesFigure m={est.cpu_minutes} /></div>
                   </dl>
                 ) : plan.st?.status === 'failed' ? null
+                  : plan.slow ? (
+                    <div className="mt-3 flex items-start gap-3" role="status">
+                      <p className="t-small flex-1" style={{ color: 'var(--ns-sodium)' }}>{PLAN_SLOW_TEXT}</p>
+                      <button className="btn btn-line" onClick={plan.retry}>Check again</button>
+                    </div>)
                   : <p className="t-small ink2 mt-3 flex items-center gap-2"><Loader2 className="size-3.5 animate-spin sodium" /> Planning camera stops with the pipeline’s own planner{plan.st?.elapsed_s != null ? ` · ${Math.floor(plan.st.elapsed_s)} s` : ''}… You can start without waiting.</p>}
                 {plan.st?.status === 'failed' && (
                   <div className="mt-3 flex items-start gap-3">

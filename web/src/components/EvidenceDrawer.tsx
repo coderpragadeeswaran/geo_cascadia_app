@@ -6,9 +6,9 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Check, CircleSlash, Flag, Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { ApiError } from '@/api/client'
-import { useObjectDetail } from '@/api/queries'
+import { useBuildingLinks, useObjectDetail } from '@/api/queries'
 import type { AnyProps, Asset, Building, GapProps, MissingProps, ReviewItem, UnmappedBusiness } from '@/api/types'
-import { assetRegLabel, ASSET_REG, diffLabel, floorsStatusPlain, floorsText, googleFlagPlain, matchLabel, nameQualityPlain, reviewLabel, reviewReasons, useLabel, useNoun } from '@/lib/labels'
+import { assetRegLabel, ASSET_REG, diffLabel, onMapSeenIn, floorsStatusPlain, floorsText, googleFlagPlain, matchLabel, nameQualityPlain, reviewLabel, reviewReasons, useLabel, useNoun } from '@/lib/labels'
 import { RouteLine } from '@/lib/routes'
 import { miniStreets } from '@/lib/mini'
 import { useAreaData } from '@/lib/useAreaData'
@@ -98,10 +98,24 @@ function registerLine(reg: NonNullable<Building['register']>) {
 const singleCameraWhere = (a: Asset) => (a.camera_distance_m != null ? `one camera, ${Math.round(a.camera_distance_m)} m away` : 'one camera, distance unknown')
 function assetSummary(a: Asset) {
   const what = a.type === 'streetlight' ? 'streetlight' : 'pole'
-  const times = a.n_detections != null ? plural(a.n_detections, 'time') : 'several times'
+  const times = a.n_detections != null ? plural(a.n_detections, 'time') : 'several times'   // one object, several photo boxes
   return a.method === 'triangulated'
     ? `The detector found this ${what} ${times} in the street photos, and its position is measured from where ${plural(a.cameras_used ?? 0, 'camera view')} cross.`
     : `The detector found this ${what} ${times} in the street photos, but from one camera position only, so its position is approximate.`
+}
+
+/** P7.3: "1 building · N shop signs": the sign boxes linked to this outline by their own line of sight (one shop can be in
+ *  several photos, so N counts sign boxes, not distinct shops). 0 linked is said plainly. */
+function LinkedLine({ area, id }: { area: string | null; id: string }) {
+  const { data: l } = useBuildingLinks(area, id)
+  if (!l) return null
+  return (
+    <p className="t-small ink2 mt-2" title={l.source}>
+      <span className="t-data">1</span> building · {l.sign_boxes
+        ? <><span className="t-data">{fmt.format(l.sign_boxes)}</span> shop {l.sign_boxes === 1 ? 'sign' : 'signs'} linked to it, in {plural(l.photos, 'photo')} <span className="ink3">(one shop can appear in several photos; marked “part of this building” on the photos)</span></>
+        : <>no shop sign in the photos is linked to it</>}
+    </p>
+  )
 }
 
 function BuildingBody({ b }: { b: Building }) {
@@ -116,6 +130,7 @@ function BuildingBody({ b }: { b: Building }) {
       <PanelHead eyebrow="Building" title={title} sub={<StatusDot s={b.match_status} label={matchLabel(b.match_status, true, !!b.attributes?.use?.value)} />} />
       <Body>
         <EvidenceViews kind="building" id={b.id} at={{ lat: b.lat, lng: b.lon }} target="building" />
+        <LinkedLine area={area} id={b.id} />
         <Section title="What we saw">
           <Row k="Use">{use ? <>{useLabel(use)}</> : <span className="ink3">Not known: no clear photo of the front</span>}</Row>
           <Row k="Floors">{at?.floors?.value != null ? floorsText(at.floors.value, at.floors.status) : <span className="ink3">Not known</span>}</Row>
@@ -171,6 +186,7 @@ function AssetBody({ a }: { a: Asset }) {
         <EvidenceViews kind="asset" id={a.id} at={{ lat: a.lat, lng: a.lon }} target={a.type === 'streetlight' ? 'lamp' : 'pole'} />
         <Section title="What we saw">
           <Row k="What">{a.type === 'streetlight' ? 'A streetlight (pole with a lamp)' : 'A pole with no lamp seen'}</Row>
+          <Row k="On the map">{onMapSeenIn(a.type === 'streetlight' ? 'streetlight' : 'pole', a.n_detections)}{(a.n_detections ?? 0) > 1 && <span className="ink3"> (the same {a.type === 'streetlight' ? 'streetlight' : 'pole'} in several photos, merged into one)</span>}</Row>
           <Row k="Position">{pinned ? `Pinpointed: seen from ${a.cameras_used} camera positions` : `Approximate: about ±${fmt1.format(a.uncertainty_m ?? 0)} m (${singleCameraWhere(a)})`}</Row>
           <HowWeKnow summary={assetSummary(a)} links={[{ page: 'trust', section: 'detector', label: 'Detector accuracy' }, { page: 'trust', section: 'positions', label: 'Position checks' },
             { page: 'hood', section: 'assets', label: 'How assets are located' }]}>
@@ -181,7 +197,7 @@ function AssetBody({ a }: { a: Asset }) {
               : a.camera_distance_m != null && a.camera_distance_m <= 8
                 ? `About ±${fmt1.format(a.uncertainty_m ?? 0)} m: ${singleCameraWhere(a)}. At that distance, 8 in 10 single-camera estimates of poles that two cameras pinpointed were within ${fmt1.format(a.uncertainty_m ?? 0)} m (a consistency check).`
                 : `About ±${fmt1.format(a.uncertainty_m ?? 0)} m: ${singleCameraWhere(a)}. An earlier surveyed check found a typical error of 4.55 m for poles 8–15 m from the camera, so about half of such poles fall inside this circle.`}</Fact>
-            <Fact k="Times seen" hint={`${a.confidence ?? '—'} confidence`}>{a.n_detections != null ? `Found ${plural(a.n_detections, 'time')} in the photos` : '—'}, {a.confidence === 'high' ? 'so we are fairly sure' : a.confidence === 'medium' ? 'so we are somewhat sure' : a.confidence === 'low' ? 'so it needs a second look' : ''}</Fact>
+            <Fact k="Times seen" hint={`${a.confidence ?? '—'} confidence`}>{a.n_detections != null ? `One ${a.type === 'streetlight' ? 'streetlight' : 'pole'}, found ${plural(a.n_detections, 'time')} in the photos` : '—'}, {a.confidence === 'high' ? 'so we are fairly sure' : a.confidence === 'medium' ? 'so we are somewhat sure' : a.confidence === 'low' ? 'so it needs a second look' : ''}</Fact>
             <Fact k="Map position"><span className="t-data">{a.lat.toFixed(6)}, {a.lon.toFixed(6)}</span></Fact>
             <Fact k="Where it stands"><DrawerMini obj={{ kind: 'asset', a }} /></Fact>
             <Fact k="ID"><span className="t-data">{a.id}</span></Fact>

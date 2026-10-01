@@ -17,14 +17,17 @@ import { measureText, useFontsReady } from '@/lib/textWidth'
 export const CLS_COLOR: Record<EvidenceBox['cls'], string> = { building: '#cfd6ea', pole: '#ffffff', lamp_head: '#ffc27a', signboard: '#7dcad6' }
 export const CLS_LABEL: Record<EvidenceBox['cls'], string> = { building: 'building', pole: 'pole', lamp_head: 'lamp', signboard: 'sign' }
 const TARGET = '#ffa23a'
+const LINKED = '#ffd29a'          // P7.3: boxes linked to the selected building ("part of this building")
+export const LINKED_TEXT = 'part of this building'
 const TARGET_NAME = { building: 'This building', pole: 'This pole', lamp: 'This streetlight', sign: 'This sign' } as const
 
 export function Boxes({ boxes, all, hidden, targetName }: { boxes: EvidenceBox[]; all: boolean; hidden: Set<string>; targetName: string }) {
   // targets last so they sit on top
-  const shown = boxes.filter((b) => b.target || (all && !hidden.has(b.cls))).sort((a, b) => Number(a.target) - Number(b.target))
+  const shown = boxes.filter((b) => b.target || b.linked || (all && !hidden.has(b.cls))).sort((a, b) => Number(a.target) - Number(b.target))
   // "building 43%": how sure the detector was (confidence 0.43)
-  const texts = shown.map((b) => (b.target ? (all ? `${targetName.toLowerCase()} · ${CLS_LABEL[b.cls]} ${Math.round(b.conf * 100)}%` : targetName) : `${CLS_LABEL[b.cls]} ${Math.round(b.conf * 100)}%`))
-  const labelled = shown.map((b) => all || b.target)
+  const texts = shown.map((b) => (b.target ? (all ? `${targetName.toLowerCase()} · ${CLS_LABEL[b.cls]} ${Math.round(b.conf * 100)}%` : targetName)
+    : b.linked ? (all ? `${LINKED_TEXT} · ${CLS_LABEL[b.cls]} ${Math.round(b.conf * 100)}%` : LINKED_TEXT) : `${CLS_LABEL[b.cls]} ${Math.round(b.conf * 100)}%`))
+  const labelled = shown.map((b) => all || b.target || !!b.linked)
   // only labelled boxes take label space; spots[i] lines up with shown[i]
   const idx = shown.map((_, i) => i).filter((i) => labelled[i])
   const fonts = useFontsReady()          // re-measure once Martian Mono has loaded
@@ -34,7 +37,7 @@ export function Boxes({ boxes, all, hidden, targetName }: { boxes: EvidenceBox[]
   return (
     <>
       {shown.map((b, i) => {
-        const c = b.target ? TARGET : CLS_COLOR[b.cls]
+        const c = b.target ? TARGET : b.linked ? LINKED : CLS_COLOR[b.cls]
         return (
           <g key={`b${i}`}>
             <rect x={b.x1} y={b.y1} width={b.x2 - b.x1} height={b.y2 - b.y1} fill="none" stroke="#000" strokeOpacity=".5" strokeWidth={b.target ? 8 : 5} rx="3" />
@@ -50,7 +53,7 @@ export function Boxes({ boxes, all, hidden, targetName }: { boxes: EvidenceBox[]
         return (
           <g key={`l${i}`}>
             <rect x={r.x} y={r.y} width={r.w} height={r.h} rx="3" fill="#000" fillOpacity=".72" />
-            <text x={r.x + 6} y={r.y + 17} fill={b.target ? TARGET : CLS_COLOR[b.cls]} fontSize="18" fontFamily="var(--ns-mono)">{texts[i]}</text>
+            <text x={r.x + 6} y={r.y + 17} fill={b.target ? TARGET : b.linked ? LINKED : CLS_COLOR[b.cls]} fontSize="18" fontFamily="var(--ns-mono)">{texts[i]}</text>
           </g>
         )
       })}

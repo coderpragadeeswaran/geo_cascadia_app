@@ -1,0 +1,56 @@
+{
+ "generated": "2026-10-01T18:21:58",
+ "streets": [
+  {
+   "raw": "Bharathidasan Salai",
+   "way_ids": [
+    206238052,
+    369881223,
+    1391379618,
+    1391379619
+   ],
+   "length_m": 2653,
+   "current": "Bharathidasan Salai",
+   "default": "Bharathidasan Salai",
+   "f2": {
+    "name": "Bharathidasan Salai",
+    "rule": "OpenStreetMap name",
+    "source": "osm",
+    "complete": true
+   },
+   "sources": [
+    {
+     "source": "osm",
+     "label": "OpenStreetMap",
+     "name": "Bharathidasan Salai",
+     "note": null
+    },
+    {
+     "source": "google",
+     "label": "Google (pipeline vote)",
+     "name": null,
+     "note": "no Google name recorded"
+    },
+    {
+     "source": "f2",
+     "label": "Street picker rule (F2)",
+     "name": "Bharathidasan Salai",
+     "note": "OpenStreetMap name"
+    },
+    {
+     "source": "register",
+     "label": "Register (synthetic)",
+     "name": null,
+     "note": "copies the raw map label 'Bharathidasan Salai' (66 records): not a name"
+    },
+    {
+     "source": "places",
+     "label": "Google Places",
+     "name": null,
+     "note": "no street names stored (only business names and positions)"
+    }
+   ],
+   "mismatch": false
+  }
+ ]
+}

@@ -1543,3 +1543,41 @@ jobs keep theirs.
 **Hood photo cost (P7.2-8).** Original areas: photos = views fetched (_views_done.json) + reliable building views
 (building_views.json; one building photo each) — Ward 29 1,154 + 266 = 1,420, $9.94 — with the source as caption and
 tooltip.
+
+## 2026-10-01 — P7 Round 2 (R1 fixes, layers and linking, name picker, sign rule on Trust)
+
+### D47. Time model, F2 street names, estimate timeout, camera-only layer, linked boxes, pole wording, name picker, sign spot-check
+**F1 time model.** GPU minutes = start-up + images × per-image rate. Per-image: Ward 29 full run, 11.5 min / 1,420 images
+= 0.49 s. Start-up: median over completed GPU jobs that ran from the start of (job time − images × 0.49 s): Kattabomman
+172 s, Vadakku Masi Veethi 286 s → 229 s (3.8 min). Estimates vs real: Ward 29 1,505 images → 16.0 min (real 11.5, a
+pipeline run without job start-up); Kattabomman 35 → 4.1 min (real job 3.1); Vadakku Masi Veethi 167 → 5.2 min (real
+job 6.1). Not fitted: two measured inputs, one formula.
+**F2 street names.** OSM name → else Google's name for the road ITSELF → else "Unnamed road between A and B / near A /
+Unnamed road". Google's name counts as the road's own only when (1) the same route name comes back at most of up to 3
+sample points along the road's middle, each > 25 m from the junctions (where reverse geocoding answers with the cross
+street), (2) Google's point for that route lies ≤ 25 m from the clicked road, and (3) it is not the name of a cross
+street at its ends (OSM, or Google's name for an unnamed end road). `streetpick.google_own_name`, cached 30 days.
+Live areas re-labelled (tools/relabel_live_streets.py): 4th Street area → "3rd Street, Sridevi Nagar" (2 of 3 samples, on
+the road); Kattabomman area → "Kattabomman Street Extention" (Google's spelling; its middle sample answered "Kattabomman
+Street" with a point ~50 m away = the cross street, rejected). Sanganur Road, Vadakku Masi Veethi: OSM names.
+**F3.** The confirm sheet stops waiting for the planner after 90 s: "Estimate slow (map server busy) — you can still
+start; the cost cap protects you." (Check again); planning continues on the server; Start never waits.
+**F4.** `# pyright: reportMissingImports=false, reportMissingModuleSource=false` heads worker/colab_worker.py.
+**Camera-only buildings.** `GET /areas/{slug}/camera-buildings` from building_positions.json `no_footprint` (rays
+crossing where OSM has no outline); toggleable layer (sodium diamonds, street zoom), count in the Key. Ward 29: 9.
+**Linked boxes.** A building's evidence photos mark every sign box linked to it by sign_links.json (D44) as "part of this
+building"; the drawer says "1 building · N shop signs linked to it, in M photos" (N counts sign boxes: one shop can be in
+several photos), or "no shop sign in the photos is linked to it".
+**Poles.** Hover and drawer: "1 pole on the map · seen in N photos" (n_detections); Hood chapter 04 now says the
+958 pole and 120 lamp-head boxes are photo boxes, merged into 268 poles and streetlights.
+**Street-name picker.** tools/street_name_candidates.py writes street_name_candidates.json per area (OSM, Google
+pipeline vote — kept in street_names_pipeline.json once the app changes street_names.json —, the F2 rule, the
+synthetic register's raw label, Places: no street names stored). Hood › Street names lists mismatches, default = F2.
+A pick goes to data/street_name_picks.json and is applied by the loader and the JSON store (namepick.apply); the area
+is reloaded; no source file changes.
+**Sign rule on Trust.** model_card.sign_links from tools/validate_sign_links.py (Ward 29: 570 of 2,065 sign boxes moved;
+30 moved read signs with a Google pin: 14 closer, 6 further, 1 same, 9 to/from no outline; median 3.5 m closer).
+tools/sign_spotcheck.py draws 20 random moves (seed 2026, from all 570). AI first pass (Claude Code viewed each photo
+once — 20 Street View requests, $0.14 at list price, deleted after): 11 move looks right, 0 wrong, 9 can't tell; 6 of
+the 20 boxes are not shop signs. Shown on Trust as "AI visual check (Claude Code), not a human check", with a
+one-photo-at-a-time spot-check a person can redo (verdicts kept in that browser).

@@ -7,6 +7,7 @@ Swagger: http://localhost:8000/docs
 Every JSON response carries `"offline": true|false` — true when the DB is unreachable and data comes read-only from
 data/areas/*.json (docs/DECISIONS.md D4).
 """
+import re
 import json
 import logging
 import os
@@ -23,7 +24,7 @@ from .settings import ROOT, Settings
 
 sys.path.insert(0, os.path.join(ROOT, "pipeline"))   # geo_cascadia (import only — never modified)
 
-from . import drive, evidence, gaps, hood, minimap, registertest, trust, views  # noqa: E402
+from . import drive, evidence, gaps, hood, loader, minimap, namepick, registertest, trust, views  # noqa: E402
 from .storage import StorageError  # noqa: E402
 from .store import Data, OfflineError  # noqa: E402
 
@@ -212,6 +213,72 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         feats, off = D.read(fn)
         return {"type": "FeatureCollection", "features": feats, "offline": off}
 
+    @app.get("/areas/{slug}/camera-buildings", tags=["areas"])
+    def camera_buildings(slug: str):
+        """P7.3: buildings found only by the camera — box rays from several cameras crossing where OpenStreetMap has no
+        building outline (the pipeline's building_positions.json "no_footprint"). Not analysed as buildings (no register
+        check); shown as a map layer. Read from the run's files, so it works with or without the database."""
+        if not re.fullmatch(r"[a-z0-9_]+", slug):
+            raise HTTPException(404, "unknown area")
+        path = os.path.join(settings.areas_dir, slug, "building_positions.json")
+        if not os.path.isdir(os.path.join(settings.areas_dir, slug)):
+            raise HTTPException(404, f"area {slug!r} not found")
+        try:
+            with open(path, encoding="utf-8") as f:
+                bp = json.load(f)
+        except (OSError, ValueError):
+            return {"offline": False, "available": False, "points": [], "count": 0, "stats": None}
+        pts = [{"id": f"cb-{i + 1:03d}", "lat": q["lat"], "lon": q["lon"], "method": q.get("method"), "from": q.get("from"),
+                "n_cameras": q.get("n_cameras"), "uncertainty_m": q.get("uncertainty_m"), "approximate": q.get("approximate")}
+               for i, q in enumerate(bp.get("no_footprint") or []) if q.get("lat") is not None]
+        return {"offline": False, "available": True, "points": pts, "count": len(pts), "stats": bp.get("no_footprint_stats"),
+                "source": "building_positions.json (no_footprint): camera rays crossing with no building outline"}
+
+    @app.get("/areas/{slug}/street-names", tags=["areas"])
+    def street_names(slug: str):
+        """P7.3: every name each street of the area has (OpenStreetMap, Google, the street picker's rule, the register,
+        Places) with mismatches flagged, the default pick (the F2 rule), and any name a person picked to display."""
+        if not re.fullmatch(r"[a-z0-9_]+", slug) or not os.path.isdir(os.path.join(settings.areas_dir, slug)):
+            raise HTTPException(404, f"area {slug!r} not found")
+        c = namepick.candidates(os.path.join(settings.areas_dir, slug))
+        picks = namepick.read_picks(settings.data_dir).get(slug, {})
+        return {"offline": False, "available": c is not None, "generated": (c or {}).get("generated"),
+                "streets": (c or {}).get("streets", []), "picks": picks}
+
+    class NamePickIn(BaseModel):
+        raw: str = Field(..., description="the street's raw OpenStreetMap label (streets.json name)")
+        name: Optional[str] = Field(None, description="one of the street's candidate names; null = remove the pick")
+
+    @app.put("/areas/{slug}/street-names", tags=["areas"])
+    def pick_street_name(slug: str, body: NamePickIn, D: Data = Depends(get_data)):
+        """Pick the name a street is DISPLAYED with (stored in data/street_name_picks.json; source files untouched). The
+        area is reloaded so the map, records and charts all use it. Needs the database (offline mode is read-only)."""
+        if not re.fullmatch(r"[a-z0-9_]+", slug) or not os.path.isdir(os.path.join(settings.areas_dir, slug)):
+            raise HTTPException(404, f"area {slug!r} not found")
+        folder = os.path.join(settings.areas_dir, slug)
+        c = namepick.candidates(folder) or {}
+        row = next((r for r in c.get("streets", []) if r["raw"] == body.raw), None)
+        if row is None:
+            raise HTTPException(404, f"street {body.raw!r} not in this area's name list")
+        allowed = {s["name"] for s in row["sources"] if s.get("name")} | {row["current"]}
+        if body.name is not None and body.name not in allowed:
+            raise HTTPException(422, f"pick one of the street's names: {sorted(allowed)}")
+        if not D.db_online and not D.probe():
+            raise OfflineError("offline data mode — read only (picking a street name needs the database)")
+        before = namepick.read_picks(settings.data_dir).get(slug, {}).get(body.raw)
+        namepick.save_pick(settings.data_dir, slug, body.raw, None if body.name == row["current"] else body.name)
+        try:
+            def fn(s):
+                with s.pool.connection() as conn:
+                    loader.load_area(conn, folder)
+            D.write(fn)
+        except Exception:
+            namepick.save_pick(settings.data_dir, slug, body.raw, before)          # keep store and files in step
+            raise
+        D.db.invalidate(slug)
+        D.json._cache.pop(slug, None)
+        return {"offline": False, "picks": namepick.read_picks(settings.data_dir).get(slug, {})}
+
     @app.get("/areas/{slug}/buildings", tags=["buildings"])
     def buildings(slug: str, street: Optional[str] = None,
                   status: Optional[str] = Query(None, description="match status: matched | discrepancy | no_record"),
@@ -271,7 +338,10 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         res, off = D.read(lambda s: evidence.evidence(app.state.detections, need(s, slug), kind, obj_id))
         if res is None:
             raise HTTPException(404, f"{kind} {obj_id!r} not found in {slug!r}")
-        return {"offline": off, "area": slug, "kind": kind, "id": obj_id, "views": res}
+        out = {"offline": off, "area": slug, "kind": kind, "id": obj_id, "views": res}
+        if kind == "building":
+            out["links"] = evidence.building_links(app.state.detections, slug, obj_id)
+        return out
 
     @app.get("/areas/{slug}/drive", tags=["areas"])
     def drive_street(slug: str, street: str = Query(..., description="street display name"), D: Data = Depends(get_data)):
@@ -327,6 +397,22 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
                 "confusion_note": "model_card.json has precision and recall per class, not a confusion matrix, so none is drawn.",
                 # D45: single-camera pole error by camera distance (model_card, written by tools/pole_uncertainty.py)
                 "single_camera_by_distance": card.get("single_camera_by_distance")}
+
+    @app.get("/trust/sign-links", tags=["trust"])
+    def trust_sign_links(area: str = "ward29"):
+        """P7.4: the sign-linking rule and its Google-pin check (model_card.sign_links), the spot-check sample of sign moves
+        (sign_spotcheck.json: photo view, box, camera, line of sight, old / new outline) and the AI first-pass verdicts
+        (sign_spotcheck_ai.json, labelled as an AI visual check, not a human one)."""
+        if not re.fullmatch(r"[a-z0-9_]+", area):
+            raise HTTPException(404, "unknown area")
+        def rd(name):
+            try:
+                with open(os.path.join(settings.areas_dir, area, name), encoding="utf-8") as f:
+                    return json.load(f)
+            except (OSError, ValueError):
+                return None
+        return {"offline": False, "area": area, "model_card": (app.state.model_card.get() or {}).get("sign_links"),
+                "spotcheck": rd("sign_spotcheck.json"), "ai_check": rd("sign_spotcheck_ai.json")}
 
     @app.get("/trust/register", tags=["trust"])
     def trust_register(D: Data = Depends(get_data)):

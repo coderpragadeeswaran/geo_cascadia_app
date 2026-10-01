@@ -1,0 +1,53 @@
+{
+ "generated": "2026-10-01T18:22:51",
+ "streets": [
+  {
+   "raw": "Vadakku Masi Veethi",
+   "way_ids": [
+    28669420
+   ],
+   "length_m": 383,
+   "current": "Vadakku Masi Veethi",
+   "default": "Vadakku Masi Veethi",
+   "f2": {
+    "name": "Vadakku Masi Veethi",
+    "rule": "OpenStreetMap name",
+    "source": "osm",
+    "complete": true
+   },
+   "sources": [
+    {
+     "source": "osm",
+     "label": "OpenStreetMap",
+     "name": "Vadakku Masi Veethi",
+     "note": null
+    },
+    {
+     "source": "google",
+     "label": "Google (pipeline vote)",
+     "name": null,
+     "note": "no Google name recorded"
+    },
+    {
+     "source": "f2",
+     "label": "Street picker rule (F2)",
+     "name": "Vadakku Masi Veethi",
+     "note": "OpenStreetMap name"
+    },
+    {
+     "source": "register",
+     "label": "Register (synthetic)",
+     "name": null,
+     "note": "copies the raw map label 'Vadakku Masi Veethi' (45 records): not a name"
+    },
+    {
+     "source": "places",
+     "label": "Google Places",
+     "name": null,
+     "note": "no street names stored (only business names and positions)"
+    }
+   ],
+   "mismatch": false
+  }
+ ]
+}

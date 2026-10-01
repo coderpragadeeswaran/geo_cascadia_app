@@ -5,7 +5,7 @@ import { GoogleMapsOverlay } from '@deck.gl/google-maps'
 import type { PickingInfo } from '@deck.gl/core'
 import { Map, useMap, type MapCameraChangedEvent } from '@vis.gl/react-google-maps'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useActiveJobs, useAreaGeo, useAreas, useBuildings } from '@/api/queries'
+import { useActiveJobs, useAreaGeo, useAreas, useBuildings, useCameraBuildings } from '@/api/queries'
 import type { AnyProps, GapProps, QueryResponse } from '@/api/types'
 import { colors, motion } from '@/design/tokens'
 import { queryApplies } from '@/lib/query'
@@ -129,6 +129,8 @@ function DeckLayers({ introDone }: { introDone: boolean }) {
     : (preview.lines.coordinates as Position[][])), [preview, trim, main])
   const analyseRest = useMemo(() => (trim && preview?.lines ? (preview.lines.coordinates as Position[][]) : null), [preview, trim])
   const drive = useDriveMark()
+  const { data: camB } = useCameraBuildings(area)
+  const cameraBuildings = camB?.points ?? null
   // D27: the selected building's predicted position (from its record), drawn at object zoom
   const { data: bRecords } = useBuildings(area)
   const predicted = useMemo(() => {
@@ -203,8 +205,8 @@ function DeckLayers({ introDone }: { introDone: boolean }) {
   const layers = useMemo(
     () => buildLayers({ mode, band, flat, layers: layerToggles, areas: areas ?? [], activeArea: area, split, jobs, pulse: animate ? pulse : 0,
       jobShown: shown.current,
-      selectedId: selected && 'id' in selected ? selected.id : null, focus, lightsOn, analyseLines, analysePoly, analyseRest, drive, predicted }),
-    [mode, band, flat, layerToggles, areas, area, split, jobs, pulse, animate, selected, focus, lightsOn, analyseLines, analysePoly, analyseRest, drive, predicted],
+      selectedId: selected && 'id' in selected ? selected.id : null, focus, lightsOn, analyseLines, analysePoly, analyseRest, drive, predicted, cameraBuildings }),
+    [mode, band, flat, layerToggles, areas, area, split, jobs, pulse, animate, selected, focus, lightsOn, analyseLines, analysePoly, analyseRest, drive, predicted, cameraBuildings],
   )
 
   useEffect(() => {

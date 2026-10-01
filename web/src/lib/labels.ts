@@ -172,6 +172,19 @@ export function stageProgress(stage: string | null | undefined, done?: number | 
   const within = total ? Math.min(1, Math.max(0, (done ?? 0) / total)) : 0
   return (i + within) / JOB_STAGES.length
 }
+/** P7.3: one map pole / light stands for every photo box of it, merged: never read as several poles */
+export function onMapSeenIn(type: 'pole' | 'streetlight', n: number | null | undefined) {
+  const what = type === 'streetlight' ? 'streetlight' : 'pole'
+  return n == null ? `1 ${what} on the map` : `1 ${what} on the map · seen in ${n.toLocaleString('en-IN')} ${n === 1 ? 'photo' : 'photos'}`
+}
+
+/** P7 R2 (F3): the confirm sheet stops waiting for the planner estimate after this long (OpenStreetMap busy); the
+ *  backend keeps planning, and the job's cost cap still protects a job started without it */
+export const PLAN_WAIT_S = 90
+export const PLAN_SLOW_TEXT = 'Estimate slow (map server busy) — you can still start; the cost cap protects you.'
+export const planTooSlow = (st: { status: string; elapsed_s?: number } | null | undefined) =>
+  st?.status === 'running' && (st.elapsed_s ?? 0) > PLAN_WAIT_S
+
 /** P7.1: a duration in minutes, never "0": anything that rounds to 0 is "< 1 minute". [figure, unit] for figure layouts. */
 export function minutesParts(m: number | null | undefined): [string, string] {
   if (m == null || !Number.isFinite(m)) return ['—', '']

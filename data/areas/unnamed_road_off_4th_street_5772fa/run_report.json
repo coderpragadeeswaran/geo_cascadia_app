@@ -1,6 +1,6 @@
 {
  "run_dir": "unnamed_road_off_4th_street_5772fa",
- "area": "Unnamed road near 4th Street",
+ "area": "3rd Street, Sridevi Nagar",
  "generated": "2026-09-28T06:02:43.620007+00:00",
  "pipeline": {
   "detector": "YOLOv8s v8s_640_s2",

@@ -64,23 +64,30 @@ def measured_rates(areas_dir, model_card):
         jobs.append({"slug": slug, "street": lr.get("street"), "device": lr.get("device") or run.get("device"), "images": n,
                      "seconds": round(secs), "cloud_usd": run.get("vlm_cost_usd") or 0.0, "places_calls": run.get("places_calls") or 0})
     out = {"jobs": jobs}
-    gpu = [j for j in jobs if j["device"] == "gpu"]
-    if gpu:
-        n = sum(j["images"] for j in gpu)
-        out["gpu"] = {"sec_per_image": sum(j["seconds"] for j in gpu) / n,
-                      "basis": f"{len(gpu)} completed GPU job(s) that ran from the start: "
-                               + ", ".join(f"{j['street']} {j['images']} images in {j['seconds'] / 60:.1f} min" for j in gpu)
-                               + " (worker claim → upload)"}
+    # P7 R2 (F1): time = fixed start-up + images x per-image rate. Per-image rate: the Ward 29 full run (model_card GPU
+    # minutes over the photos counted from its run files). Start-up: each small completed GPU job's time minus its images x
+    # that rate; the median over those jobs. Not fitted: two measured inputs, one formula.
+    ward = photos_of_run(os.path.join(areas_dir, "ward29"))
+    gpu_min = ct.get("ward29_full_run_gpu_minutes")
+    if ward and gpu_min:
+        rate = gpu_min * 60 / ward["photos"]
+        gpu = [j for j in jobs if j["device"] == "gpu"]
+        starts = sorted(j["seconds"] - j["images"] * rate for j in gpu)
+        startup = None
+        if starts:
+            m = len(starts) // 2
+            startup = max(0.0, starts[m] if len(starts) % 2 else (starts[m - 1] + starts[m]) / 2)
+        out["gpu"] = {"sec_per_image": rate, "startup_s": startup or 0.0,
+                      "basis": f"{rate:.2f} s per image from the Ward 29 full run ({ward['photos']:,} images in {gpu_min} min)"
+                               + (f" + {startup / 60:.1f} min start-up: the median of {len(gpu)} completed GPU job(s) that ran "
+                                  "from the start, each job's time minus its images at that rate ("
+                                  + ", ".join(f"{j['street']}: {j['seconds'] / 60:.1f} min, {j['images']} images" for j in gpu)
+                                  + "; worker claim → upload)" if startup is not None else " (no completed live job yet: no start-up added)")}
     cpu = [j for j in jobs if j["device"] == "cpu"]
     if cpu:
         n = sum(j["images"] for j in cpu)
         out["cpu"] = {"sec_per_image": sum(j["seconds"] for j in cpu) / n,
                       "basis": f"{len(cpu)} completed CPU job(s) that ran from the start"}
-    ward = photos_of_run(os.path.join(areas_dir, "ward29"))
-    gpu_min = ct.get("ward29_full_run_gpu_minutes")
-    if "gpu" not in out and ward and gpu_min:
-        out["gpu"] = {"sec_per_image": gpu_min * 60 / ward["photos"],
-                      "basis": f"Ward 29 full run: {ward['photos']:,} images in {gpu_min} min (no completed live job yet)"}
     if "cpu" not in out and ward:
         cpu_m = ((ct.get("cpu_fallback_per_street_min") or {}).get("full_ocr"))
         if cpu_m:
@@ -110,7 +117,10 @@ def cost_of_plan(plan, rates, cap_usd=None):
     sv_usd = images * price if price is not None else None
     cloud_usd = images * cloud if cloud is not None else None
     total = round(sv_usd + (cloud_usd or 0), 2) if sv_usd is not None else None
-    mins = lambda dev: round(images * rates[dev]["sec_per_image"] / 60, 1) if dev in rates else None
+    def mins(dev):
+        if dev not in rates:
+            return None
+        return round(((rates[dev].get("startup_s") or 0) + images * rates[dev]["sec_per_image"]) / 60, 1)
     ppi = rates.get("places_per_image")
     return {"cameras": len(plan), "views": views, "buildings_faced": faced, "street_view_images": images,
             "street_view_usd": round(sv_usd, 2) if sv_usd is not None else None,

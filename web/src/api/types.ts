@@ -43,6 +43,8 @@ export interface BuildingProps {
 export interface AssetProps {
   kind: 'pole' | 'streetlight'; id: string; street: string | null; confidence: string | null; method: string | null
   approximate: boolean; cameras_used: number | null; uncertainty_m: number | null; register_status: string | null
+  /** detection boxes merged into this one map object (P7.3: "1 pole on the map · seen in N photos") */
+  n_detections?: number | null
   review_status: string | null
 }
 export interface GapProps {
@@ -171,6 +173,8 @@ export interface JobPreview {
 export interface EvidenceBox {
   cls: 'building' | 'pole' | 'lamp_head' | 'signboard'; conf: number; x1: number; y1: number; x2: number; y2: number
   geom_ok: boolean; target: boolean; from_heading?: number
+  /** P7.3: a sign box linked to the selected building (its own line of sight hits the outline): "part of this building" */
+  linked?: boolean
 }
 export interface EvidenceViewData {
   key: string; label: string; pano_id: string; heading: number; pitch: number; fov: number

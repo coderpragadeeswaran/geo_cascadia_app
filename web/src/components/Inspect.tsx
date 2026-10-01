@@ -1,7 +1,7 @@
 /** Hover card (follows the cursor, plain words) and the low-coverage note. A click opens the evidence panel. */
 import { useAreas } from '@/api/queries'
 import type { AnyProps, GapProps } from '@/api/types'
-import { assetRegLabel, ASSET_REG, floorsText, gapTypeLabel, matchLabel, shortArea, useLabel } from '@/lib/labels'
+import { assetRegLabel, ASSET_REG, floorsText, gapTypeLabel, matchLabel, onMapSeenIn, shortArea, useLabel } from '@/lib/labels'
 import { useAreaData } from '@/lib/useAreaData'
 import { fmt, noun, plural } from '@/lib/utils'
 import { useUi } from '@/store/ui'
@@ -37,6 +37,7 @@ function Body({ p }: { p: AnyProps }) {
       return (<>
         <Title eyebrow={p.kind === 'pole' ? 'Pole, no lamp seen' : 'Streetlight'} title={p.street ?? '—'} />
         <StatusDot wrap s={ASSET_REG[p.register_status ?? '']?.status ?? null} label={assetRegLabel(p.register_status, true)} />
+        <Line>{onMapSeenIn(p.kind === 'streetlight' ? 'streetlight' : 'pole', p.n_detections)}</Line>
         <Line>{p.approximate ? 'Approximate position' : `Pinpointed from ${plural(p.cameras_used ?? 0, 'camera position')}`}</Line>
       </>)
     case 'streetlight_gap':

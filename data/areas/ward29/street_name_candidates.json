@@ -1,0 +1,490 @@
+{
+ "generated": "2026-10-01T18:47:28",
+ "streets": [
+  {
+   "raw": "Sathy Main Road",
+   "way_ids": [
+    155611919,
+    581499047,
+    581499048,
+    581499049,
+    581499051
+   ],
+   "length_m": 951,
+   "current": "Sathy Main Road",
+   "default": "Sathy Main Road",
+   "f2": {
+    "name": "Sathy Main Road",
+    "rule": "OpenStreetMap name",
+    "source": "osm",
+    "complete": true
+   },
+   "sources": [
+    {
+     "source": "osm",
+     "label": "OpenStreetMap",
+     "name": "Sathy Main Road",
+     "note": null
+    },
+    {
+     "source": "google",
+     "label": "Google (pipeline vote)",
+     "name": null,
+     "note": "no Google name recorded"
+    },
+    {
+     "source": "f2",
+     "label": "Street picker rule (F2)",
+     "name": "Sathy Main Road",
+     "note": "OpenStreetMap name"
+    },
+    {
+     "source": "register",
+     "label": "Register (synthetic)",
+     "name": null,
+     "note": "copies the raw map label 'Sathy Main Road' (42 records): not a name"
+    },
+    {
+     "source": "places",
+     "label": "Google Places",
+     "name": null,
+     "note": "no street names stored (only business names and positions)"
+    }
+   ],
+   "mismatch": false
+  },
+  {
+   "raw": "Ganapathy - Avarampalayam Road",
+   "way_ids": [
+    1247742551
+   ],
+   "length_m": 323,
+   "current": "Ganapathy - Avarampalayam Road",
+   "default": "Ganapathy - Avarampalayam Road",
+   "f2": {
+    "name": "Ganapathy - Avarampalayam Road",
+    "rule": "OpenStreetMap name",
+    "source": "osm",
+    "complete": true
+   },
+   "sources": [
+    {
+     "source": "osm",
+     "label": "OpenStreetMap",
+     "name": "Ganapathy - Avarampalayam Road",
+     "note": null
+    },
+    {
+     "source": "google",
+     "label": "Google (pipeline vote)",
+     "name": null,
+     "note": "no Google name recorded"
+    },
+    {
+     "source": "f2",
+     "label": "Street picker rule (F2)",
+     "name": "Ganapathy - Avarampalayam Road",
+     "note": "OpenStreetMap name"
+    },
+    {
+     "source": "register",
+     "label": "Register (synthetic)",
+     "name": null,
+     "note": "copies the raw map label 'Ganapathy - Avarampalayam Road' (26 records): not a name"
+    },
+    {
+     "source": "places",
+     "label": "Google Places",
+     "name": null,
+     "note": "no street names stored (only business names and positions)"
+    }
+   ],
+   "mismatch": false
+  },
+  {
+   "raw": "Sakthi Main Road",
+   "way_ids": [
+    1303123595,
+    1303123646
+   ],
+   "length_m": 155,
+   "current": "Sakthi Main Road",
+   "default": "Sakthi Main Road",
+   "f2": {
+    "name": "Sakthi Main Road",
+    "rule": "OpenStreetMap name",
+    "source": "osm",
+    "complete": true
+   },
+   "sources": [
+    {
+     "source": "osm",
+     "label": "OpenStreetMap",
+     "name": "Sakthi Main Road",
+     "note": null
+    },
+    {
+     "source": "google",
+     "label": "Google (pipeline vote)",
+     "name": null,
+     "note": "no Google name recorded"
+    },
+    {
+     "source": "f2",
+     "label": "Street picker rule (F2)",
+     "name": "Sakthi Main Road",
+     "note": "OpenStreetMap name"
+    },
+    {
+     "source": "register",
+     "label": "Register (synthetic)",
+     "name": null,
+     "note": "copies the raw map label 'Sakthi Main Road' (4 records): not a name"
+    },
+    {
+     "source": "places",
+     "label": "Google Places",
+     "name": null,
+     "note": "no street names stored (only business names and positions)"
+    }
+   ],
+   "mismatch": false
+  },
+  {
+   "raw": "(unnamed residential #29810143)",
+   "way_ids": [
+    29810143
+   ],
+   "length_m": 672,
+   "current": "2nd Street, Ganapathy Gardens (approx.)",
+   "default": "Unnamed road between 2nd Street P&T Colony and Ganapathy - Avarampalayam Road",
+   "f2": {
+    "name": "Unnamed road between 2nd Street P&T Colony and Ganapathy - Avarampalayam Road",
+    "rule": "no name for the road itself: named after its cross streets",
+    "source": "unnamed",
+    "complete": true
+   },
+   "sources": [
+    {
+     "source": "osm",
+     "label": "OpenStreetMap",
+     "name": null,
+     "note": "no name on OpenStreetMap"
+    },
+    {
+     "source": "google",
+     "label": "Google (pipeline vote)",
+     "name": "2nd Street, Ganapathy Gardens (approx.)",
+     "note": "the most common Google route name at the street's camera stops (may be a cross street near junctions)"
+    },
+    {
+     "source": "f2",
+     "label": "Street picker rule (F2)",
+     "name": "Unnamed road between 2nd Street P&T Colony and Ganapathy - Avarampalayam Road",
+     "note": "no name for the road itself: named after its cross streets"
+    },
+    {
+     "source": "register",
+     "label": "Register (synthetic)",
+     "name": null,
+     "note": "copies the raw map label '(unnamed residential #29810143)' (44 records): not a name"
+    },
+    {
+     "source": "places",
+     "label": "Google Places",
+     "name": null,
+     "note": "no street names stored (only business names and positions)"
+    }
+   ],
+   "mismatch": true
+  },
+  {
+   "raw": "(unnamed residential #206801340)",
+   "way_ids": [
+    206801340
+   ],
+   "length_m": 548,
+   "current": "2nd Street, Gandhi Nagar",
+   "default": "Unnamed road between 2nd Street and Mahatma Gandhi Layout Road",
+   "f2": {
+    "name": "Unnamed road between 2nd Street and Mahatma Gandhi Layout Road",
+    "rule": "no name for the road itself: named after its cross streets",
+    "source": "unnamed",
+    "complete": true
+   },
+   "sources": [
+    {
+     "source": "osm",
+     "label": "OpenStreetMap",
+     "name": null,
+     "note": "no name on OpenStreetMap"
+    },
+    {
+     "source": "google",
+     "label": "Google (pipeline vote)",
+     "name": "2nd Street, Gandhi Nagar",
+     "note": "the most common Google route name at the street's camera stops (may be a cross street near junctions)"
+    },
+    {
+     "source": "f2",
+     "label": "Street picker rule (F2)",
+     "name": "Unnamed road between 2nd Street and Mahatma Gandhi Layout Road",
+     "note": "no name for the road itself: named after its cross streets"
+    },
+    {
+     "source": "register",
+     "label": "Register (synthetic)",
+     "name": null,
+     "note": "copies the raw map label '(unnamed residential #206801340)' (61 records): not a name"
+    },
+    {
+     "source": "places",
+     "label": "Google Places",
+     "name": null,
+     "note": "no street names stored (only business names and positions)"
+    }
+   ],
+   "mismatch": true
+  },
+  {
+   "raw": "(unnamed residential #592678586)",
+   "way_ids": [
+    592678586
+   ],
+   "length_m": 485,
+   "current": "Sri Ganapathy Gardens 3rd Street (approx.)",
+   "default": "Sri Ganapathy Gardens 3rd Street",
+   "f2": {
+    "name": "Sri Ganapathy Gardens 3rd Street",
+    "rule": "Google's name for the road itself",
+    "source": "google",
+    "complete": true
+   },
+   "sources": [
+    {
+     "source": "osm",
+     "label": "OpenStreetMap",
+     "name": null,
+     "note": "no name on OpenStreetMap"
+    },
+    {
+     "source": "google",
+     "label": "Google (pipeline vote)",
+     "name": "Sri Ganapathy Gardens 3rd Street (approx.)",
+     "note": "the most common Google route name at the street's camera stops (may be a cross street near junctions)"
+    },
+    {
+     "source": "f2",
+     "label": "Street picker rule (F2)",
+     "name": "Sri Ganapathy Gardens 3rd Street",
+     "note": "Google's name for the road itself"
+    },
+    {
+     "source": "register",
+     "label": "Register (synthetic)",
+     "name": null,
+     "note": "copies the raw map label '(unnamed residential #592678586)' (27 records): not a name"
+    },
+    {
+     "source": "places",
+     "label": "Google Places",
+     "name": null,
+     "note": "no street names stored (only business names and positions)"
+    }
+   ],
+   "mismatch": true
+  },
+  {
+   "raw": "(unnamed residential #907980850)",
+   "way_ids": [
+    907980850
+   ],
+   "length_m": 462,
+   "current": "Korathottam Road",
+   "default": "Unnamed road between Korathottam Road and 1st Street",
+   "f2": {
+    "name": "Unnamed road between Korathottam Road and 1st Street",
+    "rule": "no name for the road itself: named after its cross streets",
+    "source": "unnamed",
+    "complete": true
+   },
+   "sources": [
+    {
+     "source": "osm",
+     "label": "OpenStreetMap",
+     "name": null,
+     "note": "no name on OpenStreetMap"
+    },
+    {
+     "source": "google",
+     "label": "Google (pipeline vote)",
+     "name": "Korathottam Road",
+     "note": "the most common Google route name at the street's camera stops (may be a cross street near junctions)"
+    },
+    {
+     "source": "f2",
+     "label": "Street picker rule (F2)",
+     "name": "Unnamed road between Korathottam Road and 1st Street",
+     "note": "no name for the road itself: named after its cross streets"
+    },
+    {
+     "source": "register",
+     "label": "Register (synthetic)",
+     "name": null,
+     "note": "copies the raw map label '(unnamed residential #907980850)' (43 records): not a name"
+    },
+    {
+     "source": "places",
+     "label": "Google Places",
+     "name": null,
+     "note": "no street names stored (only business names and positions)"
+    }
+   ],
+   "mismatch": true
+  },
+  {
+   "raw": "(unnamed residential #134792895)",
+   "way_ids": [
+    134792895
+   ],
+   "length_m": 441,
+   "current": "8th Street, Ganapathy",
+   "default": "Unnamed road between 7th Street and 8th Street",
+   "f2": {
+    "name": "Unnamed road between 7th Street and 8th Street",
+    "rule": "no name for the road itself: named after its cross streets",
+    "source": "unnamed",
+    "complete": true
+   },
+   "sources": [
+    {
+     "source": "osm",
+     "label": "OpenStreetMap",
+     "name": null,
+     "note": "no name on OpenStreetMap"
+    },
+    {
+     "source": "google",
+     "label": "Google (pipeline vote)",
+     "name": "8th Street, Ganapathy",
+     "note": "the most common Google route name at the street's camera stops (may be a cross street near junctions)"
+    },
+    {
+     "source": "f2",
+     "label": "Street picker rule (F2)",
+     "name": "Unnamed road between 7th Street and 8th Street",
+     "note": "no name for the road itself: named after its cross streets"
+    },
+    {
+     "source": "register",
+     "label": "Register (synthetic)",
+     "name": null,
+     "note": "copies the raw map label '(unnamed residential #134792895)' (36 records): not a name"
+    },
+    {
+     "source": "places",
+     "label": "Google Places",
+     "name": null,
+     "note": "no street names stored (only business names and positions)"
+    }
+   ],
+   "mismatch": true
+  },
+  {
+   "raw": "(unnamed residential #134792909)",
+   "way_ids": [
+    134792909
+   ],
+   "length_m": 398,
+   "current": "4th Street, Tatabad / Vinobaji Street",
+   "default": "4th Street, Tatabad",
+   "f2": {
+    "name": "4th Street, Tatabad",
+    "rule": "Google's name for the road itself",
+    "source": "google",
+    "complete": true
+   },
+   "sources": [
+    {
+     "source": "osm",
+     "label": "OpenStreetMap",
+     "name": null,
+     "note": "no name on OpenStreetMap"
+    },
+    {
+     "source": "google",
+     "label": "Google (pipeline vote)",
+     "name": "4th Street, Tatabad / Vinobaji Street",
+     "note": "the most common Google route name at the street's camera stops (may be a cross street near junctions)"
+    },
+    {
+     "source": "f2",
+     "label": "Street picker rule (F2)",
+     "name": "4th Street, Tatabad",
+     "note": "Google's name for the road itself"
+    },
+    {
+     "source": "register",
+     "label": "Register (synthetic)",
+     "name": null,
+     "note": "copies the raw map label '(unnamed residential #134792909)' (27 records): not a name"
+    },
+    {
+     "source": "places",
+     "label": "Google Places",
+     "name": null,
+     "note": "no street names stored (only business names and positions)"
+    }
+   ],
+   "mismatch": true
+  },
+  {
+   "raw": "(unnamed residential #66068589)",
+   "way_ids": [
+    66068589
+   ],
+   "length_m": 394,
+   "current": "1st Street, P&T Colony (approx.)",
+   "default": "Unnamed road between 1st Street and 5th Cross Street",
+   "f2": {
+    "name": "Unnamed road between 1st Street and 5th Cross Street",
+    "rule": "no name for the road itself: named after its cross streets",
+    "source": "unnamed",
+    "complete": true
+   },
+   "sources": [
+    {
+     "source": "osm",
+     "label": "OpenStreetMap",
+     "name": null,
+     "note": "no name on OpenStreetMap"
+    },
+    {
+     "source": "google",
+     "label": "Google (pipeline vote)",
+     "name": "1st Street, P&T Colony (approx.)",
+     "note": "the most common Google route name at the street's camera stops (may be a cross street near junctions)"
+    },
+    {
+     "source": "f2",
+     "label": "Street picker rule (F2)",
+     "name": "Unnamed road between 1st Street and 5th Cross Street",
+     "note": "no name for the road itself: named after its cross streets"
+    },
+    {
+     "source": "register",
+     "label": "Register (synthetic)",
+     "name": null,
+     "note": "copies the raw map label '(unnamed residential #66068589)' (44 records): not a name"
+    },
+    {
+     "source": "places",
+     "label": "Google Places",
+     "name": null,
+     "note": "no street names stored (only business names and positions)"
+    }
+   ],
+   "mismatch": true
+  }
+ ]
+}

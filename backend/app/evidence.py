@@ -160,6 +160,22 @@ class Detections:
             self._cache[key] = {"stamp": stamp, "rows": rows}
         return rows
 
+    def sign_links(self, slug):
+        """sign_links.json (D44): sign crop file name -> the building outline it is linked to (its own line of sight)"""
+        path, stamp = self._read(slug, "sign_links.json")
+        if not path:
+            return {}
+        key = f"sl:{slug}"
+        with self._lock:
+            hit = self._cache.get(key)
+            if hit and hit["stamp"] == stamp:
+                return hit["rows"]
+        with open(path, encoding="utf-8") as f:
+            rows = {k: (v or {}).get("fp") for k, v in json.load(f).items()}
+        with self._lock:
+            self._cache[key] = {"stamp": stamp, "rows": rows}
+        return rows
+
     def ocr_best(self, idx):
         """crop file name → OCR text (for picking the signboard a building's sign view refers to)"""
         if idx["ocr"] is None:
@@ -185,10 +201,11 @@ def _gate_why(q):
     return "an implausibly tall box"
 
 
-def _box(d, target=False, from_heading=None, xy=None):
+def _box(d, target=False, from_heading=None, xy=None, linked=False):
     x1, y1, x2, y2 = xy or (d["x1"], d["y1"], d["x2"], d["y2"])
     out = {"cls": d["cls"], "conf": round(float(d["conf"]), 3), "x1": round(float(x1), 1), "y1": round(float(y1), 1),
-           "x2": round(float(x2), 1), "y2": round(float(y2), 1), "geom_ok": bool(d.get("geom_ok")), "target": target}
+           "x2": round(float(x2), 1), "y2": round(float(y2), 1), "geom_ok": bool(d.get("geom_ok")), "target": target,
+           **({"linked": True} if linked and not target else {})}
     if from_heading is not None:
         out["from_heading"] = round(float(from_heading), 1)
     return out
@@ -197,7 +214,7 @@ def _box(d, target=False, from_heading=None, xy=None):
 _norm = lambda s: re.sub(r"[^0-9A-Z஀-௿]+", "", str(s or "").upper())
 
 
-def _exact_view(D, idx, v, label, stored_box=None, target_cls=None, footprint=None, ocr_text=None):
+def _exact_view(D, idx, v, label, stored_box=None, target_cls=None, footprint=None, ocr_text=None, link_fp=None):
     """A planned view: its own detections; the object's box by overlap with the stored box, OCR text, or footprint."""
     dets = idx["views"].get(view_key(v["pano_id"], v["heading"], v.get("pitch"), v.get("fov"))) if idx else None
     base = {"label": label, "pano_id": v["pano_id"], "heading": v["heading"], "pitch": v.get("pitch") or 0, "fov": v.get("fov") or 90}
@@ -221,7 +238,10 @@ def _exact_view(D, idx, v, label, stored_box=None, target_cls=None, footprint=No
     if t is None and footprint and target_cls:
         cand = [d for d in dets if d["cls"] == target_cls and d.get("footprint_faced") == footprint]
         t = max(cand, key=lambda d: d["conf"]) if cand else None
-    boxes = [_box(d, target=d is t) for d in sorted(dets, key=lambda d: -d["conf"])]
+    # P7.3: with link_fp, every sign box linked to that building (sign_links.json) is marked "part of this building"
+    links = D.sign_links(idx["slug"]) if link_fp else {}
+    lk = lambda d: bool(link_fp) and d["cls"] == "signboard" and bool(d.get("crop")) and links.get(os.path.basename(d["crop"])) == link_fp
+    boxes = [_box(d, target=d is t, linked=lk(d)) for d in sorted(dets, key=lambda d: -d["conf"])]
     if t is None and stored_box:
         boxes.append(_box({"cls": target_cls or "building", "conf": 1.0, **stored_box}, target=True))
     return {**base, "source": "exact", "boxes": boxes, "target": "box" if t is not None else ("record_box" if stored_box else "none"),
@@ -286,13 +306,13 @@ def _evidence(D, bundle, kind, obj_id):
         if ev.get("attribute_view"):
             av = ev["attribute_view"]
             stored = {k: av[k] for k in ("x1", "y1", "x2", "y2")} if all(av.get(k) is not None for k in ("x1", "y1", "x2", "y2")) else None
-            out.append({"key": "attr", **_exact_view(D, idx, av, "Front", stored, "building", obj_id)})
+            out.append({"key": "attr", **_exact_view(D, idx, av, "Front", stored, "building", obj_id, link_fp=obj_id)})
         best = None
         if not ev.get("attribute_view"):
             best = D.bviews(bundle["slug"]).get(obj_id)
         if ev.get("sign_view"):
             sv = ev["sign_view"]
-            out.append({"key": "sign", **_exact_view(D, idx, sv, "Sign", None, "signboard", obj_id, sv.get("ocr_text"))})
+            out.append({"key": "sign", **_exact_view(D, idx, sv, "Sign", None, "signboard", obj_id, sv.get("ocr_text"), link_fp=obj_id)})
         if not ev.get("attribute_view"):
             # P5 H7: no stored box. Only the pipeline's own box-to-outline match (building_views.json) may be called
             # "this building"; a detection in a photo merely AIMED at the outline is not (its sight line missed it).
@@ -301,7 +321,7 @@ def _evidence(D, bundle, kind, obj_id):
                 why = _gate_why(q)
                 view = {"pano_id": q["pano_id"], "heading": q["heading"], "pitch": q.get("pitch") or 0, "fov": q.get("fov") or 90}
                 box = {k: q[k] for k in ("x1", "y1", "x2", "y2")}
-                v = _exact_view(D, idx, view, "Best photo", box, "building", None)
+                v = _exact_view(D, idx, view, "Best photo", box, "building", None, link_fp=obj_id)
                 v["user_note"] = (f"The box the analysis matched to this building failed the photo quality check ({why}), so its use "
                                   "and floors were not read from it." if why else None)
                 out.insert(0, {"key": "best", **v})
@@ -329,3 +349,12 @@ def _evidence(D, bundle, kind, obj_id):
         stored = {k: v[k] for k in ("x1", "y1", "x2", "y2")} if all(v.get(k) is not None for k in ("x1", "y1", "x2", "y2")) else None
         return [{"key": "sign", **_exact_view(D, idx, v, "Sign", stored, "signboard", None, u.get("ocr_text"))}]
     return None
+
+
+def building_links(D, slug, fp):
+    """P7.3: what the photos link to one building outline: its shop-sign boxes (sign_links.json, D44: a sign belongs to the
+    outline its own line of sight hits) and the photos they are in. One shop seen in 3 photos is 3 sign boxes."""
+    links = D.sign_links(slug)
+    crops = [c for c, f in links.items() if f == fp]
+    photos = {c.rsplit("_", 1)[0] for c in crops}               # "<pano>_<heading>_<pitch>_<n>.jpg" -> the photo
+    return {"sign_boxes": len(crops), "photos": len(photos), "source": "sign_links.json (each sign linked by its own line of sight)"}

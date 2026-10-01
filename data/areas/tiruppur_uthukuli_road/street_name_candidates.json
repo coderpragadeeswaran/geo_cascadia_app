@@ -1,0 +1,53 @@
+{
+ "generated": "2026-10-01T18:20:17",
+ "streets": [
+  {
+   "raw": "Uthukuli Road",
+   "way_ids": [
+    453406037
+   ],
+   "length_m": 707,
+   "current": "Uthukuli Road",
+   "default": "Uthukuli Road",
+   "f2": {
+    "name": "Uthukuli Road",
+    "rule": "OpenStreetMap name",
+    "source": "osm",
+    "complete": true
+   },
+   "sources": [
+    {
+     "source": "osm",
+     "label": "OpenStreetMap",
+     "name": "Uthukuli Road",
+     "note": null
+    },
+    {
+     "source": "google",
+     "label": "Google (pipeline vote)",
+     "name": null,
+     "note": "no Google name recorded"
+    },
+    {
+     "source": "f2",
+     "label": "Street picker rule (F2)",
+     "name": "Uthukuli Road",
+     "note": "OpenStreetMap name"
+    },
+    {
+     "source": "register",
+     "label": "Register (synthetic)",
+     "name": null,
+     "note": "copies the raw map label 'Uthukuli Road' (1 records): not a name"
+    },
+    {
+     "source": "places",
+     "label": "Google Places",
+     "name": null,
+     "note": "no street names stored (only business names and positions)"
+    }
+   ],
+   "mismatch": false
+  }
+ ]
+}

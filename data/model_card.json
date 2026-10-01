@@ -1223,5 +1223,25 @@
     "status": "computed before D33 (old fallback); not re-run"
    }
   }
+ },
+ "sign_links": {
+  "rule": "A shop sign belongs to the building outline its own line of sight hits (from the camera through the sign box). It moves off the outline the photo was aimed at only when that line, and the lines 4 degrees either side, all hit the same other outline and none touches the aimed one (D44).",
+  "margin_deg": 4,
+  "ward29": {
+   "sign_crops": 2065,
+   "moved": 570,
+   "read_signs": 820,
+   "read_moved": 214,
+   "google_check": {
+    "moved_read_signs_with_google_pin": 30,
+    "closer": 14,
+    "further": 6,
+    "same_within_1m": 1,
+    "to_or_from_no_outline": 9,
+    "median_change_m": -3.5
+   }
+  },
+  "note": "Agreement check against Google Maps pins for the same business name (pins are Google's, not surveyed): is the sign's building nearer to the pin under the new rule than under the old aimed-photo rule?",
+  "source": "tools/validate_sign_links.py data/areas/ward29 (saved files only), 1 Oct 2026"
  }
 }

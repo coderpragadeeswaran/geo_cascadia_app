@@ -1,6 +1,6 @@
 {
  "run_dir": "unnamed_road_off_kattabomman_street_295e9b",
- "area": "Unnamed road near Kattabomman Street",
+ "area": "Kattabomman Street Extention",
  "generated": "2026-10-01T11:06:26.508257+00:00",
  "pipeline": {
   "detector": "YOLOv8s v8s_640_s2",

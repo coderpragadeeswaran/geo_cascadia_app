@@ -1,0 +1,156 @@
+{
+ "who": "AI visual check (Claude Code), not a human check",
+ "date": "2026-10-01",
+ "area": "ward29",
+ "seed": 2026,
+ "question": "Looking at the photo with the sign box and the top-down sketch: does the sign belong to the new building (its own line of sight) rather than the one the photo was aimed at?",
+ "counts": {
+  "right": 11,
+  "wrong": 0,
+  "cant_tell": 9
+ },
+ "not_shop_signs": 6,
+ "method": "each of the 20 Street View photos was fetched once at the stored view (20 Static API requests, $0.14 at list price), viewed with the box and a plan of both outlines and the line of sight, then deleted; nothing kept",
+ "rows": [
+  {
+   "n": 1,
+   "crop": "BwgQCjtGZDNVRK3Zm-YQiw_263.7_0_614.jpg",
+   "verdict": "cant_tell",
+   "why": "a billboard on a rooftop far to the left; the photo can't show which outline it stands on",
+   "shop_sign": false
+  },
+  {
+   "n": 2,
+   "crop": "UFT24yDY_Yhjfi89phXkjA_313.5_0_1470.jpg",
+   "verdict": "cant_tell",
+   "why": "a free-standing direction board by the road; which building it belongs to is unclear",
+   "shop_sign": true
+  },
+  {
+   "n": 3,
+   "crop": "qfLdtj38FywVtHO6UWT31Q_50.9_0_2774.jpg",
+   "verdict": "right",
+   "why": "the box is on the house to the left of the photo's aim, not on the aimed one (the box is a gate, not a sign)",
+   "shop_sign": false
+  },
+  {
+   "n": 4,
+   "crop": "sIUN2iSxh89JBe3JZYx3Mw_165.6_0_1254.jpg",
+   "verdict": "right",
+   "why": "the S.M. Motors sign is on the low shop in front, not on the tall building the photo was aimed at",
+   "shop_sign": true
+  },
+  {
+   "n": 5,
+   "crop": "AhiMb-vg3gvIt4ZxFsRxNQ_279.1_0_5456.jpg",
+   "verdict": "right",
+   "why": "a rooftop sign on the building the line of sight reaches",
+   "shop_sign": true
+  },
+  {
+   "n": 6,
+   "crop": "J7KedfQcUwzHQb3E13az9g_109.9_0_1770.jpg",
+   "verdict": "right",
+   "why": "the HITECH GEARS sign is on the shop row to the left, not on the glass building at the centre",
+   "shop_sign": true
+  },
+  {
+   "n": 7,
+   "crop": "zM-0bC7RlbV1tGWcjnTviA_173.8_0_2827.jpg",
+   "verdict": "right",
+   "why": "the plate is on the house wall to the left of the aim (it is a house number, not a shop sign)",
+   "shop_sign": false
+  },
+  {
+   "n": 8,
+   "crop": "kYxKUhZUnCzOpEpncCE0fg_347.5_0_3918.jpg",
+   "verdict": "right",
+   "why": "the sign is on the shop to the right of the blue tin shed the photo was aimed at",
+   "shop_sign": true
+  },
+  {
+   "n": 9,
+   "crop": "wKIgEIuT26Nb6vpueznEaA_168.9_0_4968.jpg",
+   "verdict": "cant_tell",
+   "why": "a tiny box at the edge, half hidden by a tree",
+   "shop_sign": true
+  },
+  {
+   "n": 10,
+   "crop": "p7Pzkqh502XaovNQUeskGA_162.6_0_5445.jpg",
+   "verdict": "cant_tell",
+   "why": "a STOP traffic sign on a pole in front of the shops: not a shop sign, belongs to no building",
+   "shop_sign": false
+  },
+  {
+   "n": 11,
+   "crop": "muYbIG1fyIR_atW5AV-TyA_106.1_0_1372.jpg",
+   "verdict": "right",
+   "why": "the sign is on the corner building's wall to the right, not on the aimed building",
+   "shop_sign": true
+  },
+  {
+   "n": 12,
+   "crop": "MWV22G-6a9PgeY52ENNQzQ_129.8_0_4716.jpg",
+   "verdict": "right",
+   "why": "the sign stands at the shop on the right (LSS Marketing), not at the white house at the centre",
+   "shop_sign": true
+  },
+  {
+   "n": 13,
+   "crop": "1AJdRC8078oEOQPtZZfSlw_44.0_0_4225.jpg",
+   "verdict": "cant_tell",
+   "why": "a small sign on a roadside pole; the old link (pink house) is clearly wrong, the new one 29 m away is not visibly right",
+   "shop_sign": true
+  },
+  {
+   "n": 14,
+   "crop": "8zYFfmmOzZFSEJWk_kKKWg_135.7_0_5064.jpg",
+   "verdict": "cant_tell",
+   "why": "a poster on an electricity pole in front of two houses",
+   "shop_sign": false
+  },
+  {
+   "n": 15,
+   "crop": "AhiMb-vg3gvIt4ZxFsRxNQ_99.1_0_5471.jpg",
+   "verdict": "right",
+   "why": "the orange sign is on the separate building at the left, not on the aimed shops",
+   "shop_sign": true
+  },
+  {
+   "n": 16,
+   "crop": "QK7mugv9O_XBxYnbFw72iw_145.2_0_1952.jpg",
+   "verdict": "right",
+   "why": "the small board is on the compound of the large building in the background",
+   "shop_sign": true
+  },
+  {
+   "n": 17,
+   "crop": "ATr2edTfvbcgawZUmRL1oA_162.6_0_5393.jpg",
+   "verdict": "cant_tell",
+   "why": "a billboard (advert) above trees; which building carries it is not visible",
+   "shop_sign": false
+  },
+  {
+   "n": 18,
+   "crop": "muYbIG1fyIR_atW5AV-TyA_176.1_0_1388.jpg",
+   "verdict": "right",
+   "why": "the sign is on the wall of the building on the left, not on the hardware shop at the centre",
+   "shop_sign": true
+  },
+  {
+   "n": 19,
+   "crop": "1ROYdg_G36gaD0wckcq0jg_136.6_0_3985.jpg",
+   "verdict": "cant_tell",
+   "why": "a small plate on a utility pole at the end of a compound wall",
+   "shop_sign": true
+  },
+  {
+   "n": 20,
+   "crop": "Sewq9uscj99sz7uudHqhpQ_163.8_0_3242.jpg",
+   "verdict": "cant_tell",
+   "why": "a sign on a boundary wall between a shed and a large building",
+   "shop_sign": true
+  }
+ ]
+}

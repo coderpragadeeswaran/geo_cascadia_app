@@ -791,6 +791,12 @@ def fill_street_names(folder, job_input=None):
         new[raw] = name; used.add(name)
     if not new:
         return
+    # P7.3: keep the pipeline's own names (its Google geocoding vote) before the app changes them: a source for the
+    # street-name picker, never overwritten
+    keep = os.path.join(folder, "street_names_pipeline.json")
+    if not os.path.isfile(keep):
+        with open(keep, "w", encoding="utf-8") as f:
+            json.dump(rd("street_names.json", {}), f)
     # records carry the display name (the raw label, or the pipeline's Google name): map both to the new name
     rename = {display(raw): nm for raw, nm in new.items()}
     rename.update(new)

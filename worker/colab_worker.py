@@ -1,3 +1,4 @@
+# pyright: reportMissingImports=false, reportMissingModuleSource=false
 # GEO-CASCADIA analysis worker — ONE cell. Paste it after the setup cells (S0 install package, S1a deps, S1b keys),
 # or run it on its own (Kaggle, laptop): it then loads the pipeline from the path / shared Drive link you give it.
 #

@@ -39,7 +39,7 @@ TILE_PAD_M = 80            # > SEARCH_M + 8 (the pipeline's around radius): the 
 SEARCH_M, BUFFER_M, MAX_LEN_M = 60, 45, 1200      # pipeline defaults (picker.click_to_street)
 LOCAL_SNAP_M = 15          # a click this close to an analysed street line is that street (no Overpass)
 OVERLAP_BUFFER_M, OVERLAP_SHARE = 15, 0.30
-LABEL_RULE = 2             # P7.1 naming rule; resolved streets cached under an older rule are resolved again
+LABEL_RULE = 3             # P7.1 naming rule; resolved streets cached under an older rule are resolved again
 UA = {"User-Agent": "geo-cascadia/0.2 (research prototype; street picker)"}
 
 
@@ -301,8 +301,13 @@ def pick_overpass(cache_dir, lat, lon, deadline, google_key=None):
                                                                             and not (w.get("tags") or {}).get("name")], google_key, deadline)
             pairs += g_pairs
             complete = complete and g_complete                    # a Google name still to come: not final, not cached
-        street = unnamed_label(line, pairs, Point(0, 0))
-        src = "unnamed"
+        street, src = unnamed_label(line, pairs, Point(0, 0)), "unnamed"
+        if google_key:
+            # F2: Google's name for the road ITSELF (not a cross street) wins over the cross-street label
+            own, own_complete = google_own_name(cache_dir, F, line, [n for n, _ in pairs], google_key, deadline)
+            complete = complete and own_complete
+            if own:
+                street, src = own, "google"
     way_ids = [w["id"] for w in group]
     if complete:                                                  # every way of the street resolves to it from now on
         rec = {"rule": LABEL_RULE, "t": time.time(), "lines": _lines_ll(F, line), "way_ids": way_ids, "street": street,
@@ -354,6 +359,84 @@ def google_names_at_ends(cache_dir, F, line, unnamed_osm, key, deadline=None):
         if name and name.lower() != "unnamed road":
             out.append((tidy(name), g))
     return out, complete
+OWN_END_M = 25               # sample points this far from the junctions (the geocoder snaps to the cross street there)
+OWN_NEAR_M = 25              # Google's point for the name must lie this close to the clicked road
+
+
+def _route_here(cache_dir, la, lo, key, deadline):
+    """Google's route at a point, formatted as the pipeline formats it (reference._route_at: "3rd Street, Sridevi
+    Nagar" for a numbered street), with the route's own point. Returns ({"name", "lat", "lon"} | None, complete)."""
+    path = os.path.join(cache_dir, "google_own", f"{la:.5f}_{lo:.5f}.json")
+    hit = _read_json(path)
+    if hit and time.time() - hit.get("t", 0) < GOOGLE_TTL_S:
+        return hit.get("r"), True
+    left = 6.0 if deadline is None else deadline - time.monotonic()
+    if left < 0.5:
+        return None, False
+    try:
+        j = requests.get(GEO_URL, params={"latlng": f"{la:.6f},{lo:.6f}", "result_type": "route", "key": key},
+                         timeout=min(6.0, left)).json()
+    except (requests.RequestException, ValueError):
+        return None, False
+    if j.get("status") not in ("OK", "ZERO_RESULTS"):
+        return None, True                                         # refused (Geocoding not enabled): final, nothing
+    out = None
+    for res in j.get("results", []):
+        comps = res.get("address_components", [])
+        rt = next((c["long_name"] for c in comps if "route" in c.get("types", [])), None)
+        if not rt or rt.lower() == "unnamed road":
+            continue
+        area = next((c["long_name"] for c in comps
+                     if set(c.get("types", [])) & {"neighborhood", "sublocality_level_2", "sublocality_level_1"}), "")
+        if re.match(r"^\d+(st|nd|rd|th)\s+(street|cross)", rt, re.I) and area and area.lower() not in rt.lower():
+            rt = f"{rt}, {area}"
+        loc = (res.get("geometry") or {}).get("location") or {}
+        out = {"name": tidy(rt), "lat": loc.get("lat"), "lon": loc.get("lng")}
+        break
+    _write_json(path, {"t": time.time(), "r": out})
+    return out, True
+
+
+def _base(name):
+    return str(name).split(",")[0].strip().lower()
+
+
+def google_own_name(cache_dir, F, line, cross_names, key, deadline=None):
+    """F2 (P7 R2): Google's name for the clicked unnamed road itself, or None. It is the road's own name only when
+    - the same name comes back at most of the sample points along the road's middle (up to 3, each > OWN_END_M from the
+      junctions, where reverse geocoding answers with the cross street), and
+    - the point Google gives for that route lies within OWN_NEAR_M of the clicked road, and
+    - it is not the name of a cross street at its ends (OpenStreetMap names, or Google's names for the end roads).
+    Returns (name | None, complete)."""
+    m = linemerge(line) if line.geom_type == "MultiLineString" else line
+    parts = _parts(m) or []
+    if not parts:
+        return None, True
+    main = max(parts, key=lambda g: g.length)
+    L = main.length
+    if L <= 2 * OWN_END_M:
+        return None, True                                         # too short to sample away from the junctions
+    fr = [0.25, 0.5, 0.75] if L > 4 * OWN_END_M else [0.5]
+    pts = [main.interpolate(max(OWN_END_M, min(L - OWN_END_M, f * L))) for f in fr]
+    votes, complete = [], True
+    for p in pts:
+        la, lo = F.ll(p.x, p.y)
+        r, ok = _route_here(cache_dir, la, lo, key, deadline)
+        complete = complete and ok
+        if r and r.get("lat") is not None:
+            x, y = F.xy(r["lat"], r["lon"])
+            if line.distance(Point(x, y)) <= OWN_NEAR_M:
+                votes.append(r["name"])
+    if not votes:
+        return None, complete
+    top = max(set(votes), key=votes.count)
+    if votes.count(top) * 2 <= len(pts):                          # not a majority of the sample points
+        return None, complete
+    if _base(top) in {_base(n) for n in cross_names if n}:
+        return None, complete                                     # it names a cross street, not this road
+    return top, complete
+
+
 SMALL_WORDS = {"and", "of", "the", "to", "on", "in", "at", "by"}
 
 
@@ -464,7 +547,8 @@ SLOW_NOTE = "OSM lookup slow — showing without OSM details (the name and full 
 
 
 def pick(cache_dir, bundles, lat, lon, google_key=None):
-    """Resolve a click within BUDGET_S. Raises NoRoad (422), OverpassSlow (503, still loading in the background) or
+    """Resolve a click within BUDGET_S. Name (F2): the OpenStreetMap name; else Google's name for the road itself
+    (google_own_name); else the cross-street label (unnamed_label). Raises NoRoad (422), OverpassSlow (503, still loading in the background) or
     OverpassBusy (503). A street resolved without its OSM details carries osm_details=False and SLOW_NOTE."""
     res = pick_local(bundles, lat, lon)
     if res is None:

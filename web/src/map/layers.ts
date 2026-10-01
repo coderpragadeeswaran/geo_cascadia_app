@@ -118,6 +118,8 @@ export interface LayerCtx {
   analyseRest?: Position[][] | null
   /** drive the street: the branch being driven, camera position, travel heading and view heading */
   drive: DriveMark | null
+  /** P7.3: buildings seen by the camera only (no map outline) */
+  cameraBuildings?: { lat: number; lon: number }[] | null
   /** D27: the selected building's predicted position (point + uncertainty radius in metres, null = not estimated) */
   predicted?: { position: Position; radius_m: number | null } | null
 }
@@ -345,6 +347,12 @@ export function buildLayers(ctx: LayerCtx): Layer[] {
         stroked: !night, lineWidthUnits: 'pixels', getLineWidth: 1, getLineColor: rgba(c.bg1, 255), pickable: true,
         updateTriggers: { getRadius: near, getFillColor: [lit, fk, mode], getLineColor: mode } }),
     )
+  }
+  // ---------------------------------------------------------------- P7.3: buildings seen by the camera only (street level)
+  if (ctx.cameraBuildings?.length) {
+    L.push(new IconLayer<{ lat: number; lon: number }>({ id: 'camera-buildings', visible: !!on.cameraBuildings && near, data: ctx.cameraBuildings,
+      getPosition: (d) => [d.lon, d.lat], getIcon: () => ICONS.cameraBuilding, sizeUnits: 'pixels', getSize: 17,
+      getColor: rgba(night ? c.sodiumGlow : c.sodium, 235), updateTriggers: { getColor: mode } }))
   }
   // ---------------------------------------------------------------- unmapped businesses (hollow ring = approximate) + register records not seen
   L.push(

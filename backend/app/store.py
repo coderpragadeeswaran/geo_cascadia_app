@@ -18,6 +18,7 @@ from shapely.ops import unary_union
 
 from . import loader
 from .db import DbUnavailable, Pool
+from . import namepick
 from .streetgeo import gap_display, named_streets
 
 log = logging.getLogger("geo_cascadia.data")
@@ -124,6 +125,7 @@ class JsonStore:
         rr_path = os.path.join(folder, "run_report.json")
         rr = loader._read(rr_path) if os.path.exists(rr_path) else None
         raw_streets, names, plan = loader.read_street_inputs(folder)
+        exp, names = namepick.apply(folder, exp, names)    # P7.3: picked display names, as the loader applies them
         named = named_streets(raw_streets, names)          # display name + osm_name, same as the loader (D13)
         poly, poly_src = loader.area_polygon(exp, raw_streets)
         B, A, U = exp.get("buildings", []), exp.get("assets", []), exp.get("unmapped_businesses") or []

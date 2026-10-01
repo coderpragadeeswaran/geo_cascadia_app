@@ -11,6 +11,7 @@ import { useAreas } from '@/api/queries'
 import { Card, CountUp, jumpTo, REDUCED, SectionNav, T, useDetail, useInView, useScrollSpy } from '@/components/Detail'
 import { ExampleSheet } from '@/components/ExampleSheet'
 import { GeoMini } from '@/components/GeoMini'
+import { StreetNames } from '@/components/StreetNames'
 import { AlignedBars, Donut, Funnel, SegBar, StageTimeline } from '@/components/viz'
 import { KPI_DEFS, kpiFilter } from '@/lib/derive'
 import { shortArea } from '@/lib/labels'
@@ -26,7 +27,7 @@ const NAV: [string, string][] = [
   ['overview', 'Coverage & summary'], ['streets', '01 · Streets planned'], ['cameras', '02 · Camera positions'], ['imagery', '03 · Photos fetched'],
   ['detection', '04 · Objects detected'], ['signs', '05 · Signs read'], ['routed', '06 · Local or cloud AI'], ['buildings', '07 · Floors and use'],
   ['positions', '08 · Positions'], ['matched', '09 · Matched'], ['findings', '10 · Findings'], ['flow', 'Whole pipeline'],
-  ['dropped', 'What got dropped'], ['streets-table', 'Street by street'], ['cost', 'Time and cost'],
+  ['dropped', 'What got dropped'], ['streets-table', 'Street by street'], ['street-names', 'Street names'], ['cost', 'Time and cost'],
 ]
 
 export default function Hood() {
@@ -122,7 +123,7 @@ function Story({ h, pick }: { h: HoodData; pick: Pick }) {
         { key: 'u', label: 'map has no building outline', value: n.views_unmapped, kind: 'idle', examples: 'views.unmapped' }]} />,
       examples: [exBtn('views.mapped', 'Photos facing a mapped building'), exBtn('views.unmapped', 'Photos where the map has no building outline')] },
     { id: 'detection', title: 'Objects detected', figure: n.boxes, unit: 'boxes',
-      plain: `A detector running without the cloud marked ${fmt.format(n.boxes_building)} buildings, ${fmt.format(n.boxes_signboard)} signs, ${fmt.format(n.boxes_pole)} poles and ${fmt.format(n.boxes_lamp_head)} lamp heads. ${fmt.format(n.boxes_tilted + n.boxes_user)} boxes came from tilted or public photos and are not used to place anything on the map.`,
+      plain: `A detector running without the cloud drew boxes around ${fmt.format(n.boxes_building)} buildings, ${fmt.format(n.boxes_signboard)} signs, ${fmt.format(n.boxes_pole)} poles and ${fmt.format(n.boxes_lamp_head)} lamp heads in the photos. These are photo boxes, not objects: one pole is usually boxed in several photos, and the boxes of the same pole or lamp are merged into ${plural(n.assets, 'pole or streetlight', 'poles and streetlights')} on the map. ${fmt.format(n.boxes_tilted + n.boxes_user)} boxes came from tilted or public photos and are not used to place anything on the map.`,
       tech: `${pipe.detector ?? 'YOLO'} → detections.json ${fmt.format(n.boxes)} boxes; geom_ok ${fmt.format(n.boxes_geom_ok)}; excluded: tilted view ${fmt.format(n.boxes_tilted)}, user photosphere ${fmt.format(n.boxes_user)}.`,
       visual: (run) => <SegBar run={run} onPick={pick} unit="boxes" segs={[
         { key: 'ok', label: 'usable for positions', value: n.boxes_geom_ok, kind: 'kept', examples: 'det.building' },
@@ -208,6 +209,10 @@ function Story({ h, pick }: { h: HoodData; pick: Pick }) {
       </Section>
       <Dropped h={h} pick={pick} />
       <StreetsTable h={h} />
+      <Section id="street-names" title="Street names" lead={<T plain="Where our sources give a street different names, choose the one to show. The default is the street picker’s rule: the map’s name, else Google’s name for the road itself, else the cross streets."
+        tech="GET /areas/{slug}/street-names (street_name_candidates.json); PUT stores data/street_name_picks.json and reloads the area. Source files unchanged." />}>
+        <StreetNames slug={h.area} />
+      </Section>
       <CostTime h={h} />
     </div>
   )

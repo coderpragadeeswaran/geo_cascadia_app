@@ -1,0 +1,53 @@
+{
+ "generated": "2026-10-01T18:21:58",
+ "streets": [
+  {
+   "raw": "(unnamed residential #592678611)",
+   "way_ids": [
+    592678611
+   ],
+   "length_m": 172,
+   "current": "Kattabomman Street Extention",
+   "default": "Kattabomman Street Extention",
+   "f2": {
+    "name": "Kattabomman Street Extention",
+    "rule": "Google's name for the road itself",
+    "source": "google",
+    "complete": true
+   },
+   "sources": [
+    {
+     "source": "osm",
+     "label": "OpenStreetMap",
+     "name": null,
+     "note": "no name on OpenStreetMap"
+    },
+    {
+     "source": "google",
+     "label": "Google (pipeline vote)",
+     "name": "Kattabomman Street",
+     "note": "the most common Google route name at the street's camera stops (may be a cross street near junctions)"
+    },
+    {
+     "source": "f2",
+     "label": "Street picker rule (F2)",
+     "name": "Kattabomman Street Extention",
+     "note": "Google's name for the road itself"
+    },
+    {
+     "source": "register",
+     "label": "Register (synthetic)",
+     "name": null,
+     "note": "copies the raw map label '(unnamed residential #592678611)' (7 records): not a name"
+    },
+    {
+     "source": "places",
+     "label": "Google Places",
+     "name": null,
+     "note": "no street names stored (only business names and positions)"
+    }
+   ],
+   "mismatch": true
+  }
+ ]
+}

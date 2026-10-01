@@ -8,6 +8,11 @@ export const ICONS = {
     url: svg(64, 64, `<rect x="8" y="8" width="48" height="48" rx="10" fill="none" stroke="#fff" stroke-width="5" stroke-dasharray="9 6"/><path d="M23 23l18 18M41 23L23 41" stroke="#fff" stroke-width="6" stroke-linecap="round"/>`),
     width: 64, height: 64, mask: true, anchorY: 32,
   },
+  /** P7.3: a building seen by the camera only (no map outline): a diamond outline with a centre dot */
+  cameraBuilding: {
+    url: svg(64, 64, `<path d="M32 6 58 32 32 58 6 32Z" fill="none" stroke="#fff" stroke-width="6" stroke-linejoin="round"/><circle cx="32" cy="32" r="7" fill="#fff"/>`),
+    width: 64, height: 64, mask: true, anchorY: 32,
+  },
   /** drive the street: direction of travel (points up = north at angle 0; lies flat on the map) */
   arrow: {
     url: svg(64, 64, `<path d="M32 4 52 44 32 34 12 44Z" fill="#fff"/>`),

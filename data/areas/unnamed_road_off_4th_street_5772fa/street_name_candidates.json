@@ -1,0 +1,53 @@
+{
+ "generated": "2026-10-01T18:21:58",
+ "streets": [
+  {
+   "raw": "(unnamed residential #206801268)",
+   "way_ids": [
+    206801268
+   ],
+   "length_m": 232,
+   "current": "3rd Street, Sridevi Nagar",
+   "default": "3rd Street, Sridevi Nagar",
+   "f2": {
+    "name": "3rd Street, Sridevi Nagar",
+    "rule": "Google's name for the road itself",
+    "source": "google",
+    "complete": true
+   },
+   "sources": [
+    {
+     "source": "osm",
+     "label": "OpenStreetMap",
+     "name": null,
+     "note": "no name on OpenStreetMap"
+    },
+    {
+     "source": "google",
+     "label": "Google (pipeline vote)",
+     "name": "3rd Street, Sridevi Nagar",
+     "note": "the most common Google route name at the street's camera stops (may be a cross street near junctions)"
+    },
+    {
+     "source": "f2",
+     "label": "Street picker rule (F2)",
+     "name": "3rd Street, Sridevi Nagar",
+     "note": "Google's name for the road itself"
+    },
+    {
+     "source": "register",
+     "label": "Register (synthetic)",
+     "name": null,
+     "note": "copies the raw map label '(unnamed residential #206801268)' (23 records): not a name"
+    },
+    {
+     "source": "places",
+     "label": "Google Places",
+     "name": null,
+     "note": "no street names stored (only business names and positions)"
+    }
+   ],
+   "mismatch": false
+  }
+ ]
+}

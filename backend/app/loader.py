@@ -17,6 +17,7 @@ from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, P
 from shapely.ops import transform, unary_union
 
 from .derived import computed_counts, consistency
+from . import namepick
 from .streetgeo import gap_display, named_streets
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -128,6 +129,7 @@ def load_area(conn, folder, slug=None, source_job_id=None):
     exp = _read(os.path.join(folder, "export.json"))
     rr = ensure_run_report(folder)
     streets, names, plan = read_street_inputs(folder)
+    exp, names = namepick.apply(folder, exp, names)  # P7.3: a person's pick of the display name (source files unchanged)
     streets = named_streets(streets, names)          # name = pipeline display name, osm_name = raw OSM label (D13)
     mc = _read(MODEL_CARD) if os.path.exists(MODEL_CARD) else None
     meta, B, A = exp["meta"], exp.get("buildings", []), exp.get("assets", [])

@@ -61,6 +61,17 @@ export function makeModelCardSchemas(mode: SchemaMode) {
       used_uncertainty_m: z.array(obj({ up_to_m: z.number(), plus_minus_m: z.number(), basis: z.string().optional() })),
       rule: Text, notebook_surveyed_check: Text,
     }).optional(),
+    // P7.4: the sign-linking rule (D44) and its agreement check against Google pins (tools/validate_sign_links.py)
+    sign_links: obj({
+      rule: Text, margin_deg: z.number(), note: Text, source: Text,
+      ward29: obj({
+        sign_crops: z.number().int(), moved: z.number().int(), read_signs: z.number().int(), read_moved: z.number().int(),
+        google_check: obj({
+          moved_read_signs_with_google_pin: z.number().int(), closer: z.number().int(), further: z.number().int(),
+          same_within_1m: z.number().int(), to_or_from_no_outline: z.number().int(), median_change_m: z.number(),
+        }),
+      }),
+    }).optional(),
     // D26/D27: building position vs the Gate 1 target (tools/eval_gate1.py); per-area tables are keyed by area slug
     gate1_position: obj({
       _note: Text, generated: z.string(), target_m: z.number(), status: z.string(), status_note: Text,

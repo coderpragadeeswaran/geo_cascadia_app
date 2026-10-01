@@ -170,7 +170,7 @@ def features(bundle, layers, keep=None):
                 feats.append(F(pt(a), {
                     "kind": a["type"], "id": a["id"], "street": a.get("street"), "confidence": a.get("confidence"),
                     "method": a.get("method"), "approximate": a.get("method") != "triangulated",
-                    "cameras_used": a.get("cameras_used"), "uncertainty_m": a.get("uncertainty_m"),
+                    "cameras_used": a.get("cameras_used"), "n_detections": a.get("n_detections"), "uncertainty_m": a.get("uncertainty_m"),
                     "register_status": (a.get("register") or {}).get("status"), "review_status": (a.get("review") or {}).get("status")}))
     if "gaps" in layers:
         disp = bundle.get("gap_display") or {}

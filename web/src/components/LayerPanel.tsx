@@ -14,6 +14,7 @@ const GROUPS: { title: string; items: { key: LayerKey; label: string; hint: stri
     { key: 'gaps', label: 'Dark stretches', hint: 'No streetlight seen within 60 m' },
     { key: 'unmapped', label: 'Businesses with no analysed building', hint: 'Shop signs on no outline, or on a building outside the analysed ones' },
     { key: 'missing', label: 'In the register, not seen', hint: 'Synthetic register record, nothing detected' },
+    { key: 'cameraBuildings', label: 'Buildings seen by camera only', hint: 'Several cameras agree on a building where the map has no outline' },
     { key: 'review', label: 'Waiting for review', hint: 'Dashed outline on items a person should check' },
   ] },
   { title: 'Extra context (off by default)', items: [

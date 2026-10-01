@@ -55,7 +55,8 @@ def test_plan_estimate_prices_the_real_plan():
     e = planest.cost_of_plan(plan, rates, cap_usd=2.0)
     assert (e["views"], e["buildings_faced"], e["street_view_images"], e["cameras"]) == (4, 2, 6, 2)
     assert e["street_view_usd"] == 0.04 and e["cloud_ai_usd"] == 0.0006 and e["total_usd"] == 0.04
-    assert e["gpu_minutes"] == 0.3 and e["cpu_minutes"] is None and e["places_calls"] == 1 and not e["over_cap"]
+    assert e["gpu_minutes"] == 0.3 and e["cpu_minutes"] is None
+    assert planest.cost_of_plan(plan, {**rates, "gpu": {"sec_per_image": 3.0, "startup_s": 120, "basis": "x"}})["gpu_minutes"] == 2.3 and e["places_calls"] == 1 and not e["over_cap"]
     big = [{"views": [{"footprint": f"b{i}"}]} for i in range(200)]                     # 200 views + 200 buildings
     assert planest.cost_of_plan(big, rates, cap_usd=2.0)["over_cap"]
 
@@ -71,8 +72,12 @@ def test_measured_rates_come_from_full_live_runs():
     r = planest.measured_rates(st.areas_dir, mc)
     used = {j["slug"] for j in r["jobs"]}
     assert "vadakku_masi_veethi_f17937" in used and "sanganur_road_086d14" not in used      # resumed: not a rate
-    n = sum(j["images"] for j in r["jobs"])
-    assert abs(r["gpu"]["sec_per_image"] - sum(j["seconds"] for j in r["jobs"]) / n) < 1e-9
+    # P7 R2 (F1): per-image rate from the Ward 29 full run; start-up = median of (job time - images x rate)
+    rate = mc["cost_time"]["ward29_full_run_gpu_minutes"] * 60 / 1420
+    assert abs(r["gpu"]["sec_per_image"] - rate) < 1e-9
+    starts = sorted(j["seconds"] - j["images"] * rate for j in r["jobs"])
+    med = starts[len(starts) // 2] if len(starts) % 2 else (starts[len(starts) // 2 - 1] + starts[len(starts) // 2]) / 2
+    assert abs(r["gpu"]["startup_s"] - med) < 1e-9
     assert r["sv_price"] == mc["cost_time"]["street_view_price_usd_per_image"]
     # Ward 29's photos from its run files: 1,154 views fetched + 266 building crops = 1,420 (the owner's full run)
     assert planest.photos_of_run(os.path.join(st.areas_dir, "ward29")) == {"views": 1154, "crops": 266, "photos": 1420}

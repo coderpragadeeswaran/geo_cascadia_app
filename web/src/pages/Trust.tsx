@@ -9,6 +9,7 @@
  *    limits and how questions are answered. Anchors: #/trust/<id> (results, use, floors, names, streetlights, detector,
  *    positions, gate1, matching, cost, rejected, consistency, gap-checks, limits, questions). */
 import { ArrowRight, CircleCheck, CircleX, Minus } from 'lucide-react'
+import { SignRule } from '@/components/SignRule'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useConsistency, useRegisterTests, useTrust, type ConsistencyRow, type Experiment, type RegisterTests, type TrustCard, type TrustNum } from '@/api/p5'
 import { useAreas, useModelCard } from '@/api/queries'
@@ -45,7 +46,7 @@ const frac = (x: TrustNum | null) => !x || typeof x.value !== 'number' ? null : 
 
 const NAV: [string, string][] = [
   ['results', 'What each result is worth'], ['rejected', 'Tried and dropped'], ['detector', 'Detector'], ['positions', 'Pole & light positions'],
-  ['gate1', 'Building position (Gate 1)'], ['register-tests', 'Register tests (planted mistakes)'], ['matching', 'Register matching (notebook)'], ['cost', 'Cost: routed vs all-VLM'],
+  ['gate1', 'Building position (Gate 1)'], ['signs', 'Which building a sign belongs to'], ['register-tests', 'Register tests (planted mistakes)'], ['matching', 'Register matching (notebook)'], ['cost', 'Cost: routed vs all-VLM'],
   ['consistency', 'Stored vs computed'], ['gap-checks', 'Gap length checks'], ['limits', 'Limits of this data'], ['questions', 'How questions are answered'],
 ]
 
@@ -195,6 +196,10 @@ export default function Trust() {
 
           {m.gate1_position && <Gate1 g={m.gate1_position} names={Object.fromEntries((areas ?? []).map((a) => [a.slug, shortArea(a.name)]))} />}
 
+          <Sec id="signs" title="Which building a sign belongs to" lead={<T plain="How a shop sign in a photo is linked to a building, how that was checked, and a spot-check anyone can redo."
+            tech="model_card.sign_links (tools/validate_sign_links.py); /trust/sign-links: sign_spotcheck.json (tools/sign_spotcheck.py, seed 2026) + sign_spotcheck_ai.json (AI first pass)." />}>
+            <SignRule />
+          </Sec>
           <Sec id="register-tests" title="Register tests: planted mistakes and pairing by location"
             lead={<T plain="Each area's register is made-up: it copies what the photos show, except a few planted mistakes. Records are paired with buildings by position only (never by a shared ID). This tests the comparison logic end to end on made-up data; real accuracy needs a real register."
               tech="D42/D43. GET /trust/register: planted_register_mistakes.json and register_synthetic.json (the hidden truth) vs the exported records, per area. Computed, not typed." />}>
