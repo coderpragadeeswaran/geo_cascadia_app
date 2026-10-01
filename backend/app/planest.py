@@ -131,14 +131,17 @@ def cost_of_plan(plan, rates, cap_usd=None):
 
 
 def basis_text(rates):
-    parts = [f"Images = views planned by the pipeline's own camera planner + one building photo per building it faces "
-             f"(the worker's cost-cap rule; an upper bound). ${rates.get('sv_price')} per Street View image (model card)."]
-    if rates.get("cloud_basis"):
-        parts.append(f"Cloud AI per image: {rates['cloud_basis']}.")
-    for dev, word in (("gpu", "GPU"), ("cpu", "CPU")):
-        if dev in rates:
-            parts.append(f"{word} time per image: {rates[dev]['basis']}.")
-    parts.append("Google look-ups (Places) are counted from the same jobs but not priced (no price recorded).")
+    """the plain-language "How is this estimated?" shown to users (hotfix: no internal words); the technical rates stay in
+    the `rates` field"""
+    parts = [f"Photos: every Street View photo this street needs, from the spots where Google's cameras stood along it, "
+             f"plus one close-up per building (at most). Each photo costs ${rates.get('sv_price')} (Google's price)."]
+    if rates.get("cloud_usd_per_image") is not None:
+        parts.append(f"AI checks: about ${rates['cloud_usd_per_image']:.5f} per photo, as measured on earlier analyses.")
+    g = rates.get("gpu")
+    if g:
+        parts.append(f"Time: about {g['sec_per_image']:.1f} s per photo (the full Ward 29 analysis)"
+                     + (f" plus about {g['startup_s'] / 60:.0f} minutes to start up (typical of earlier analyses)." if g.get("startup_s") else "."))
+    parts.append("Google business look-ups are counted but not priced. An estimate, not a measurement.")
     return " ".join(parts)
 
 
@@ -166,13 +169,24 @@ def plan_street(polygon, way_ids, data_dir, maps_key):
             "seconds": {"panoramas": round(t1 - t0, 1), "area_and_plan": round(time.monotonic() - t1, 1)}}
 
 
-def key_of(polygon, way_ids):
-    return hashlib.md5(json.dumps([polygon, sorted(way_ids or [])], sort_keys=True).encode()).hexdigest()[:16]
+def _rounded(g, nd):
+    if isinstance(g, (list, tuple)):
+        return [_rounded(x, nd) for x in g]
+    if isinstance(g, dict):
+        return {k: _rounded(v, nd) for k, v in g.items()}
+    return round(g, nd) if isinstance(g, float) else g
 
 
-def start(polygon, way_ids, *, data_dir, maps_key, model_card, cap_usd):
+def key_of(polygon, way_ids, lines=None):
+    """one key per stretch of street: its line (≈ 1 m rounding) when known, so clicking the same street at another spot
+    reuses the estimate (the job polygon is the line's 45 m buffer, rebuilt around each click with tiny float changes)"""
+    basis = _rounded(lines, 5) if lines else _rounded(polygon, 6)
+    return hashlib.md5(json.dumps([basis, sorted(way_ids or [])], sort_keys=True).encode()).hexdigest()[:16]
+
+
+def start(polygon, way_ids, *, data_dir, maps_key, model_card, cap_usd, lines=None):
     """Start (or join) planning for this job polygon. Returns the status dict (see status())."""
-    k = key_of(polygon, way_ids)
+    k = key_of(polygon, way_ids, lines)
     path = os.path.join(data_dir, "cache", "planest", f"{k}.json")
     with _LOCK:
         if k in _JOBS and _JOBS[k]["status"] in ("running", "done"):
@@ -228,9 +242,3 @@ def status(k):
                            "method": "planner", "basis": basis_text(rates),
                            "rates": {k2: v for k2, v in rates.items() if k2 != "jobs"}, "is_estimate": True}
     return out
-
-
-def done_estimate(polygon, way_ids):
-    """the finished estimate for this polygon, if planning already finished (for the job record)"""
-    st = status(key_of(polygon, way_ids))
-    return st.get("estimate") if st.get("status") == "done" else None

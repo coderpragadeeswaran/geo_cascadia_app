@@ -118,7 +118,7 @@ export function CoverageNotice() {
     <p className="sheet t-small ink2 pointer-events-auto mx-5 mt-2 max-w-[640px] border-l-2 px-3 py-2" role="note"
       style={{ borderLeftColor: 'var(--ns-sodium)', background: 'color-mix(in srgb, var(--ns-bg1) 90%, transparent)' }}>
       <b className="text-ink">Few buildings are on the map here.</b>{' '}
-      {pct != null && <>{pct}% of the camera views face frontage with no building outline in OpenStreetMap. </>}
+      {pct != null && <>{pct}% of the camera views face frontage with no building outline on the map. </>}
       Buildings were checked only where an outline exists ({c.buildings}); streetlights, poles and signs were checked everywhere ({plural(c.assets, 'pole or light', 'poles and lights')}, {plural(c.unmapped_businesses, 'business')} with no analysed building).
     </p>
   )

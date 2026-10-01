@@ -400,7 +400,7 @@ export function GeoMini({ streets = [], highlight, highlightText, points = [], l
           {[...leg.entries()].map(([name, e]) => (
             <span key={name} className="inline-flex items-center gap-1.5"><Swatch sw={e.sw} />{name}{countOf(name, e.n) ? <span className="ink3 tabular-nums"> {e.n}</span> : null}</span>
           ))}
-          {ctx && !ctx.roads_available && <span className="ink3">other roads not loaded (OpenStreetMap busy)</span>}
+          {ctx && !ctx.roads_available && <span className="ink3">other roads not loaded (map server busy)</span>}
         </figcaption>
       )}
       {caption && <p className="t-small ink3 mt-1">{caption}</p>}

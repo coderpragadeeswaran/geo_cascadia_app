@@ -1581,3 +1581,30 @@ tools/sign_spotcheck.py draws 20 random moves (seed 2026, from all 570). AI firs
 once — 20 Street View requests, $0.14 at list price, deleted after): 11 move looks right, 0 wrong, 9 can't tell; 6 of
 the 20 boxes are not shop signs. Shown on Trust as "AI visual check (Claude Code), not a human check", with a
 one-photo-at-a-time spot-check a person can redo (verdicts kept in that browser).
+
+## 2026-10-01 — P7 hotfix (street lookup, plain wording, city labels)
+
+### D48. "Pending" instead of 503, raced mirrors with health, one tile query, plain words, no city badges
+**Why /jobs/preview kept answering 503.** Since P7.1 a lookup still running after 5 s raised OverpassSlow → 503, and every
+Retry waited 5 s and got 503 again while Overpass took 20–40 s per query (measured: overpass-api.de 27–39 s or 504,
+maps.mail.ru 20 s or 504, kumi.systems and private.coffee timing out). Fixes:
+- **202 pending.** /jobs/preview waits ≤ 4 s per ask; still running → 202 `{status: pending}`; the lookup continues in the
+  background (`_finish_later`), so the next ask is answered from the cache. 503 only when every map server failed for
+  60 s ("Map server is busy — try again in a minute."). The browser shows "Finding street…" and asks again every
+  0.8 s up to 30 s, then the busy line + Retry; the street appears by itself when it lands.
+- **The road first, details after.** One Overpass query per tile now returns every road (any highway class); the
+  clicked road is still chosen among the pipeline's classes, and the roads at an unnamed road's ends come from the same
+  answer when its ends lie inside the tile (no second query). When only a named street's full length is missing, the
+  street is shown at once (`status: partial`, "Finding the full street…", Start disabled) and swapped for the full one.
+- **Mirrors.** overpass-api.de, overpass.kumi.systems, overpass.private.coffee, maps.mail.ru raced in parallel; a mirror
+  that is unreachable or times out rests 5 min (`alive_mirrors`), a 429 / 5xx one does not; a 200 with a runtime-error
+  remark is a failure. Regional instances are excluded. `/health` reports `map_servers`.
+- Cache writes survive the Windows replace race; the planner estimate's cache key is the street line (≈ 1 m), so the
+  same street clicked elsewhere reuses it; an incomplete street starts no estimate.
+**Plain wording (H2).** Analyse, the job card, Jobs, the top bar and the main drawer lines say "Finding street…",
+"Estimating cost and time…", "Estimate not available right now. You can still start — the $2 cap protects you.",
+"analysis computer", "Time" (no GPU / CPU / OSM / pipeline / planner / worker / way id). "How do we know?", Under the Hood
+and Trust stay technical (D16).
+**City labels (H3).** The city-zoom name badges are gone (outlines only; name and counts on hover). No other app layer
+draws map text.
+**Verification rule** added to CLAUDE.md; `web/scripts/screenshots.ts` (Playwright, dev-only `window.__gcMap`).

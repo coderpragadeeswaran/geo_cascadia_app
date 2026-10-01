@@ -31,9 +31,14 @@ from shapely.ops import linemerge, transform, unary_union
 from geo_cascadia.geo import Frame
 from geo_cascadia.picker import ROADS            # same road classes as the pipeline
 
-MIRRORS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]
-BUDGET_S = 5.0             # P7.1: a click waits at most this long in total; the browser gives up at 8 s
-BG_PER_CALL_S = 25.0       # a query keeps running in the background this long per mirror after the click gave up
+# Hotfix: every global public Overpass instance, asked in parallel; the first good answer wins. A mirror that fails
+# (timeout, refused, 5xx) is skipped for MIRROR_REST_S, so dead ones drop out at runtime (all of them resting = ask all).
+# Regional instances (e.g. overpass.osm.ch, Switzerland only) are left out: their empty answers would look valid.
+MIRRORS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter",
+           "https://overpass.private.coffee/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter"]
+MIRROR_REST_S = 300.0
+BUDGET_S = 4.0             # one /jobs/preview request waits this long; the browser asks again (pending) up to 30 s
+BG_PER_CALL_S = 30.0       # one mirror request may take this long
 TILE_DEG = 0.003           # roads are fetched per tile (~330 m) with a margin, so any click in it resolves locally
 TILE_PAD_M = 80            # > SEARCH_M + 8 (the pipeline's around radius): the nearest road is never cut off
 SEARCH_M, BUFFER_M, MAX_LEN_M = 60, 45, 1200      # pipeline defaults (picker.click_to_street)
@@ -55,6 +60,14 @@ class NoRoad(RuntimeError):
     pass
 
 
+class Pending(OverpassBusy):
+    """Hotfix: the lookup is still running (in the background); ask again. `partial` = the street without its details,
+    when the road itself is already known."""
+    def __init__(self, partial=None):
+        super().__init__("still looking up the street")
+        self.partial = partial
+
+
 def _read_json(path):
     try:
         with open(path, encoding="utf-8") as f:
@@ -68,22 +81,67 @@ def _write_json(path, obj):
     tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(obj, f)
-    os.replace(tmp, path)
+    for k in range(4):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:                                   # another thread is replacing the same file right now
+            time.sleep(0.05 * (k + 1))
+    try:
+        os.remove(tmp)                                            # the other writer's copy is the same answer
+    except OSError:
+        pass
 
 
 _POOL = ThreadPoolExecutor(max_workers=6, thread_name_prefix="overpass-race")        # one coordinator per query
 _CALLS = ThreadPoolExecutor(max_workers=16, thread_name_prefix="overpass-call")      # mirror requests (may hang)
 _INFLIGHT, _LOCK = {}, threading.Lock()
-BG_TOTAL_S = 45.0          # a background query gives up after this long in total
+BG_TOTAL_S = 60.0          # a background query gives up after this long in total
+_HEALTH = {}               # mirror -> {"ok": last success (monotonic), "rest_until": skip until (monotonic), "fails": n}
+
+
+def alive_mirrors():
+    now = time.monotonic()
+    ok = [u for u in MIRRORS if _HEALTH.get(u, {}).get("rest_until", 0) <= now]
+    return ok or list(MIRRORS)
+
+
+def _mark(url, ok, rest=True):
+    with _LOCK:
+        h = _HEALTH.setdefault(url, {"fails": 0})
+        if ok:
+            h.update(ok=time.monotonic(), rest_until=0, fails=0)
+        else:
+            h["fails"] = h.get("fails", 0) + 1
+            if rest:
+                h["rest_until"] = time.monotonic() + MIRROR_REST_S
+
+
+def mirror_health():
+    """for /health: which mirrors answered lately and which are resting after a failure"""
+    now = time.monotonic()
+    return [{"url": u.split("/")[2], "resting": _HEALTH.get(u, {}).get("rest_until", 0) > now,
+             "last_ok_s_ago": round(now - _HEALTH[u]["ok"]) if _HEALTH.get(u, {}).get("ok") else None,
+             "fails": _HEALTH.get(u, {}).get("fails", 0)} for u in MIRRORS]
 TRIES_PER_MIRROR = 3       # a mirror answering 429 / 5xx / timeout is asked again (after a short wait) while time allows
 
 
 def _ask_mirror(url, query, wait_s=0.0):
     if wait_s:
         time.sleep(wait_s)
-    r = requests.post(url, data={"data": query}, headers=UA, timeout=(5, BG_PER_CALL_S))
+    try:
+        r = requests.post(url, data={"data": query}, headers=UA, timeout=(5, BG_PER_CALL_S))
+    except requests.RequestException:
+        _mark(url, False)                                         # unreachable / timed out: rest it
+        raise
     if r.status_code == 200 and r.text.lstrip().startswith("{"):
-        return r.json().get("elements", [])
+        j = r.json()
+        if "error" in str(j.get("remark") or "").lower():          # a 200 that is really a server-side timeout
+            _mark(url, False, rest=False)
+            raise OverpassBusy("runtime error")
+        _mark(url, True)
+        return j.get("elements", [])
+    _mark(url, False, rest=False)                                 # 429 / 5xx = busy, not dead: ask again later
     raise OverpassBusy(f"HTTP {r.status_code}")
 
 
@@ -91,7 +149,7 @@ def _race(query, path):
     """Every mirror at once; the first valid answer wins and is cached. A failed mirror is asked again after a short
     wait (Overpass answers 429 when one address asks too often). Runs in the background pool."""
     t_end, last = time.monotonic() + BG_TOTAL_S, None
-    pending = {_CALLS.submit(_ask_mirror, u, query): (u, 1) for u in MIRRORS}
+    pending = {_CALLS.submit(_ask_mirror, u, query): (u, 1) for u in alive_mirrors()}
     try:
         while pending:
             done, _ = wait(list(pending), timeout=max(0.0, t_end - time.monotonic()), return_when=FIRST_COMPLETED)
@@ -140,7 +198,15 @@ def _tile_query(lat, lon):
     plon = TILE_PAD_M / (111320 * max(0.2, math.cos(math.radians(lat))))
     s, w = ty * TILE_DEG - plat, tx * TILE_DEG - plon
     n, e = (ty + 1) * TILE_DEG + plat, (tx + 1) * TILE_DEG + plon
-    return f'[out:json][timeout:25];way["highway"~"{ROADS}"]({s:.6f},{w:.6f},{n:.6f},{e:.6f});out geom tags;'
+    return f'[out:json][timeout:25];way["highway"]({s:.6f},{w:.6f},{n:.6f},{e:.6f});out geom tags;'
+
+
+def _tile_box(lat, lon):
+    """the tile query's bounds (south, west, north, east)"""
+    ty, tx = math.floor(lat / TILE_DEG), math.floor(lon / TILE_DEG)
+    plat = TILE_PAD_M / 110574
+    plon = TILE_PAD_M / (111320 * max(0.2, math.cos(math.radians(lat))))
+    return ty * TILE_DEG - plat, tx * TILE_DEG - plon, (ty + 1) * TILE_DEG + plat, (tx + 1) * TILE_DEG + plon
 
 
 # ------------------------------------------------------------------ geometry (local metre frame, as the pipeline)
@@ -252,8 +318,9 @@ def pick_overpass(cache_dir, lat, lon, deadline, google_key=None):
     """Returns (result, complete). complete is False when the details (the named street beyond the tile, the roads at
     an unnamed road's ends) were still loading when the click's budget ran out: the street is shown without them."""
     F = Frame(lat, lon)
-    els, cached = overpass(_tile_query(lat, lon), cache_dir, deadline)      # same road classes as the pipeline
-    ways = [w for w in els if "geometry" in w]
+    els, cached = overpass(_tile_query(lat, lon), cache_dir, deadline)      # every road of the tile, any class
+    every = [w for w in els if "geometry" in w and len(w["geometry"]) >= 2]
+    ways = [w for w in every if re.search(ROADS, (w.get("tags") or {}).get("highway", ""))]   # the pipeline's road classes
     geom = lambda w: LineString([F.xy(n["lat"], n["lon"]) for n in w["geometry"]])
     hit = min(ways, key=lambda w: geom(w).distance(Point(0, 0))) if ways else None
     if hit is None or geom(hit).distance(Point(0, 0)) > SEARCH_M:
@@ -284,7 +351,13 @@ def pick_overpass(cache_dir, lat, lon, deadline, google_key=None):
         named = [w for w in ways if (w.get("tags") or {}).get("name")]
         ends = end_points(line)
         els3 = []
-        if ends:
+        S_, W_, N_, E_ = _tile_box(lat, lon)
+        inside = lambda la, lo: (min(la - S_, N_ - la) * 110574 > TOUCH_M + 5 and
+                                 min(lo - W_, E_ - lo) * 111320 * math.cos(math.radians(la)) > TOUCH_M + 5)
+        if ends and all(inside(*F.ll(p.x, p.y)) for p in ends):
+            els3 = [w for w in every if any(geom(w).distance(p) <= TOUCH_M for p in ends)]   # same answer, no query
+            named += [w for w in els3 if (w.get("tags") or {}).get("name") and w not in named]
+        elif ends:
             pts = [F.ll(p.x, p.y) for p in ends]
             # every road at the two ends: named ones name it; unnamed ones may have a name on Google Maps
             q3 = ("[out:json][timeout:25];(" + "".join(f'way["highway"](around:{TOUCH_M},{la:.6f},{lo:.6f});' for la, lo in pts)
@@ -543,13 +616,13 @@ def _finish_later(cache_dir, lat, lon, path, google_key):
     threading.Thread(target=run, name="pick-finish", daemon=True).start()
 
 
-SLOW_NOTE = "OSM lookup slow — showing without OSM details (the name and full length may be incomplete)."
 
 
 def pick(cache_dir, bundles, lat, lon, google_key=None):
-    """Resolve a click within BUDGET_S. Name (F2): the OpenStreetMap name; else Google's name for the road itself
-    (google_own_name); else the cross-street label (unnamed_label). Raises NoRoad (422), OverpassSlow (503, still loading in the background) or
-    OverpassBusy (503). A street resolved without its OSM details carries osm_details=False and SLOW_NOTE."""
+    """Resolve a click. Name (F2): the OpenStreetMap name; else Google's name for the road itself (google_own_name); else
+    the cross-street label (unnamed_label). Each call waits BUDGET_S at most: while OpenStreetMap is still answering it
+    raises Pending (the endpoint answers 202 and the browser asks again; the lookup continues in the background, so the
+    next call is answered from the cache). NoRoad -> 422; OverpassBusy (every mirror failed for BG_TOTAL_S) -> 503."""
     res = pick_local(bundles, lat, lon)
     if res is None:
         # picks2: resolved clicks (complete answers named by the current rule only)
@@ -560,22 +633,26 @@ def pick(cache_dir, bundles, lat, lon, google_key=None):
         else:
             try:
                 res, complete = pick_overpass(cache_dir, lat, lon, time.monotonic() + BUDGET_S, google_key)
-                if complete:
-                    _write_json(path, {"complete": True, "rule": LABEL_RULE, "t": time.time(), "res": res})
-                else:
-                    res["osm_details"], res["note"] = False, SLOW_NOTE
-                    _finish_later(cache_dir, lat, lon, path, google_key)
             except OverpassSlow:
                 _finish_later(cache_dir, lat, lon, path, google_key)
-                res = pick_local(bundles, lat, lon, SEARCH_M)
-                if res is None:
-                    raise
-                res["note"] = "OpenStreetMap is slow, so this is the nearest street that was already analysed."
+                raise Pending() from None
             except OverpassBusy:
-                res = pick_local(bundles, lat, lon, SEARCH_M)          # slow / busy: offer the nearest analysed street
+                res = pick_local(bundles, lat, lon, SEARCH_M)          # really busy: offer the nearest analysed street
                 if res is None:
                     raise
-                res["note"] = "OpenStreetMap is slow or busy, so this is the nearest street that was already analysed."
+                res["note"] = "The map server is busy, so this is the nearest street that was already analysed."
+                complete = True
+            if complete:
+                if res.get("source") != "area":
+                    _write_json(path, {"complete": True, "rule": LABEL_RULE, "t": time.time(), "res": res})
+            else:
+                _finish_later(cache_dir, lat, lon, path, google_key)
+                res["osm_details"] = False
+                raise Pending(finish(res, bundles, lat, lon))
+    return finish(res, bundles, lat, lon)
+
+
+def finish(res, bundles, lat, lon):
     res = annotate(res, bundles, lat, lon)
     res["street"] = plain_name(res["street"])
     return res

@@ -1,5 +1,5 @@
 /** deck.gl layers in the NIGHT SURVEY map language (docs/DESIGN.md "Map language"), by zoom band (CLAUDE.md §9.3):
- *  city   (z < 13.5): analysed areas glow as sodium outlines with a count badge; pulsing dot for running jobs
+ *  city   (z < 13.5): analysed areas glow as sodium outlines (name and counts on hover); pulsing dot for running jobs
  *  area   (13.5–16.5): analysed roads lit (sodium glow), every streetlight gap a DARK stretch on top, streetlights glow;
  *                      buildings only as findings points (no record / discrepancy). Poles, matched buildings and
  *                      unmapped businesses appear from street level (declutter rule 8)
@@ -9,7 +9,7 @@
 import { HexagonLayer } from '@deck.gl/aggregation-layers'
 import type { Layer } from '@deck.gl/core'
 import { FillStyleExtension, PathStyleExtension } from '@deck.gl/extensions'
-import { IconLayer, PathLayer, PolygonLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers'
+import { IconLayer, PathLayer, PolygonLayer, ScatterplotLayer } from '@deck.gl/layers'
 import type { LineString, MultiLineString, MultiPolygon, Point, Polygon } from 'geojson'
 import type {
   AnyProps, AreaCard, AreaFeature, AssetProps, Band, BuildingProps, GapProps, Job, MissingProps, StreetProps, UnmappedProps,
@@ -18,7 +18,6 @@ import { colors, rgba, statusColor, type Mode, type RGBA } from '@/design/tokens
 import type { Focus } from '@/lib/derive'
 import type { LayerKey } from '@/store/ui'
 import { HATCH_MAPPING, ICONS, hatchAtlas } from './icons'
-import { plural } from '@/lib/utils'
 import { mainLine, pointAt, slice } from './trim'
 
 /** Display scale for extrusion only: observed floors × 3.2 m. Not a measured height. */
@@ -184,18 +183,9 @@ export function buildLayers(ctx: LayerCtx): Layer[] {
     new PolygonLayer({ id: 'area-fill', visible: city, data: ctx.areas.flatMap((a) => outerRings(a.polygon).map((polygon) => ({ p: { kind: 'area' as const, id: a.slug, name: a.name, card: a }, polygon }))),
       getPolygon: (d) => d.polygon, getFillColor: rgba(c.sodium, 18), stroked: false, pickable: true, updateTriggers: { getFillColor: mode } }),
   )
-  // created only once areas exist: with no text, the 'auto' font atlas is a 1024×0 canvas and WebGL warns (D13)
-  if (ctx.areas.length) {
-    L.push(new TextLayer<AreaCard>({
-      id: 'area-badge', visible: city, data: ctx.areas,
-      getPosition: (a) => [(a.bbox[0] + a.bbox[2]) / 2, a.bbox[3]],
-      getText: (a) => `${a.name.replace(/^Unseen street: /, '')}  ·  ${plural(a.counts.buildings, 'building')} · ${plural(a.counts.streetlight_gaps_60m, 'dark stretch')}`,
-      getSize: 14, fontFamily: "'Anek Tamil Variable', system-ui, sans-serif", fontWeight: 600,
-      getColor: rgba(c.ink), getPixelOffset: [0, -14], background: true, getBackgroundColor: rgba(c.bg2, 235),
-      backgroundPadding: [9, 5, 9, 5], getBorderColor: rgba(c.sodium, 150), getBorderWidth: 1,
-      characterSet: 'auto', outlineWidth: 0, updateTriggers: { getColor: mode, getBackgroundColor: mode, getBorderColor: mode },
-    }))
-  }
+  // Hotfix (H3): no text labels on the map at city zoom: nearby areas (Ward 29, Sanganur Road, the unnamed roads) piled
+  // their name badges on top of each other. Outlines only; the name and counts are on hover (Inspect, kind 'area').
+  // No other map layer draws text (street names are the base map's own).
 
   // P6 jobs: the clicked street itself. Running = the stage sweeps along the street (done of total) with a camera head;
   // queued / paused = a still, dashed chalk line (nothing pretends to run). The pulsing dot marks it from the city view.

@@ -90,6 +90,8 @@ function MapInstance({ mapId }: { mapId: string }) {
 function YieldToUser() {
   const map = useMap('main')
   useEffect(() => (map ? yieldToUser(map.getDiv()) : undefined), [map])
+  // dev builds only: the map for the Playwright screenshot script (scripts/screenshots.ts) to move the camera
+  useEffect(() => { if (import.meta.env.DEV && map) (window as unknown as { __gcMap?: google.maps.Map }).__gcMap = map }, [map])
   return null
 }
 

@@ -228,7 +228,7 @@ function UnmappedBody({ u }: { u: UnmappedBusiness }) {
         <Section title="What we saw">
           <p className="t-body">{u.on_outline
             ? 'A shop sign was read here, on a building outline that is not one of the analysed buildings (no planned photo faced it), so it can’t be matched to the register.'
-            : 'A shop sign was read here, but OpenStreetMap has no building outline at this spot, so it can’t be matched to the register.'}</p>
+            : 'A shop sign was read here, but the map has no building outline at this spot, so it can’t be matched to the register.'}</p>
           <Row k="Seen in">{u.sightings != null ? plural(u.sightings, 'photo') : '— photos'}</Row>
           <Row k="Position">{u.on_outline ? 'Where the sign’s line of sight meets that outline' : 'Approximate'}</Row>
           <HowWeKnow summary={<>The text reader read this sign in {u.sightings != null ? plural(u.sightings, 'photo') : 'the photos'}. OpenStreetMap has no building outline here, so its spot is only approximate.</>}

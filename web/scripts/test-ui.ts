@@ -1,7 +1,7 @@
 /** Pure UI helpers (review fixes 10, 11, 13, 14), no browser: `npm run test:ui`. Exits 1 on the first failure. */
 import { strict as assert } from 'node:assert'
 import { placeLabels, placeMapLabels, type Rect } from '../src/lib/labelLayout'
-import { JOB_STAGES, jobStatus, matchLabel, minutesText, planTooSlow, stageLine, stageProgress, stageShort, timeLeft } from '../src/lib/labels'
+import { JOB_STAGES, jobStatus, matchLabel, minutesText, planSlowText, planTooSlow, stageLine, stageProgress, stageShort, timeLeft } from '../src/lib/labels'
 import { kpis, type Records } from '../src/lib/derive'
 import { photoProblem, saveDecision } from '../src/lib/review'
 import { article, costText, noun, plural, usd, withArticle } from '../src/lib/utils'
@@ -125,19 +125,20 @@ t('P6: job stages, progress and an honest time left', () => {
   assert.equal(stageProgress('done'), 1)
   // D35 (F2): the real stage number out of the real total; counts only where they mean something to people
   assert.equal(stageLine('detect', 12, 40), 'Stage 4 of 10 · Looking at photos · 12 of 40 photos')
-  assert.equal(stageLine('plan', 5, 5), 'Stage 3 of 10 · Planning camera stops')
+  assert.equal(stageLine('plan', 5, 5), 'Stage 3 of 10 · Planning photos')
   assert.equal(stageLine('area', 5, 5), 'Stage 2 of 10 · Reading the map')
   assert.equal(stageLine(null), 'Starting')
   assert.equal(stageShort('plan'), '3/10')
   const est = { gpu_minutes: 6, cpu_minutes: 11 }
-  assert.equal(timeLeft(120, 'gpu', est), 'about 4 minutes left (estimate for a GPU)')
-  assert.equal(timeLeft(60, 'cpu', est), 'about 10 minutes left (estimate for a CPU)')
-  assert.equal(timeLeft(600, 'gpu', est), 'taking longer than the GPU estimate of 6 minutes')   // never a fake countdown
-  assert.equal(timeLeft(30, 'gpu', { gpu_minutes: 0.3, cpu_minutes: null }), 'taking longer than the GPU estimate of < 1 minute')
+  assert.equal(timeLeft(120, 'gpu', est), 'about 4 minutes left (estimate)')
+  assert.equal(timeLeft(60, 'cpu', est), 'about 10 minutes left (estimate)')
+  assert.equal(timeLeft(600, 'gpu', est), 'taking longer than the estimate of 6 minutes')   // never a fake countdown
+  assert.equal(timeLeft(30, 'gpu', { gpu_minutes: 0.3, cpu_minutes: null }), 'taking longer than the estimate of < 1 minute')
   // P7 R2 (F3): the sheet stops waiting for the planner after 90 s
   assert.equal(planTooSlow({ status: 'running', elapsed_s: 91 }), true)
   assert.equal(planTooSlow({ status: 'running', elapsed_s: 30 }), false)
   assert.equal(planTooSlow({ status: 'done', elapsed_s: 300 }), false)
+  assert.equal(planSlowText(2), 'Estimate not available right now. You can still start — the $2 cap protects you.')
   // P7.1: a duration that rounds to 0 is "< 1 minute", never "0"
   assert.equal(minutesText(0.2), '< 1 minute')
   assert.equal(minutesText(0), '< 1 minute')

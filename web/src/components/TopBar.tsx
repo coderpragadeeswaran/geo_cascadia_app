@@ -101,18 +101,18 @@ function WorkerIndicator() {
   const approval = jobs.filter((j) => j.status === 'needs_approval').length
   const dev = deviceWord(w?.device)
   const doing = on && w?.job ? `${w.job.street ?? 'a street'}: ${stageLine(w.job.stage, w.job.done, w.job.total)}`
-    : running ? `${running.street ?? 'a street'} (worker not responding)` : null
+    : running ? `${running.street ?? 'a street'} (analysis computer not responding)` : null
   const short = approval ? 'Needs approval' : on ? (w?.job ? stageShort(w.job.stage) ?? 'Starting' : dev ?? 'Ready')
     : waiting ? `${waiting} waiting` : null
-  const tip = [on ? `Analysis worker connected${dev ? ` (${dev})` : ''}` : 'Analysis worker disconnected',
-    doing, waiting && !on ? `${plural(waiting, 'street')} queued, waiting for a worker` : null,
+  const tip = [on ? `Analysis computer connected${dev ? ` (${dev})` : ''}` : 'Analysis computer not connected',
+    doing, waiting && !on ? `${plural(waiting, 'street')} queued, waiting for the analysis computer` : null,
     approval ? `${plural(approval, 'analysis', 'analyses')} waiting for your approval (cost above the cap)` : null].filter(Boolean).join(' · ')
   return (
     <Tip label={tip}>
       <button className="btn" onClick={() => go('jobs')} aria-label={tip}>
         <span className={cn('size-2 rounded-full', on && w?.job && 'animate-pulse')} aria-hidden
           style={{ background: on ? 'var(--ns-discrepancy)' : 'transparent', boxShadow: on ? undefined : 'inset 0 0 0 1.5px var(--ns-ink3)' }} />
-        <span className="t-small hidden min-[1280px]:inline">{on ? 'Worker' : 'No worker'}</span>
+        <span className="t-small hidden min-[1280px]:inline">{on ? 'Analysis on' : 'Analysis off'}</span>
         {short && <span className="t-data" style={approval ? { color: 'var(--ns-sodium)' } : undefined}>{short}</span>}
       </button>
     </Tip>

@@ -136,16 +136,16 @@ function JobDetail({ id, online, onOpen, onDelete }: { id: string; online: boole
     catch (e) { setErr(e instanceof ApiError ? e.message : 'Could not cancel') } finally { setBusy(false) }
   }
   const message: Record<string, string> = {
-    queued: online ? 'Queued. The analysis worker picks it up in a few seconds.' : 'Queued, waiting for a worker. Nothing is running yet; it starts when a worker connects.',
+    queued: online ? 'Queued. The analysis starts in a few seconds.' : 'Queued. The analysis computer is not connected yet; it starts as soon as it is.',
     running: `${stageLine(j.stage, j.done, j.total)}.`,
-    interrupted: 'Interrupted: the worker stopped responding (the notebook closed or the account was switched). It will resume when a worker connects again.',
+    interrupted: 'Interrupted: the analysis computer stopped responding. It continues from where it stopped when it reconnects.',
     needs_approval: `Needs your approval: about ${pe?.photos != null ? fmt.format(pe.photos) : 'more'} Street View photos${pe?.usd != null ? ` (about $${pe.usd.toFixed(2)})` : ''}${pe?.buildings != null ? ` for ${plural(pe.buildings, 'building')}` : ''}, above the limit of ${pe?.cap_photos ?? '—'} photos or $${pe?.cap_usd ?? '—'} per street. Nothing has been bought yet.`,
     done: j.area_slug ? 'Done. The new area is ready.' : j.message === 'area deleted' ? 'Done. Its area was deleted afterwards.' : 'Done.',
     failed: `Failed: ${j.message ?? 'unknown error'}${j.retryable ? '. Retry continues from the saved progress; photos already fetched are not bought again.' : ''}`,
     cancelled: 'Cancelled. Nothing was analysed.',
     no_street_view: `No usable Street View here${j.message ? `: ${j.message}` : ''}.`,
-    expired_token: 'Paused: the cloud-AI keys expired. Enter new keys in the worker; it continues where it stopped, nothing is lost.',
-    cancelling: 'Cancelling… the worker stops within about 15 seconds and deletes what it saved for this street.',
+    expired_token: 'Paused: the analysis needs new access keys. It continues where it stopped once they are entered; nothing is lost.',
+    cancelling: 'Cancelling… the analysis stops within about 15 seconds and deletes what it saved for this street.',
   }
   return (
     <article className="rounded-[var(--ns-r-sheet)] p-4" style={{ boxShadow: 'inset 0 0 0 1px var(--ns-line-strong)' }} aria-label="Job detail">
@@ -165,7 +165,7 @@ function JobDetail({ id, online, onOpen, onDelete }: { id: string; online: boole
           streets={[{ name: j.street ?? 'street', geometry: lines as GeoJSON.MultiLineString, length_m: j.input?.length_m ?? null }]} highlight={j.street ?? 'street'}
           highlightText={`${j.street ?? 'Requested stretch'} · ${j.input?.length_m ? `${fmt.format(Math.round(j.input.length_m))} m` : 'length not known'}${j.input?.trimmed ? ' (trimmed)' : ''}`}
           label={`${j.street ?? 'The street'} on a small plan`}
-          caption={j.area_slug ? 'Ticks: the camera stops the analysis used.' : 'The camera stops are planned when a worker starts the analysis; they appear here once it has run.'} />
+          caption={j.area_slug ? 'Ticks: where the photos were taken.' : 'Where the photos were taken appears here once the analysis has run.'} />
           : <p className="t-small ink3">No street geometry stored for this job.</p>}
       </div>
       <dl className="t-small mt-3 grid grid-cols-[120px_1fr] gap-y-1">
@@ -181,16 +181,16 @@ function JobDetail({ id, online, onOpen, onDelete }: { id: string; online: boole
           <dl className="t-small grid grid-cols-[120px_1fr] gap-y-1">
             <dt className="ink3">Photos</dt><dd>about {fmt.format(est.street_view_images)} Street View images{est.street_view_usd != null ? ` · about $${est.street_view_usd.toFixed(2)}` : ''}</dd>
             <dt className="ink3">Total</dt><dd>{est.total_usd != null ? `about $${est.total_usd.toFixed(2)}` : '—'}{est.cap_usd != null ? ` · cost cap $${est.cap_usd.toFixed(2)}` : ''}</dd>
-            <dt className="ink3">Time</dt><dd>{est.gpu_minutes != null ? `about ${minutesText(est.gpu_minutes)} on a GPU` : '—'}{est.cpu_minutes != null ? ` · about ${minutesText(est.cpu_minutes)} on a CPU` : ''}</dd>
+            <dt className="ink3">Time</dt><dd>{est.gpu_minutes != null ? `about ${minutesText(est.gpu_minutes)}` : '—'}</dd>
           </dl>
-          <p className="t-small ink3 mt-1">From the pipeline’s own camera plan for this street, made when it was queued; an estimate, not a measurement.</p>
+          <p className="t-small ink3 mt-1">Worked out from the photos this street needs, when it was queued; an estimate, not a measurement.</p>
           <details className="mt-1"><summary className="link t-small cursor-pointer">How is this estimated?</summary><p className="t-small ink3 mt-1">{est.basis}</p></details>
         </div>
       )}
       <div className="mt-4">
         <div className="t-micro mb-1.5">Stages</div>
-        {stageIdx < 0 && j.status !== 'done' ? <p className="t-small ink3 mb-1.5">Progress appears here once a worker runs the analysis.</p> : null}
-        <ol className="grid grid-cols-2 gap-x-4 gap-y-1" aria-label="Pipeline stages">
+        {stageIdx < 0 && j.status !== 'done' ? <p className="t-small ink3 mb-1.5">Progress appears here once the analysis starts.</p> : null}
+        <ol className="grid grid-cols-2 gap-x-4 gap-y-1" aria-label="Analysis stages">
           {JOB_STAGES.map((s, i) => {
             const state = j.status === 'done' ? 'done' : i < stageIdx ? 'done' : i === stageIdx ? 'now' : 'wait'
             return (
@@ -254,7 +254,7 @@ function ClearTest({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-[60] flex items-center justify-center" style={{ background: 'color-mix(in srgb, var(--ns-bg0) 70%, transparent)' }} onClick={() => !busy && onClose()}>
       <div role="dialog" aria-modal="true" aria-label="Clear test jobs" className="sheet w-[520px] max-w-[94%] p-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between"><h2 className="t-title">Clear test jobs</h2><button autoFocus className="btn btn-icon" disabled={busy} onClick={onClose} aria-label="Close"><X /></button></div>
-        <p className="t-small ink2 mt-1">Removes test runs (with the test areas they made) and requests cancelled before any worker started them. Real analyses, their areas and the three original areas are never touched.</p>
+        <p className="t-small ink2 mt-1">Removes test runs (with the test areas they made) and requests cancelled before their analysis started. Real analyses, their areas and the three original areas are never touched.</p>
         {err && <p className="t-small mt-3" style={{ color: 'var(--ns-no-record)' }}>{err}</p>}
         {!state && !err && <p className="t-small ink3 mt-3">Checking…</p>}
         {done != null ? <p className="t-small mt-3">Removed {plural(done.jobs, 'job')}{done.areas ? ` and ${plural(done.areas, 'test area')}` : ''}.</p> : state && (
@@ -298,10 +298,10 @@ function WorkerLine({ w, online, offline }: { w: WorkerStatus | undefined; onlin
   return (
     <p className="t-small mb-8 flex items-center gap-2">
       <span className="inline-block size-2 shrink-0 rounded-full" style={{ background: on ? 'var(--ns-discrepancy)' : 'transparent', boxShadow: on ? undefined : 'inset 0 0 0 1.5px var(--ns-ink3)' }} aria-hidden />
-      <span className="ink2">Analysis worker: <b className="text-ink">{on ? 'connected' : 'not connected'}</b>
+      <span className="ink2">Analysis computer: <b className="text-ink">{on ? 'connected' : 'not connected'}</b>
         {on && dev && ` on a ${dev}`}
         {on && (w?.job ? ` · analysing ${w.job.street ?? 'a street'} (${stageLine(w.job.stage, w.job.done, w.job.total)})` : ' · waiting for a street')}
-        {!on && ' — new streets wait in the queue until a worker connects.'}
+        {!on && ' — new streets wait in the queue until it connects.'}
         {offline && ' Offline data mode: jobs need the database.'}</span>
     </p>
   )

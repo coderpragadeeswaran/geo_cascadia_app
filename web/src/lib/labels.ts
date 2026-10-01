@@ -144,8 +144,8 @@ const JOB_STATUS: Record<string, [string, string]> = {
 export const JOB_STAGES = ['panoramas', 'area', 'plan', 'detect', 'geometry', 'ocr', 'vlm', 'reference', 'match', 'export']
 /** the same stages in plain words (short: one per row on Jobs, one line on the job card) */
 export const STAGE_PLAIN: Record<string, string> = {
-  panoramas: 'Finding Street View', area: 'Reading the map', plan: 'Planning camera stops', detect: 'Looking at photos',
-  geometry: 'Placing objects', ocr: 'Reading signs', vlm: 'Cloud model', reference: 'Google check', match: 'Register check',
+  panoramas: 'Finding Street View', area: 'Reading the map', plan: 'Planning photos', detect: 'Looking at photos',
+  geometry: 'Placing objects', ocr: 'Reading signs', vlm: 'AI check', reference: 'Google check', match: 'Register check',
   export: 'Saving results', done: 'Done',
 }
 /** what each stage's "done of total" counts */
@@ -181,7 +181,7 @@ export function onMapSeenIn(type: 'pole' | 'streetlight', n: number | null | und
 /** P7 R2 (F3): the confirm sheet stops waiting for the planner estimate after this long (OpenStreetMap busy); the
  *  backend keeps planning, and the job's cost cap still protects a job started without it */
 export const PLAN_WAIT_S = 90
-export const PLAN_SLOW_TEXT = 'Estimate slow (map server busy) — you can still start; the cost cap protects you.'
+export const planSlowText = (cap: number) => `Estimate not available right now. You can still start — the $${cap % 1 ? cap.toFixed(2) : cap} cap protects you.`
 export const planTooSlow = (st: { status: string; elapsed_s?: number } | null | undefined) =>
   st?.status === 'running' && (st.elapsed_s ?? 0) > PLAN_WAIT_S
 
@@ -200,10 +200,11 @@ export function timeLeft(elapsedS: number, device: string | null | undefined, es
   const total = device === 'cpu' ? est.cpu_minutes : est.gpu_minutes
   if (total == null) return null
   const left = total - elapsedS / 60
-  return left > 0.5 ? `about ${minutesText(Math.ceil(left))} left (estimate for a ${device === 'cpu' ? 'CPU' : 'GPU'})`
-    : `taking longer than the ${device === 'cpu' ? 'CPU' : 'GPU'} estimate of ${minutesText(total)}`
+  return left > 0.5 ? `about ${minutesText(Math.ceil(left))} left (estimate)`
+    : `taking longer than the estimate of ${minutesText(total)}`
 }
-export const deviceWord = (d: string | null | undefined) => (d === 'gpu' ? 'GPU' : d === 'cpu' ? 'CPU' : null)
+/** plain words for the analysis computer (GPU = a fast graphics computer, CPU = an ordinary one) */
+export const deviceWord = (d: string | null | undefined) => (d === 'gpu' ? 'fast computer' : d === 'cpu' ? 'standard computer' : null)
 /** P5/P6: the API's display_status adds "interrupted" (running, worker silent for 2 min) and "cancelled" */
 export function jobStatus(j: { status: string; message?: string | null; display_status?: string }) {
   const k = j.display_status ?? (j.status === 'failed' && j.message === CANCELLED_MESSAGE ? 'cancelled' : j.status)

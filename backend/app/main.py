@@ -25,6 +25,7 @@ from .settings import ROOT, Settings
 sys.path.insert(0, os.path.join(ROOT, "pipeline"))   # geo_cascadia (import only — never modified)
 
 from . import drive, evidence, gaps, hood, loader, minimap, namepick, registertest, trust, views  # noqa: E402
+from . import streetpick as streetpick_mod  # noqa: E402
 from .storage import StorageError  # noqa: E402
 from .store import Data, OfflineError  # noqa: E402
 
@@ -149,7 +150,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         from .jobs import worker_online
         online = D.probe()
         return {"ok": True, "offline": not online, "db_error": D.last_error, "configured": settings.describe(),
-                "worker_online": worker_online(app)}
+                "worker_online": worker_online(app), "map_servers": streetpick_mod.mirror_health()}
 
     @app.get("/config/public", tags=["meta"])
     def config_public(D: Data = Depends(get_data)):

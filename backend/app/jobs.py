@@ -18,6 +18,7 @@ import uuid
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from shapely.geometry import mapping, shape
 from shapely.ops import transform
@@ -156,18 +157,20 @@ def _bundles(D):
         return []
 
 
-def pick_street(settings, D, lat, lon):
-    """The street under a click (streetpick.pick): 422 when there is no road, 503 when OpenStreetMap is busy."""
+def pick_street(settings, D, lat, lon, pending_ok=False):
+    """The street under a click (streetpick.pick): 422 when there is no road, 503 when every map server failed. While
+    the lookup is still running: streetpick.Pending (pending_ok, /jobs/preview answers 202) or 409 with a plain line."""
     try:
         return streetpick.pick(os.path.join(settings.data_dir, "cache", "streetpick"), _bundles(D), lat, lon,
                                google_key=settings.google_server_key)
     except streetpick.NoRoad as e:
         raise HTTPException(422, str(e)) from None
-    except streetpick.OverpassSlow:
-        raise HTTPException(503, "OSM lookup slow — the street isn't loaded yet. It keeps loading in the background; "
-                                 "Retry in a few seconds.") from None
-    except streetpick.OverpassBusy as e:
-        raise HTTPException(503, str(e)) from None
+    except streetpick.Pending:
+        if pending_ok:
+            raise
+        raise HTTPException(409, "Still finding this street — try again in a few seconds.") from None
+    except streetpick.OverpassBusy:
+        raise HTTPException(503, "Map server is busy — try again in a minute.") from None
 
 
 # ------------------------------------------------------------------------------------------------ jobs
@@ -198,15 +201,25 @@ class EstimateIn(BaseModel):
 def job_preview(body: ClickIn, request: Request, D: Data = Depends(get_data)):
     """Resolve a map click to the street it lands on (no job created) — for the confirm sheet. The estimate comes from
     the real camera plan (P7.2): planning starts here in the background; poll GET /jobs/plan-estimate/{key}."""
-    res = pick_street(request.app.state.settings, D, body.lat, body.lon)
-    return {"offline": not D.db_online, **res, "plan_estimate": _plan(request, res["polygon"], res.get("way_ids")),
+    try:
+        res = pick_street(request.app.state.settings, D, body.lat, body.lon, pending_ok=True)
+    except streetpick.Pending as p:
+        if p.partial:
+            # the road is known, its details (full name / length) are still loading: show it now; the browser keeps
+            # asking and swaps in the full street. No cost estimate for an incomplete street (it would only add map load).
+            return {"offline": not D.db_online, **p.partial, "status": "partial", "osm_details": False,
+                    "plan_estimate": {"key": "", "status": "running", "elapsed_s": 0},
+                    "cost_cap_usd": request.app.state.settings.job_cost_cap_usd}
+        # hotfix: still looking it up (in the background): 202, the browser asks again; never a 503 for "slow"
+        return JSONResponse(status_code=202, content={"offline": not D.db_online, "status": "pending", "retry_after_ms": 800})
+    return {"offline": not D.db_online, **res, "status": "ok", "plan_estimate": _plan(request, res["polygon"], res.get("way_ids"), res.get("lines")),
             "cost_cap_usd": request.app.state.settings.job_cost_cap_usd}
 
 
-def _plan(request, polygon, way_ids):
+def _plan(request, polygon, way_ids, lines=None):
     st = request.app.state.settings
     return planest.start(polygon, way_ids, data_dir=st.data_dir, maps_key=st.google_server_key,
-                         model_card=request.app.state.model_card.get(), cap_usd=st.job_cost_cap_usd)
+                         model_card=request.app.state.model_card.get(), cap_usd=st.job_cost_cap_usd, lines=lines)
 
 
 class PlanIn(BaseModel):
@@ -226,7 +239,7 @@ def job_plan_estimate(body: PlanIn, request: Request, D: Data = Depends(get_data
             pick = streetpick.trim(pick, body.lines)
         except ValueError as e:
             raise HTTPException(422, str(e)) from None
-    return {"offline": not D.db_online, "length_m": pick["length_m"], **_plan(request, pick["polygon"], pick.get("way_ids"))}
+    return {"offline": not D.db_online, "length_m": pick["length_m"], **_plan(request, pick["polygon"], pick.get("way_ids"), pick.get("lines"))}
 
 
 @router.get("/jobs/plan-estimate/{key}", tags=["jobs"])
@@ -263,7 +276,7 @@ def job_create(body: JobIn, request: Request, D: Data = Depends(get_data)):
                 raise HTTPException(422, str(e)) from None
         kind, inp = "street_click", {"click": {"lat": body.lat, "lon": body.lon}, **pick,
                                      "name": body.name or pick["street"]}
-        st = _plan(request, pick["polygon"], pick.get("way_ids"))
+        st = _plan(request, pick["polygon"], pick.get("way_ids"), pick.get("lines"))
         if st.get("estimate"):
             inp["estimate"] = st["estimate"]
     else:

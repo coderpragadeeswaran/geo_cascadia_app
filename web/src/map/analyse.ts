@@ -1,7 +1,8 @@
-/** "Analyse a street": click → /jobs/preview (street + planner estimate) → confirm → POST /jobs → poll the job.
- *  One lookup at a time: a new click cancels the pending one. P7.1: the backend answers within ~5 s (a slow OpenStreetMap
- *  keeps loading in the background, so Retry is quick); the browser gives up at 8 s. Honest states: worker offline,
- *  read-only data mode, no Street View, token expired. */
+/** "Analyse a street": click → /jobs/preview (street + estimate) → confirm → POST /jobs → poll the job.
+ *  One lookup at a time: a new click cancels the pending one. Hotfix: while the map server is still answering, the
+ *  backend says "pending" (202) and the browser asks again every ~0.8 s (each ask waits up to 4 s on the server), showing
+ *  "Finding street…"; the street appears by itself when it lands. Only after FIND_LIMIT_MS with no answer: "Map server is
+ *  busy — try again in a minute" + Retry. Honest states: worker offline, read-only data mode, no Street View, token expired. */
 import { create } from 'zustand'
 import { ApiError, api } from '@/api/client'
 import { post } from '@/api/queries'
@@ -10,9 +11,15 @@ import type { JobFull, JobPreview } from '@/api/types'
 import { useUi } from '@/store/ui'
 import { mainLine, slice } from './trim'
 
-const CLIENT_TIMEOUT_MS = 8_000
+const FIND_LIMIT_MS = 30_000          // give up looking for the street after this long
+const DETAILS_LIMIT_MS = 90_000       // a street shown without its full name / length keeps updating this long
+const ASK_TIMEOUT_MS = 10_000          // one ask (the server waits ≤ 4 s)
 export type PickError = { kind: 'busy' | 'no_road' | 'offline' | 'other'; message: string }
-const SLOW = 'OSM lookup slow — the street isn’t loaded yet. It keeps loading in the background; Retry in a few seconds.'
+export const BUSY = 'Map server is busy — try again in a minute.'
+const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((res) => {
+  const t = setTimeout(res, ms)
+  signal.addEventListener('abort', () => { clearTimeout(t); res() }, { once: true })
+})
 
 interface AnalyseState {
   clickAt: { lat: number; lng: number } | null
@@ -55,31 +62,50 @@ export const useAnalyse = create<AnalyseState>((set, get) => ({
     ctrl?.abort('replaced')                                       // one request at a time: a new click wins
     const mine = new AbortController()
     ctrl = mine
-    const timer = setTimeout(() => mine.abort('timeout'), CLIENT_TIMEOUT_MS)
+    const t0 = performance.now()
     // a click on the street already shown keeps its trim; another street starts untrimmed
-    set({ clickAt: { lat, lng }, loading: true, startedAt: performance.now(), error: null })
+    set({ clickAt: { lat, lng }, loading: true, startedAt: t0, error: null })
     try {
-      const preview = await post<JobPreview>('/jobs/preview', { lat, lon: lng }, mine.signal)
-      if (ctrl === mine) {
-        const same = streetKey(get().preview) === streetKey(preview)
-        set({ preview, loading: false, startedAt: null, ...(same ? {} : { trim: null, anyway: false }) })
+      for (;;) {
+        const one = new AbortController()
+        const kill = setTimeout(() => one.abort('timeout'), ASK_TIMEOUT_MS)
+        const stop = () => one.abort('cancelled')
+        mine.signal.addEventListener('abort', stop, { once: true })
+        let r: JobPreview | { status: 'pending' } | null = null
+        try {
+          r = await post<JobPreview | { status: 'pending' }>('/jobs/preview', { lat, lon: lng }, one.signal)
+        } catch (e) {
+          if (mine.signal.aborted) throw e
+          if (!(one.signal.aborted && one.signal.reason === 'timeout')) throw e          // a slow ask is just asked again
+        } finally {
+          clearTimeout(kill)
+          mine.signal.removeEventListener('abort', stop)
+        }
+        if (ctrl !== mine) return
+        if (r && r.status !== 'pending') {
+          const preview = r as JobPreview
+          const same = streetKey(get().preview) === streetKey(preview)
+          set({ preview, loading: false, startedAt: null, ...(same ? {} : { trim: null, anyway: false }) })
+          // the road is shown; its full name / length are still loading: keep asking quietly and swap them in
+          if (preview.status !== 'partial' || performance.now() - t0 > DETAILS_LIMIT_MS) return
+        } else if (performance.now() - t0 > FIND_LIMIT_MS) {
+          set({ loading: false, startedAt: null, error: { kind: 'busy', message: BUSY } })
+          return
+        }
+        await sleep(800, mine.signal)
+        if (mine.signal.aborted) return
       }
     } catch (e) {
       if (ctrl !== mine) return                                   // replaced by a newer click
-      if (mine.signal.aborted) {
-        const reason = mine.signal.reason
-        set({ loading: false, startedAt: null, error: reason === 'cancelled' ? null : { kind: 'busy', message: SLOW } })
-        return
-      }
+      if (mine.signal.aborted) { set({ loading: false, startedAt: null }); return }
       const err = e instanceof ApiError ? e : null
-      set({ loading: false, startedAt: null, error: !err ? { kind: 'other', message: 'Could not look up the street' }
-        : err.status === 503 || err.status === 504 ? { kind: 'busy', message: err.offline ? 'Offline data mode: street lookups need the API.' : err.message || SLOW }
-          : err.status === 422 ? { kind: 'no_road', message: 'No road here. Point at a street with a blue Street View line and click.' }
-            : err.status === 0 ? { kind: 'offline', message: 'The API is not reachable.' }
+      set({ loading: false, startedAt: null, error: !err ? { kind: 'other', message: 'Could not look up the street.' }
+        : err.status === 503 || err.status === 504 ? { kind: 'busy', message: err.offline ? 'Offline: looking up streets needs the server.' : BUSY }
+          : err.status === 422 ? { kind: 'no_road', message: 'No road here. Point at a street with a blue line and click.' }
+            : err.status === 0 ? { kind: 'offline', message: 'The server is not reachable.' }
               : err.status >= 500 ? { kind: 'other', message: 'Couldn’t prepare this street — server error.' }
                 : { kind: 'other', message: err.message } })
     } finally {
-      clearTimeout(timer)
       if (ctrl === mine) ctrl = null
     }
   },

@@ -168,6 +168,8 @@ export interface JobPreview {
   plan_estimate: import('./p5').PlanStatus
   /** the default cost cap per job (backend JOB_COST_CAP_USD) */
   cost_cap_usd: number
+  /** hotfix: "ok" when the street was found (a "pending" answer has no street yet) */
+  status?: 'ok' | 'partial'
 }
 /** one evidence photo with every detection box on it (GET /areas/{slug}/evidence/{kind}/{id}) */
 export interface EvidenceBox {

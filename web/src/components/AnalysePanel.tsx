@@ -12,8 +12,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/api/client'
 import type { JobEstimate, PlanStatus } from '@/api/p5'
 import { post, useAreas } from '@/api/queries'
-import { deviceWord, JOB_STAGES, jobStatus, minutesParts, PLAN_SLOW_TEXT, planTooSlow, shortArea, STAGE_PLAIN, stageLine, timeLeft } from '@/lib/labels'
-import { fmt, noun, plural } from '@/lib/utils'
+import { deviceWord, JOB_STAGES, jobStatus, minutesParts, planSlowText, planTooSlow, shortArea, STAGE_PLAIN, stageLine, timeLeft } from '@/lib/labels'
+import { fmt, noun } from '@/lib/utils'
 import { streetKey, useAnalyse } from '@/map/analyse'
 import { flyToBounds } from '@/map/MapView'
 import { mainLine, MIN_STRETCH_M, slice } from '@/map/trim'
@@ -22,11 +22,6 @@ import { useUi } from '@/store/ui'
 const STAGES = JOB_STAGES
 const card = 'sheet pointer-events-auto w-[min(470px,92vw)] px-5 py-4'
 
-function Elapsed({ since }: { since: number }) {
-  const [now, setNow] = useState(performance.now())
-  useEffect(() => { const t = setInterval(() => setNow(performance.now()), 250); return () => clearInterval(t) }, [])
-  return <span className="t-data">{Math.floor((now - since) / 1000)} s</span>
-}
 
 /** P7.2: the estimate for what will be analysed, from the pipeline's own camera planner. The preview starts planning the
  *  whole street; a trimmed stretch is planned again (debounced) while the end dots move. Planning runs on the backend
@@ -86,7 +81,7 @@ function CostCap({ total, fallback }: { total: number | null; fallback: number }
         style={{ boxShadow: 'inset 0 0 0 1px var(--ns-line-strong)' }} value={text} onChange={(e) => setText(e.target.value)}
         onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') commit() }} aria-describedby="cost-cap-note" />
       <span id="cost-cap-note" className={over ? '' : 'ink3'} style={over ? { color: 'var(--ns-sodium)' } : undefined}>
-        {over ? 'Above the cap: the worker will pause it for your approval before buying any photo.' : 'Above it, the job waits for your approval.'}</span>
+        {over ? 'Above the cap: it will wait for your approval before any photo is bought.' : 'Above it, the analysis waits for your approval.'}</span>
     </div>
   )
 }
@@ -161,7 +156,7 @@ export function AnalysePanel() {
             {a.loading && a.startedAt != null ? (
               <div className="flex items-center gap-3">
                 <Loader2 className="size-4 shrink-0 animate-spin sodium" />
-                <p className="flex-1">Asking OpenStreetMap which street this is… <Elapsed since={a.startedAt} /></p>
+                <p className="flex-1">Finding street…</p>
                 <button className="btn btn-line" onClick={() => a.cancelPick()}>Cancel</button>
               </div>
             ) : a.error ? (
@@ -187,7 +182,7 @@ export function AnalysePanel() {
                 <div className="t-small ink2 mt-0.5">
                   {a.trim ? <><span className="t-data">{fmt.format(Math.round(a.trim.b - a.trim.a))} m</span> of {fmt.format(p.length_m)} m · <button className="link" onClick={() => a.setTrim(null)}>whole street</button></>
                     : <><span className="t-data">{fmt.format(p.length_m)} m</span> · highlighted on the map</>}
-                  {p.name_source === 'osm' && ' · name from OpenStreetMap'}{p.name_source === 'unnamed' && ' · no name in OpenStreetMap'}</div>
+                  </div>
                 <div className="t-small ink3 mt-0.5">Drag the orange end dots on the map to analyse only part of it{trimmable ? '' : ' (this street is too short to trim)'}.</div>
               </div>
               <button className="btn btn-icon" onClick={() => a.reset()} aria-label="Pick another street"><X /></button>
@@ -195,11 +190,14 @@ export function AnalysePanel() {
             {p.note && (
               <div className="mt-2 flex items-start gap-3">
                 <p className="t-small flex-1" style={{ color: 'var(--ns-sodium)' }}>{p.note}</p>
-                {p.osm_details === false && <button className="btn btn-line" disabled={a.loading} onClick={() => a.retry()}>Retry</button>}
+
               </div>
             )}
+            {p.osm_details === false && !p.note && (
+              <div className="t-small ink2 mt-2 flex items-center gap-2" role="status"><Loader2 className="size-3.5 animate-spin sodium" /> Finding the full street…</div>
+            )}
             {a.loading && a.startedAt != null && (
-              <div className="t-small ink2 mt-2 flex items-center gap-2" role="status"><Loader2 className="size-3.5 animate-spin sodium" /> Looking up the street you clicked… <Elapsed since={a.startedAt} /></div>
+              <div className="t-small ink2 mt-2 flex items-center gap-2" role="status"><Loader2 className="size-3.5 animate-spin sodium" /> Finding street…</div>
             )}
             {!a.loading && a.error && a.error.kind === 'busy' && (
               <div className="mt-2 flex items-start gap-3">
@@ -210,7 +208,7 @@ export function AnalysePanel() {
             {already.length > 0 && !a.anyway ? (
               <div className="mt-3 border-l-2 pl-3" style={{ borderColor: 'var(--ns-sodium)' }}>
                 <p>Already analysed in <b>{shortArea(already[0].area)}</b>{already[0].street !== p.street ? <> as <b>{already[0].street}</b></> : null}.</p>
-                <p className="t-small ink3 mt-0.5">{already[0].by === 'way_ids' ? 'Same OpenStreetMap road.' : `${Math.round(already[0].overlap * 100)}% of it runs along an analysed street.`}</p>
+                <p className="t-small ink3 mt-0.5">{already[0].by === 'way_ids' ? 'The same road.' : `${Math.round(already[0].overlap * 100)}% of it runs along an analysed street.`}</p>
                 <div className="mt-3 flex gap-2">
                   <button className="btn btn-solid" onClick={() => openExisting(already[0].slug, already[0].street)}>Open</button>
                   <button className="btn btn-line" onClick={() => useAnalyse.setState({ anyway: true })}>Analyse anyway</button>
@@ -219,19 +217,18 @@ export function AnalysePanel() {
             ) : (
               <>
                 {est ? (
-                  <dl className="mt-4 grid grid-cols-3" aria-live="polite" style={{ opacity: plan.busy ? 0.6 : 1 }}>
+                  <dl className="mt-4 grid grid-cols-2" aria-live="polite" style={{ opacity: plan.busy ? 0.6 : 1 }}>
                     <div><dt className="t-micro">Street View</dt><dd className="t-figure mt-1" style={{ fontSize: 21.5 }}>≈ {fmt.format(est.street_view_images)}</dd>
                       <dd className="t-small ink3">{noun(est.street_view_images, 'image')}{est.street_view_usd != null ? ` · ≈ $${est.street_view_usd.toFixed(2)}` : ''}</dd></div>
-                    <div className="rule-l pl-4"><dt className="t-micro">GPU (Colab)</dt><MinutesFigure m={est.gpu_minutes} /></div>
-                    <div className="rule-l pl-4"><dt className="t-micro">CPU only</dt><MinutesFigure m={est.cpu_minutes} /></div>
+                    <div className="rule-l pl-4"><dt className="t-micro">Time</dt><MinutesFigure m={est.gpu_minutes} /></div>
                   </dl>
                 ) : plan.st?.status === 'failed' ? null
                   : plan.slow ? (
                     <div className="mt-3 flex items-start gap-3" role="status">
-                      <p className="t-small flex-1" style={{ color: 'var(--ns-sodium)' }}>{PLAN_SLOW_TEXT}</p>
+                      <p className="t-small flex-1" style={{ color: 'var(--ns-sodium)' }}>{planSlowText(useAnalyse.getState().cap ?? p.cost_cap_usd)}</p>
                       <button className="btn btn-line" onClick={plan.retry}>Check again</button>
                     </div>)
-                  : <p className="t-small ink2 mt-3 flex items-center gap-2"><Loader2 className="size-3.5 animate-spin sodium" /> Planning camera stops with the pipeline’s own planner{plan.st?.elapsed_s != null ? ` · ${Math.floor(plan.st.elapsed_s)} s` : ''}… You can start without waiting.</p>}
+                  : <p className="t-small ink2 mt-3 flex items-center gap-2" role="status"><Loader2 className="size-3.5 animate-spin sodium" /> Estimating cost and time…</p>}
                 {plan.st?.status === 'failed' && (
                   <div className="mt-3 flex items-start gap-3">
                     <p className="t-small ink2 flex-1">No estimate: {plan.st.error}</p>
@@ -241,7 +238,6 @@ export function AnalysePanel() {
                 {est && (
                   <p className="t-small ink2 mt-2">
                     {est.total_usd != null ? <>Total ≈ <span className="t-data">${est.total_usd.toFixed(2)}</span> (photos{est.cloud_ai_usd != null ? ` + cloud AI $${est.cloud_ai_usd.toFixed(est.cloud_ai_usd < 0.01 ? 4 : 2)}` : ''})</> : 'Total not known'}
-                    {est.cameras ? <> · {plural(est.cameras, 'camera stop')}</> : null}
                     {plan.busy && <> · updating…</>}
                   </p>
                 )}
@@ -249,14 +245,14 @@ export function AnalysePanel() {
                 <CostCap total={est?.total_usd ?? null} fallback={p.cost_cap_usd} />
                 {est && (
                   <details className="mt-2">
-                    <summary className="t-small ink3 cursor-pointer">An estimate{a.trim ? ' for the trimmed stretch' : ''} from the same camera plan the worker makes. <span className="link">How is this estimated?</span></summary>
+                    <summary className="t-small ink3 cursor-pointer">An estimate{a.trim ? ' for the shorter stretch' : ''}, not a measurement. <span className="link">How is this estimated?</span></summary>
                     <p className="t-small ink3 mt-1">{est.basis}</p>
                   </details>
                 )}
                 {a.error && a.error.kind !== 'busy' && <p className="t-small mt-2" style={{ color: 'var(--ns-no-record)' }}>{a.error.message}</p>}
                 <div className="mt-4 flex justify-end gap-2">
                   <button className="btn" onClick={leave}>Cancel</button>
-                  <button className="btn btn-solid" disabled={a.loading || offline} onClick={() => a.start()}>{a.loading && <Loader2 className="animate-spin" />} {offline ? 'Offline — read-only' : 'Start analysis'}</button>
+                  <button className="btn btn-solid" disabled={a.loading || offline || p.osm_details === false} onClick={() => a.start()}>{a.loading && <Loader2 className="animate-spin" />} {offline ? 'Offline — read-only' : 'Start analysis'}</button>
                 </div>
               </>
             )}
@@ -279,16 +275,16 @@ function JobCard() {
   const elapsed = job.started_at ? Math.max(0, (Date.now() - new Date(job.started_at).getTime()) / 1000) : null
   const pe = job.plan_estimate
   const message = {
-    queued: workerOnline ? 'Queued. The analysis worker picks it up in a few seconds.' : 'Queued, waiting for a worker. Nothing is running yet; it starts when a worker connects.',
+    queued: workerOnline ? 'Queued. The analysis starts in a few seconds.' : 'Queued. The analysis computer is not connected yet; it starts as soon as it is.',
     running: stageLine(job.stage, job.done, job.total),
-    interrupted: 'Interrupted: the worker stopped responding. It continues from where it stopped when a worker connects again.',
+    interrupted: 'Interrupted: the analysis computer stopped responding. It continues from where it stopped when it reconnects.',
     needs_approval: `This street needs about ${pe?.photos != null ? fmt.format(pe.photos) : 'more'} Street View photos${pe?.usd != null ? ` (about $${pe.usd.toFixed(2)})` : ''}, above the limit of ${pe?.cap_photos ?? '—'} photos or $${pe?.cap_usd ?? '—'} per street. Nothing has been bought yet.`,
     done: 'Done. Opening the new area…',
     failed: `Failed: ${job.message ?? 'unknown error'}${job.retryable ? '. Retry continues from the saved progress; photos already fetched are not bought again.' : ''}`,
     cancelled: 'Cancelled. Nothing was analysed.',
     no_street_view: `No usable Street View here${job.message ? `: ${job.message}` : ''}.`,
-    expired_token: 'Paused: the cloud-AI keys expired. Enter new keys in the worker; it continues where it stopped.',
-    cancelling: 'Cancelling… the worker stops within about 15 seconds and deletes what it saved.',
+    expired_token: 'Paused: the analysis needs new access keys. It continues where it stopped once they are entered.',
+    cancelling: 'Cancelling… the analysis stops within about 15 seconds and deletes what it saved.',
   }[st.key] ?? st.label
   const active = ['queued', 'running', 'needs_approval', 'expired_token'].includes(job.status)
   return (

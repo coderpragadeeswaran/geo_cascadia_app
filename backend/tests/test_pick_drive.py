@@ -71,41 +71,93 @@ def _ways(lat, lon):
              "geometry": [{"lat": lat - d, "lon": lon + d}, {"lat": lat + d, "lon": lon + d}]}]
 
 
-def test_slow_details_show_the_street_without_them_then_retry_is_instant(monkeypatch, tmp_path):
+def _wait_background():
+    import time as T
+    while streetpick._INFLIGHT or streetpick._FINISHING:
+        T.sleep(0.05)
+
+
+def test_slow_lookup_is_pending_then_the_cache_answers(monkeypatch, tmp_path):
+    """hotfix: a slow map server means "pending" (the endpoint answers 202), never a failure; the lookup finishes in the
+    background, the next ask is answered from the cache, and a click elsewhere on the same road by its way id"""
     import threading, time as T
     lat, lon = 11.1, 77.0
     gate = threading.Event()
 
     def ask(url, query, wait_s=0.0):
-        if "around:" in query and not gate.is_set():                  # the roads at the ends: slow until released
-            gate.wait(10)
-        return _ways(lat, lon) if "around:" not in query else [_ways(lat, lon)[1]]
+        gate.wait(10)
+        return _ways(lat, lon)
     monkeypatch.setattr(streetpick, "_ask_mirror", ask)
-    monkeypatch.setattr(streetpick, "BUDGET_S", 0.6)
-    t = T.monotonic()
-    r = streetpick.pick(str(tmp_path), [], lat, lon)
-    assert T.monotonic() - t < 2                                       # never hangs past the budget
-    assert r["osm_details"] is False and "OSM lookup slow" in r["note"] and r["way_ids"] == [11]   # the road, details pending
-    gate.set()
-    while streetpick._INFLIGHT or streetpick._FINISHING:
-        T.sleep(0.05)
-    t = T.monotonic()
-    r2 = streetpick.pick(str(tmp_path), [], lat, lon)                  # Retry: answered from the cache
-    assert T.monotonic() - t < 0.3 and r2.get("osm_details") is None and r2["street"] == "Unnamed road near East Street"
-    r3 = streetpick.pick(str(tmp_path), [], lat, lon - 0.0004)         # another click on the same road: by its way id
-    assert r3["street"] == "Unnamed road near East Street" and r3["source"] == "cache"
-
-
-def test_slow_road_query_says_so_quickly(monkeypatch, tmp_path):
-    import threading, time as T
-    gate = threading.Event()
-    monkeypatch.setattr(streetpick, "_ask_mirror", lambda url, query, wait_s=0.0: gate.wait(10) and [])
     monkeypatch.setattr(streetpick, "BUDGET_S", 0.5)
     t = T.monotonic()
-    with pytest.raises(streetpick.OverpassSlow):
-        streetpick.pick(str(tmp_path), [], 11.2, 77.1)
-    assert T.monotonic() - t < 1.5
+    with pytest.raises(streetpick.Pending) as e:
+        streetpick.pick(str(tmp_path), [], lat, lon)
+    assert T.monotonic() - t < 1.5 and e.value.partial is None           # never hangs past the budget
     gate.set()
+    _wait_background()
+    t = T.monotonic()
+    r = streetpick.pick(str(tmp_path), [], lat, lon)                     # the next ask: from the cache
+    assert T.monotonic() - t < 0.3 and r["street"] == "Unnamed road near East Street" and r.get("osm_details") is None
+    r2 = streetpick.pick(str(tmp_path), [], lat, lon - 0.0004)           # another click on the same road: by its way id
+    assert r2["street"] == "Unnamed road near East Street" and r2["source"] == "cache"
+
+
+def test_named_street_shown_while_its_full_length_loads(monkeypatch, tmp_path):
+    """the road is known but the rest of a named street is still loading: Pending carries it (shown as "partial")"""
+    import threading
+    lat, lon = 11.3, 77.2
+    gate = threading.Event()
+    d = 0.0009
+    tile = [{"type": "way", "id": 21, "tags": {"highway": "residential", "name": "Long Road"},
+             "geometry": [{"lat": lat, "lon": lon - d}, {"lat": lat, "lon": lon + d}]}]
+
+    def ask(url, query, wait_s=0.0):
+        if '"name"=' in query:                                           # the named street's full length: slow
+            gate.wait(10)
+        return tile
+    monkeypatch.setattr(streetpick, "_ask_mirror", ask)
+    monkeypatch.setattr(streetpick, "BUDGET_S", 0.5)
+    with pytest.raises(streetpick.Pending) as e:
+        streetpick.pick(str(tmp_path), [], lat, lon)
+    assert e.value.partial and e.value.partial["street"] == "Long Road" and e.value.partial["osm_details"] is False
+    gate.set()
+    _wait_background()
+    assert streetpick.pick(str(tmp_path), [], lat, lon).get("osm_details") is None
+
+
+def test_preview_answers_pending_never_503_while_slow(monkeypatch, offline):
+    import threading
+    gate = threading.Event()
+    def ask(url, query, wait_s=0.0):                                     # slow, then failing: nothing is ever cached
+        gate.wait(10)
+        raise streetpick.OverpassBusy("test")
+    monkeypatch.setattr(streetpick, "_ask_mirror", ask)
+    monkeypatch.setattr(streetpick, "BUDGET_S", 0.3)
+    r = offline.post("/jobs/preview", json={"lat": 11.45, "lon": 77.45})
+    assert r.status_code == 202 and r.json()["status"] == "pending"
+    gate.set()
+    _wait_background()
+
+
+def test_dead_mirror_is_rested_busy_one_is_not(monkeypatch):
+    import requests
+    streetpick._HEALTH.clear()
+    dead, busy = streetpick.MIRRORS[1], streetpick.MIRRORS[0]
+
+    class R:
+        status_code, text = 504, "<html>"
+
+    def post(url, **kw):
+        if url == dead:
+            raise requests.ConnectTimeout("down")
+        return R()
+    monkeypatch.setattr(streetpick.requests, "post", post)
+    for u in (dead, busy):
+        with pytest.raises(Exception):
+            streetpick._ask_mirror(u, "q")
+    alive = streetpick.alive_mirrors()
+    assert dead not in alive and busy in alive
+    streetpick._HEALTH.clear()
 
 
 @pytest.mark.parametrize("street,branches", [("Sathy Main Road", [803, 111]), ("Sri Ganapathy Gardens 3rd Street (approx.)", [485])])

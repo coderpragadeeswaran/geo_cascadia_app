@@ -1,5 +1,7 @@
 > **Read docs/DECISIONS.md before any work.**
 
+> **Before saying a change is done, verify it live: real API calls against the running backend and Playwright screenshots of every changed screen, checked by eye. Unit tests alone are not enough.** (`web/scripts/screenshots.ts`, dev server on :5173 + API on :8000)
+
 # GEO-CASCADIA — Product build spec (read fully before writing code)
 
 You are building the **product layer** of GEO-CASCADIA: database, API, job worker and an **exceptional,
