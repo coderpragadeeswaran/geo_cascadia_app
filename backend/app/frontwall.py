@@ -19,8 +19,10 @@ SOURCE = ("OpenStreetMap outline: its wall facing the street (the edge nearest t
           "is the building's position; straight continuations joined)")
 
 
-def front_wall(bundle, b):
-    """{length_m, edge_m, longest_side_m, street, source} for one building record, or None (no usable outline)."""
+def road_edge(bundle, b):
+    """(frame, outline, {street name: line}, road-facing edge) in metres around the building, or None (no usable outline
+    or no street line). The same wall as the Gate 1 reference (tools/eval_gate1.py; the backend's value reproduces the
+    stored per-building distances to < 0.005 m) and the pipeline's position rule."""
     fp = b.get("footprint") or {}
     ring = fp.get("polygon_latlon") or []
     if len(ring) < 4:
@@ -36,8 +38,16 @@ def front_wall(bundle, b):
             lines[st["name"]] = unary_union(ls)
     edge = road_facing_edge(poly, lines.get(b.get("street"))) or \
         road_facing_edge(poly, unary_union(list(lines.values())) if lines else None)
-    if edge is None:
+    return (fr, poly, lines, edge) if edge is not None else None
+
+
+def front_wall(bundle, b):
+    """{length_m, edge_m, longest_side_m, street, source} for one building record, or None (no usable outline)."""
+    got = road_edge(bundle, b)
+    if got is None:
         return None
+    fr, poly, lines, edge = got
+    fp = b.get("footprint") or {}
     # an export from before D51 still carries the longest side under frontage_m
     longest = fp.get("longest_side_m", fp.get("frontage_m") if "longest_side_m" not in fp else None)
     return {"length_m": front_wall_length(poly, edge), "edge_m": round(edge.length, 1), "longest_side_m": longest,

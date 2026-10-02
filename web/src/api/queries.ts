@@ -44,12 +44,20 @@ export const useReviewRows = (slug: string | null) =>
 export const useObjectDetail = (area: string | null, kind: 'building' | 'asset' | null, id: string | null) =>
   useQuery({
     queryKey: ['detail', area, kind, id],
-    queryFn: () => api<{ review_item: ReviewItem | null; building?: Building; asset?: Asset; front_wall?: FrontWall | null }>(`/${kind === 'building' ? 'buildings' : 'assets'}/${area}/${encodeURIComponent(id!)}`),
+    queryFn: () => api<{ review_item: ReviewItem | null; building?: Building; asset?: Asset; front_wall?: FrontWall | null; position_check?: PositionCheck | null }>(`/${kind === 'building' ? 'buildings' : 'assets'}/${area}/${encodeURIComponent(id!)}`),
     enabled: !!(area && kind && id),
   })
 
 /** P8: the building's street-facing wall from its OpenStreetMap outline (backend/app/frontwall.py) */
 export interface FrontWall { length_m: number; edge_m: number; longest_side_m: number | null; street: string | null; source: string; longest_note: string }
+/** Gate 1 for one building (backend/app/gate1pos.py): `camera` = a camera-derived position with its distance to the middle
+ *  of the front wall on the map (Trust's own row when from_trust); `map` = taken from the outline, error not measured. */
+export interface PositionCheck {
+  case: 'camera' | 'map' | 'none'; method: string | null; target_m: number; distance_m: number | null; within: boolean | null
+  from_trust: boolean; reference: string; area_stats: { n: number; median_m: number | null; within_3_5_m_pct: number | null } | null
+  front_street: string | null; other_walls: { street: string | null; dist_m: number; side: 'side' | 'back' }[]
+  corner: boolean; back_street: boolean; roads_checked: string
+}
 /** detection boxes on each evidence photo of an object (design pass B §2) */
 type EvidenceResponse = { views: EvidenceViewData[]; links?: BuildingLinks }
 /** P7.3: what the photos link to one building outline (sign boxes by their own line of sight, and the photos they are in) */

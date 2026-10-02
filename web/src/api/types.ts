@@ -57,8 +57,10 @@ export interface UnmappedProps { kind: 'unmapped_business'; id: string; name: st
 export interface MissingProps { kind: 'missing_asset_record'; id: string; street: string | null; why: string | null; register: 'SYNTHETIC' }
 
 export interface AreaProps { kind: 'area'; id: string; name: string; card: AreaCard }
+/** P7.3: a building seen by the camera only (camera rays cross where the map has no outline); not an analysed building */
+export interface CameraBuildingProps { kind: 'camera_building'; id: string; lat: number; lon: number; n_cameras: number | null; uncertainty_m: number | null; from: string | null }
 
-export type AnyProps = AreaProps | StreetProps | BuildingProps | AssetProps | GapProps | UnmappedProps | MissingProps
+export type AnyProps = AreaProps | StreetProps | BuildingProps | AssetProps | GapProps | UnmappedProps | MissingProps | CameraBuildingProps
 export type AreaFeature = Feature<Geometry, AnyProps>
 export type AreaGeoJSON = FeatureCollection<Geometry, AnyProps> & { offline: boolean }
 

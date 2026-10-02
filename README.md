@@ -110,6 +110,7 @@ npx tsx scripts/tour-shots.ts      # the guided tour, both themes, every step; f
 npx tsx scripts/audit.ts           # every page in both themes, keyboard (Tab, Esc, Ctrl K), the numbers the UI shows
 npx tsx scripts/heap.ts            # production build only: JS heap after GC (target ≤ 60 MB)
 npx tsx scripts/offline.ts         # fallbacks; needs extra APIs on :8001 (outgoing requests blocked) and :8002 (no Google keys)
+npx tsx scripts/gate1-shots.ts     # Gate 1 per building in the drawer (dev server): the three cases, a corner, Trust › Gate 1; MODE=daylight
 npx tsx scripts/p8-shots.ts        # P8 screens (dev server): Routing and cost, photo dates, front wall, dark stretches, Tamil; MODE=daylight for Daylight
 backend\.venv\Scripts\python tools\audit_numbers.py    # (repo root) Ward 29 numbers straight from the database
 ```

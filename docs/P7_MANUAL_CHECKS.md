@@ -45,3 +45,11 @@ Daylight. Each line: what to do → what you should see. Round 3 appends below.
 33. **Possible dark stretch.** Key number "Possible dark stretches" → list says "the detector finds about 43% of lamp heads"; hover a black band → the card says it too.
 34. **Tamil.** Ask "பதிவேட்டில் இல்லாத கடைகள்" → Shops, not in the register (5); "60 மீட்டருக்குள் தெருவிளக்கு இல்லாத தெருக்களைக் காட்டு" → 11 possible dark stretches.
 35. **Worker (re-paste the worker cell, upload the p7b zip).** After a real job: the cell prints "deleted N Street View photo crops (X MB)"; `/content/gc_jobs` has no folder for it.
+
+## Gate 1 in the building drawer (D52)
+36. **Position per building.** Explore → Ward 29, click (or Ctrl K / table):
+    - w1252504250 → Position "2.8 m from the middle of the front wall on the map (target ≤ 3.5 m) ✓ within", then "Front wall chosen: the one facing 8th Street, Ganapathy (a corner building…)".
+    - w1252505716 → "8.7 m … ✗ outside".
+    - w1252505151 → "Position taken from the map outline — error not measured." No "0 m" anywhere in its drawer.
+    - At street zoom click an orange diamond (camera-only layer) → drawer "No map outline for this building — error can't be measured." and "Uncertainty about ±N m".
+    - Building → second "How do we know?" → Position check: the distance to two decimals, "n = 260, median 2.8 m, 60.4% within 3.5 m" — open Trust → Building position (Gate 1) → "All camera-derived positions" row for Ward 29 shows the same 260 / 2.8 m / 60.4%. Repeat once in Daylight.

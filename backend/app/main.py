@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import sys
+import time
 from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
@@ -24,7 +25,7 @@ from .settings import ROOT, Settings
 
 sys.path.insert(0, os.path.join(ROOT, "pipeline"))   # geo_cascadia (import only — never modified)
 
-from . import drive, evidence, frontwall, gaps, hood, imagery, loader, minimap, namepick, registertest, trust, views  # noqa: E402
+from . import drive, evidence, frontwall, gaps, gate1pos, hood, imagery, loader, minimap, namepick, registertest, trust, views  # noqa: E402
 from . import streetpick as streetpick_mod  # noqa: E402
 from .storage import StorageError  # noqa: E402
 from .store import Data, OfflineError  # noqa: E402
@@ -118,6 +119,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     app.state.plans = drive.Plans(settings.areas_dir)
     app.state.gapcalc = gaps.GapCalc(settings.areas_dir)
     app.state.runfiles = hood.RunFiles(settings.areas_dir)
+    app.state.gate1rows = gate1pos.EvalRows(settings.areas_dir)
     app.state.workers = {}
     app.add_middleware(ServerErrorsAsJson)          # added first = innermost: its 500 still passes through CORS
     app.add_middleware(GZipMiddleware, minimum_size=2000)
@@ -299,7 +301,15 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             if rec is None:
                 raise HTTPException(404, f"building {id!r} not found in {area!r}")
             item = next((q for q in b["review_queue"] if q["item_type"] == "building" and q["ref_id"] == id), None)
-            return {"area": area, "building": rec, "review_item": item, "front_wall": frontwall.front_wall(b, rec)}
+            # Gate 1 for this building: Trust's own row; roads for the corner check from the mini-map's cache (a short
+            # wait at most; without them only the analysed streets are checked, and the answer says so)
+            r = minimap.roads(b, app.state.plans.get(area), os.path.join(settings.data_dir, "cache", "streetpick"),
+                              deadline=time.monotonic() + 2.0)
+            card = mc()
+            pos = gate1pos.check(b, rec, app.state.gate1rows.get(area), r["roads"] if r["available"] else None,
+                                 ((card or {}).get("gate1_position") or {}).get("target_m", 3.5), gate1pos.area_stats(card, area))
+            return {"area": area, "building": rec, "review_item": item, "front_wall": frontwall.front_wall(b, rec),
+                    "position_check": pos}
         res, off = D.read(fn)
         return {"offline": off, **res}
 

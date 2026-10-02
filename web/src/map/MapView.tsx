@@ -132,7 +132,9 @@ function DeckLayers({ introDone }: { introDone: boolean }) {
   const analyseRest = useMemo(() => (trim && preview?.lines ? (preview.lines.coordinates as Position[][]) : null), [preview, trim])
   const drive = useDriveMark()
   const { data: camB } = useCameraBuildings(area)
-  const cameraBuildings = camB?.points ?? null
+  // clickable: each diamond carries its props, so a click opens the camera-only drawer (Gate 1 case 3)
+  const cameraBuildings = useMemo(() => camB?.points?.map((d) => ({ lat: d.lat, lon: d.lon, p: { kind: 'camera_building' as const, id: d.id, lat: d.lat, lon: d.lon,
+    n_cameras: d.n_cameras, uncertainty_m: d.uncertainty_m, from: d.from } })) ?? null, [camB])
   // D27: the selected building's predicted position (from its record), drawn at object zoom
   const { data: bRecords } = useBuildings(area)
   const predicted = useMemo(() => {

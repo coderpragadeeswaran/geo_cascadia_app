@@ -168,6 +168,7 @@ export function makeExportSchemas(mode: SchemaMode) {
     buildings_use_sign: z.number().optional(),            // D32: use filled from a readable business sign
     vlm_calls: z.number(), vlm_cost_usd: z.number(), places_calls: z.number(), device: z.string(),
     floors_examples_found: z.boolean().optional(),
+    use_router: z.string().optional(),                   // D50: "local" / "off: file not found (…)" / "off: not configured" (runs since P8)
     stage_seconds: Counts, total_minutes: z.number(),
     validation: z.record(z.string(), z.string()),
     planted_error_scores: z.record(z.string(), z.union([PlantedScore, Recovery])).nullable(),
