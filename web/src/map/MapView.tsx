@@ -199,7 +199,7 @@ function DeckLayers({ introDone }: { introDone: boolean }) {
       o = new GoogleMapsOverlay({ interleaved: INTERLEAVED, useDevicePixels: DPR, pickingRadius: 6 })
       o.setMap(map)
       setOverlay(o)
-      if (import.meta.env.DEV) Object.assign(window, { __gcMap: map, __gcOverlay: o })   // dev-only hooks for scripted checks
+      if (import.meta.env.DEV) Object.assign(window, { __gcMap: map, __gcOverlay: o, __gcUi: useUi })   // dev-only hooks for scripted checks
     }, 0)
     return () => { clearTimeout(t); o?.finalize(); setOverlay(null) }
   }, [map])

@@ -12,7 +12,8 @@
    supported phrasings are suggested. The UI applies nothing until the person accepts or edits (never a silent guess).
 4. Grammar and filler words (segments, was, were, detected, generate, …) are understood-neutral: they never make a
    question "partial" (review fix 1). Words in any script are tokenised; an unknown word (e.g. Tamil) is reported as
-   ignored, never dropped silently (fix 7). No Tamil synonyms yet.
+   ignored, never dropped silently (fix 7). P8: Tamil words for the main concepts are rewritten to English first
+   (TAMIL_PHRASES / TAMIL_WORDS, matched by stem because Tamil adds suffixes); other Tamil words stay "ignored".
 5. Street names are matched loosely (fix 8): case / spacing / punctuation, road ~ rd, street ~ st, the generic words
    (main, road, street, salai) optional, and a short or long form of a distinctive word (sathy ~ sathyamangalam). The
    matched span is rewritten to the full street name so QueryEngine reads it; the match is reported ("sathy road" →
@@ -174,10 +175,89 @@ def match_street(norm, streets):
     return best[:3]
 
 
-def normalize(text):
-    """→ (normalized lower-case text, [{from, to}] synonyms applied). Replaced spans are not re-processed."""
-    segs = [(text.lower(), False)]
+# ---------------------------------------------------------------- Tamil (P8)
+# Tamil is written with suffixes on the word (கடை shop → கடைகள் shops → கடைகளை shops-object), so a Tamil word is matched
+# by its STEM: the longest stem below that the word starts with. Phrases whose Tamil word order differs from the English
+# rules ("பதிவேட்டில் இல்லாத" = register-in not-having = "no record") are rewritten first. The result is English that the
+# rules above read; every rewrite is reported like an English synonym, and a Tamil word not listed stays "ignored".
+TA = r"[^\x00-\x7f\s]*"                                         # the rest of a Tamil word (its suffixes)
+TA_NUM = {"ஒன்று": 1, "ஒரு": 1, "இரண்டு": 2, "இரு": 2, "மூன்று": 3, "நான்கு": 4, "ஐந்து": 5, "ஆறு": 6}
+TA_N = r"(\d+|" + "|".join(sorted(TA_NUM, key=len, reverse=True)) + r")" + TA
+TA_FLOOR = r"(?:மாடி|தள)" + TA
+
+
+def _ta_n(s):
+    return int(s) if s.isdigit() else TA_NUM[s]
+
+
+TAMIL_PHRASES = [
+    # floors: "இரண்டு மாடிகளுக்கு மேல்" (two floors-than above) = more than 2 floors; "… குறைவான / கீழ்" = less than
+    (rf"{TA_N}\s*{TA_FLOOR}\s+(?:மேல்|அதிக)" + TA, lambda m: f" more than {_fl(_ta_n(m.group(1)))} "),
+    (rf"{TA_N}\s*{TA_FLOOR}\s+(?:குறைவ|கீழ்)" + TA, lambda m: f" less than {_fl(_ta_n(m.group(1)))} "),
+    (rf"(?:குறைந்தது|குறைந்த பட்சம்)\s+{TA_N}\s*{TA_FLOOR}", lambda m: f" at least {_fl(_ta_n(m.group(1)))} "),
+    (rf"{TA_N}\s*{TA_FLOOR}", lambda m: f" with exactly {_fl(_ta_n(m.group(1)))} "),
+    # register: "(property) register-in / record not-having" = no record; "register-from differing" = discrepancy
+    (r"(?:சொத்து\s+)?(?:பதிவேட்" + TA + r"|பதிவ" + TA + r")\s+(?:இல்லா|இல்லை)" + TA, " no record "),
+    (r"(?:பதிவேட்" + TA + r"|பதிவ" + TA + r")\s+(?:வேறுபட|முரண்)" + TA, " discrepancy "),
+    # streetlights: "(street)light not-having" = no streetlight; "60 metres-within" = within 60 m
+    (r"(?:தெரு\s*)?விளக்கு" + TA + r"\s+(?:இல்லா|இல்லை)" + TA, " no streetlight "),
+    (r"(\d+)\s*மீ(?:ட்டர்|\.)?" + TA, lambda m: f" within {m.group(1)} m "),
+    # review: "low reliability" = low confidence
+    (r"குறைந்த\s+(?:நம்பக|நம்பிக்கை|உறுதி)" + TA, " low confidence "),
+    (r"(?:மறு\s*ஆய்வு|மறுஆய்வு|சரிபார்ப்பு)" + TA + r"\s+வரிசை" + TA, " review queue "),
+    # by street: "street-wise"
+    (r"தெரு\s*(?:வாரியாக|வாரி)" + TA, " by street "),
+    # Google
+    (r"(?:கூகுள்|கூகிள்)" + TA + r"\s+(?:இல்லா|இல்லை)" + TA, " not in google "),
+]
+TAMIL_WORDS = {
+    # what to show
+    "கடை": "shops", "வணிக": "commercial", "வியாபார": "commercial", "கட்டிட": "buildings", "கட்டட": "buildings",
+    "வீடு": "houses", "வீடுக": "houses", "வீட்டு": "houses", "குடியிருப்பு": "residential",
+    "கம்ப": "poles", "மின்கம்ப": "poles", "தெருவிளக்கு": "streetlights", "விளக்கு": "streetlights",
+    "இருண்ட": "dark", "தெரு": "streets", "சாலை": "road", "மாடி": "floors", "தளம்": "floors",
+    # register, review, Google
+    "பதிவேடு": "register", "பதிவேட்": "register", "பொருந்தாத": "unmatched", "முரண்பா": "discrepancy",
+    "மறுஆய்வு": "review", "ஆய்வு": "review", "கூகுள்": "google", "கூகிள்": "google",
+    # charts, counts, verbs (filler for the rules)
+    "வரைபடம்": "chart", "விளக்கப்படம்": "chart", "எண்ணிக்கை": "count", "கணிப்பு": "predictions", "வரிசை": "queue",
+    "காட்டு": "show", "காண்பி": "show", "பட்டியல்": "list", "உருவாக்கு": "create", "மட்டும்": "only",
+    "அனைத்து": "all", "எல்லா": "all", "உள்ள": "that are", "கொண்ட": "with", "மற்றும்": "and",
+    "எங்கே": "where", "எந்த": "which", "தெரியும்": "visible",
+}
+# whole words only (a stem would swallow other words: இல் "in/on" is the start of இல்லாத "not having")
+TAMIL_EXACT = {"இல்": "on", "ல்": "on", "இன்": "of"}
+_TA_WORD = re.compile(r"[^\x00-\x7f\s]+")
+_TA_STEMS = sorted(TAMIL_WORDS, key=len, reverse=True)
+
+
+def tamil(text):
+    """→ (text with Tamil phrases and words rewritten to the English the rules read, [{from, to}] applied)."""
     applied = []
+    for pat, rep in TAMIL_PHRASES:
+        def sub(m, rep=rep):
+            new = rep(m) if callable(rep) else rep
+            applied.append({"from": m.group(0).strip(), "to": new.strip(), "tamil": True})
+            return new
+        text = re.sub(pat, sub, text)
+
+    def word(m):
+        w = m.group(0)
+        to = TAMIL_EXACT.get(w) or next((TAMIL_WORDS[s] for s in _TA_STEMS if w.startswith(s)), None)
+        if to is None:
+            return w                                            # unknown: left as it is, reported as ignored
+        applied.append({"from": w, "to": to, "tamil": True})
+        return f" {to} "
+    text = _TA_WORD.sub(word, text)
+    return re.sub(r"\s+", " ", text).strip(), applied
+
+
+
+def normalize(text):
+    """→ (normalized lower-case text, [{from, to}] synonyms applied). Tamil is rewritten to English first (P8); English
+    replaced spans are not re-processed."""
+    text, applied = tamil(text)
+    segs = [(text.lower(), False)]
     for pat, rep in SYNONYMS:
         out = []
         for t, done in segs:

@@ -37,3 +37,11 @@ Daylight. Each line: what to do → what you should see. Round 3 appends below.
 27. **Trust.** Detector: the sign-box sentence (6 of 20, AI check). Gate 1: no pooled "all buildings" row in the two map-referenced tables, and the note says why; "73%" nowhere.
 28. **Daylight buttons.** Hover the orange solid buttons (Next, Finish, Approve) in Daylight → the text stays readable.
 29. **Colab cells.** Paste the exact S0, S1a, S1ba and S1bb cell text into `worker/colab_setup_cells.md` (the "PASTE CELL HERE" blocks).
+
+## P8
+30. **Routing and cost.** Under the Hood → Ward 29 → Routing and cost: as run $0.070 (589 calls), no router $0.089 (782), every photo ≈ $0.112 (estimate); hover a cost → its source; the model-card check box.
+31. **Photo date.** Explore → a building → the photo shows "Photo from …"; w1252505151 (8th Street, Ganapathy) shows "over 3 years old" and "Imagery may be outdated" at the top.
+32. **Front wall.** Same drawer → "Front wall 33.4 m along the street, from the map outline"; How do we know? → its source.
+33. **Possible dark stretch.** Key number "Possible dark stretches" → list says "the detector finds about 43% of lamp heads"; hover a black band → the card says it too.
+34. **Tamil.** Ask "பதிவேட்டில் இல்லாத கடைகள்" → Shops, not in the register (5); "60 மீட்டருக்குள் தெருவிளக்கு இல்லாத தெருக்களைக் காட்டு" → 11 possible dark stretches.
+35. **Worker (re-paste the worker cell, upload the p7b zip).** After a real job: the cell prints "deleted N Street View photo crops (X MB)"; `/content/gc_jobs` has no folder for it.

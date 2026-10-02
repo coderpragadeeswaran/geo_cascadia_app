@@ -192,7 +192,7 @@ export function AlignedBars({ rows, fmtV = (v) => fmt.format(v) }: { rows: { key
   return (
     <div className="space-y-1">
       {rows.map((r) => (
-        <div key={r.key} className="grid grid-cols-[150px_minmax(0,1fr)_84px] items-center gap-2">
+        <div key={r.key} className="grid grid-cols-[150px_minmax(0,1fr)_84px] items-center gap-2" title={r.note ? `${r.label}: ${r.note}` : r.label}>
           <span className="t-small truncate">{r.label}</span>
           <span className="relative h-3">{r.value != null && <span className="absolute inset-y-0 left-0" style={{ width: `${Math.max(0.8, (r.value / max) * 100)}%`, background: r.tone ?? 'var(--ns-sodium)', borderRadius: 2 }} />}</span>
           <span className="t-data text-right">{r.value == null ? '—' : fmtV(r.value)}</span>

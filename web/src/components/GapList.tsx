@@ -7,6 +7,7 @@ import { propsFor, useAreaData } from '@/lib/useAreaData'
 import { cn, fmt, plural } from '@/lib/utils'
 import { flyToBounds } from '@/map/MapView'
 import { useUi } from '@/store/ui'
+import { LampRecall } from './LampRecall'
 import { Fact, HowWeKnow } from './HowWeKnow'
 
 export type Gap = Pick<GapRow, 'id' | 'street' | 'length_m' | 'gap_type' | 'poles_inside' | 'display_mode' | 'along_road_m' | 'length_differs' | 'note'> & Partial<Pick<GapProps, 'lit_cameras_inside' | 'longest_dark_along_road_m' | 'interval_m'>> & { computed?: boolean }
@@ -45,11 +46,12 @@ export function GapList({ rows }: { rows: Gap[] }) {
       flyToBounds(map, [Math.min(...xs) - 0.0003, Math.min(...ys) - 0.0003, Math.max(...xs) + 0.0003, Math.max(...ys) + 0.0003], { maxZoom: 18 })
     }
   }
-  if (!list.length) return <p className="t-small ink3 px-5 py-6">No dark stretches here.</p>
+  if (!list.length) return <p className="t-small ink3 px-5 py-6">No possible dark stretches here.</p>
   return (
     <div>
       <p className="t-small ink2 px-5 pb-2"><span className="t-data text-ink">{fmt.format(Math.round(total))} m</span> in {plural(list.length, 'stretch')}, longest first.</p>
-      <ol aria-label="Dark stretches">
+      <LampRecall className="px-5 pb-2" />
+      <ol aria-label="Possible dark stretches">
         {list.map((g) => {
           const on = selected?.kind === 'streetlight_gap' && selected.id === g.id
           return (

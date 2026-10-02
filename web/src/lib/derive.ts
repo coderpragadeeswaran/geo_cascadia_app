@@ -71,7 +71,7 @@ export const KPI_DEFS: KpiDef[] = [
   { key: 'buildings_analysed', label: 'Buildings checked', one: 'Building checked', main: true, apply: {} },
   { key: 'unmatched_properties', label: 'Not in register', main: true, tone: 'no-record', apply: { match: 'no_record' } },
   { key: 'buildings_with_discrepancy', label: 'Differ from register', one: 'Differs from register', main: true, tone: 'discrepancy', apply: { match: 'discrepancy' } },
-  { key: 'streetlight_gaps', label: 'Dark stretches', one: 'Dark stretch', main: true, apply: { gaps: true }, sub: 'no streetlight seen in 60 m' },
+  { key: 'streetlight_gaps', label: 'Possible dark stretches', one: 'Possible dark stretch', main: true, apply: { gaps: true }, sub: 'no streetlight seen in 60 m' },
   { key: 'use_not_classified', label: 'Use not known', main: true, tone: 'unclassified', apply: { use: '__none' } },
   { key: 'streetlights', label: 'Streetlights', one: 'Streetlight', apply: { subject: 'assets', assetType: 'streetlight' } },
   { key: 'poles', label: 'Poles, no lamp seen', one: 'Pole, no lamp seen', apply: { subject: 'assets', assetType: 'pole' } },

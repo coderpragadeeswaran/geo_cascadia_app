@@ -34,6 +34,8 @@ web (React, :5173) ──> API (FastAPI, :8000) ──> Supabase Postgres + Post
 2. Run the checks below (Tests) once.
 
 ### On the day, in this order
+0. **Worker files changed in P8:** re-paste the worker cell, and upload `geo_cascadia_pkg_p7b.zip`
+   (`tools\build_pkg_zip.py`) to `/MyDrive/alldataset` once.
 1. **Fresh AWS keys.** Open the AWS access portal and copy new SSO credentials (access key id, secret, session token).
    They expire after a few hours, so take them just before the demo and put them in the Colab secrets.
 2. **T1 — API** (repo root):
@@ -108,7 +110,22 @@ npx tsx scripts/tour-shots.ts      # the guided tour, both themes, every step; f
 npx tsx scripts/audit.ts           # every page in both themes, keyboard (Tab, Esc, Ctrl K), the numbers the UI shows
 npx tsx scripts/heap.ts            # production build only: JS heap after GC (target ≤ 60 MB)
 npx tsx scripts/offline.ts         # fallbacks; needs extra APIs on :8001 (outgoing requests blocked) and :8002 (no Google keys)
+npx tsx scripts/p8-shots.ts        # P8 screens (dev server): Routing and cost, photo dates, front wall, dark stretches, Tamil; MODE=daylight for Daylight
 backend\.venv\Scripts\python tools\audit_numbers.py    # (repo root) Ward 29 numbers straight from the database
 ```
+
+## Field check: the review queue as a walking route
+
+```powershell
+backend\.venv\Scripts\python tools\review_route.py ward29     # waiting items -> data/exports/review_route_ward29.csv / .geojson
+```
+Stops in walking order (nearest next, then 2-opt), with a Google Maps link each; distances are straight lines, so the
+real walk is longer. `--all` includes decided items.
+
+## Street View imagery (Google terms)
+
+No Street View photo is stored by the API or in `data/`. The worker keeps photo crops only while a job runs and
+deletes them once the result is delivered (it prints how many). Local screenshots in `docs/screenshots/` (git-ignored)
+can show Street View photos: delete them when no longer needed. Details: explainer 04 §6.9.
 
 Registers are synthetic demo data. Prototype — imagery © Google.

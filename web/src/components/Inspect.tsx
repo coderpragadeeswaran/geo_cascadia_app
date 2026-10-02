@@ -1,5 +1,5 @@
 /** Hover card (follows the cursor, plain words) and the low-coverage note. A click opens the evidence panel. */
-import { useAreas } from '@/api/queries'
+import { useAreas, useModelCard } from '@/api/queries'
 import type { AnyProps, GapProps } from '@/api/types'
 import { assetRegLabel, ASSET_REG, floorsText, gapTypeLabel, matchLabel, onMapSeenIn, shortArea, useLabel } from '@/lib/labels'
 import { useAreaData } from '@/lib/useAreaData'
@@ -14,7 +14,7 @@ function Body({ p }: { p: AnyProps }) {
     case 'area':
       return (<>
         <Title eyebrow="Analysed area" title={shortArea(p.name)} />
-        <Line><N n={p.card.counts.buildings} /> {noun(p.card.counts.buildings, 'building')} checked · <N n={p.card.counts.streetlight_gaps_60m} /> {noun(p.card.counts.streetlight_gaps_60m, 'dark stretch')}</Line>
+        <Line><N n={p.card.counts.buildings} /> {noun(p.card.counts.buildings, 'building')} checked · <N n={p.card.counts.streetlight_gaps_60m} /> {noun(p.card.counts.streetlight_gaps_60m, 'possible dark stretch')}</Line>
         <Line><N n={p.card.counts.unmapped_businesses} /> {noun(p.card.counts.unmapped_businesses, 'business')} with no analysed building</Line>
       </>)
     case 'street':
@@ -42,9 +42,10 @@ function Body({ p }: { p: AnyProps }) {
       </>)
     case 'streetlight_gap':
       return (<>
-        <Title eyebrow="Dark stretch" title={`${fmt.format(Math.round(p.length_m))} m of ${p.street}`} />
+        <Title eyebrow="Possible dark stretch" title={`${fmt.format(Math.round(p.length_m))} m of ${p.street}`} />
         <GapContext p={p} />
         <Line>{gapTypeLabel(p.gap_type)}</Line>
+        <LampRecallLine />
         {p.display_mode === 'check' && <Line><span className="sodium">Needs checking: the road bends here</span></Line>}
       </>)
     case 'unmapped_business':
@@ -73,7 +74,7 @@ function GapContext({ p }: { p: GapProps }) {
   const rank = [...all].sort((a, b) => b.length_m - a.length_m).findIndex((g) => g.id === p.id) + 1
   const total = all.reduce((s, g) => s + g.length_m, 0)
   return (
-    <Line>{all.length === 1 ? 'The only dark stretch' : <>{rank} of {plural(all.length, 'dark stretch')}</>} on {p.street}
+    <Line>{all.length === 1 ? 'The only possible dark stretch' : <>{rank} of {plural(all.length, 'possible dark stretch')}</>} on {p.street}
       {all.length > 1 && <> (<span className="t-data text-ink">{fmt.format(Math.round(total))} m</span> total)</>}
       {computed && <span className="ink3"> · within {p.interval_m} m, computed</span>}</Line>
   )
@@ -122,4 +123,11 @@ export function CoverageNotice() {
       Buildings were checked only where an outline exists ({c.buildings}); streetlights, poles and signs were checked everywhere ({plural(c.assets, 'pole or light', 'poles and lights')}, {plural(c.unmapped_businesses, 'business')} with no analysed building).
     </p>
   )
+}
+
+/** P8: the hover card's short form of the lamp detector's recall (model card) */
+function LampRecallLine() {
+  const { data: mc } = useModelCard()
+  const lh = (mc as { detector?: { per_class?: Record<string, { R: number; n: number }> } } | undefined)?.detector?.per_class?.lamp_head
+  return lh ? <Line><span className="ink3">The detector finds about {Math.round(lh.R * 100)}% of lamps, so some may be missed</span></Line> : null
 }

@@ -187,5 +187,15 @@ export interface EvidenceViewData {
   user_note?: string | null
   /** D36: where the camera stood (from the run's panoramas), for the mini-map; null when unknown */
   camera?: { lat: number; lon: number } | null
+  /** P8: the panorama's capture month ("YYYY-MM", panos.json), null when unknown */
+  date?: string | null
 }
+/** P8: photo ages (GET /areas/{slug}/imagery), from the capture months the pipeline stored; nothing fetched */
+export interface ImageryObject { date: string | null; newest: string | null; oldest: string | null; outdated: boolean }
+export interface ImagerySummary {
+  source: string; as_of: string; old_months: number; cutoff: string; camera_stops: number; camera_stops_dated: number
+  oldest: string | null; newest: string | null; older_than_cutoff: number; by_year: Record<string, number>
+  panoramas_found: { n: number; oldest: string | null; newest: string | null }; outdated_findings: Record<string, number>
+}
+export interface Imagery { summary: ImagerySummary; objects: Record<string, ImageryObject> }
 export interface JobFull extends Job { message: string | null; created_at: string | null; started_at: string | null; finished_at: string | null }

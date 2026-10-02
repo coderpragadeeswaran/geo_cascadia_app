@@ -6,7 +6,7 @@
  *  buildings, positions (assets), matched, findings (streetlights), flow, dropped, streets-table, cost, story, compare. */
 import { AlertTriangle, ArrowRight, GitCompareArrows, MapPin } from 'lucide-react'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { useHood, useHoods, type Hood as HoodData, type StreetRow } from '@/api/p5'
+import { useHood, useHoods, type Hood as HoodData, type Routing as RoutingData, type RouteRow, type StreetRow } from '@/api/p5'
 import { useAreas } from '@/api/queries'
 import { Card, CountUp, jumpTo, REDUCED, SectionNav, T, useDetail, useInView, useScrollSpy } from '@/components/Detail'
 import { ExampleSheet } from '@/components/ExampleSheet'
@@ -17,7 +17,7 @@ import { KPI_DEFS, kpiFilter } from '@/lib/derive'
 import { shortArea } from '@/lib/labels'
 import { MATCH_LEGEND, REGISTER_NOTE, assetPoints, buildingPolys, darkLines, miniStreets } from '@/lib/mini'
 import { useAreaData } from '@/lib/useAreaData'
-import { cn, fmt, noun, plural } from '@/lib/utils'
+import { cn, fmt, monthText, noun, plural, usd } from '@/lib/utils'
 import { useUi } from '@/store/ui'
 
 const Sankey = lazy(() => import('@/components/Sankey'))
@@ -27,7 +27,7 @@ const NAV: [string, string][] = [
   ['overview', 'Coverage & summary'], ['streets', '01 · Streets planned'], ['cameras', '02 · Camera positions'], ['imagery', '03 · Photos fetched'],
   ['detection', '04 · Objects detected'], ['signs', '05 · Signs read'], ['routed', '06 · Local or cloud AI'], ['buildings', '07 · Floors and use'],
   ['positions', '08 · Positions'], ['matched', '09 · Matched'], ['findings', '10 · Findings'], ['flow', 'Whole pipeline'],
-  ['dropped', 'What got dropped'], ['streets-table', 'Street by street'], ['street-names', 'Street names'], ['cost', 'Time and cost'],
+  ['dropped', 'What got dropped'], ['streets-table', 'Street by street'], ['street-names', 'Street names'], ['routing', 'Routing and cost'], ['cost', 'Time and cost'],
 ]
 
 export default function Hood() {
@@ -213,6 +213,7 @@ function Story({ h, pick }: { h: HoodData; pick: Pick }) {
         tech="GET /areas/{slug}/street-names (street_name_candidates.json); PUT stores data/street_name_picks.json and reloads the area. Source files unchanged." />}>
         <StreetNames slug={h.area} />
       </Section>
+      {h.routing && <RoutingCost r={h.routing} />}
       <CostTime h={h} />
     </div>
   )
@@ -260,7 +261,7 @@ function Findings({ n, pick }: { n: HoodData['n']; pick: Pick }) {
     { v: fmt.format(n.match_no_record), label: 'not in the register', tone: 'var(--ns-no-record)', ex: 'match.no_record', kpi: 'unmatched_properties' },
     { v: fmt.format(n.match_discrepancy), label: 'differ from the register', tone: 'var(--ns-discrepancy)', ex: 'match.discrepancy', kpi: 'buildings_with_discrepancy' },
     { v: fmt.format(n.use_unknown), label: 'use not known', tone: 'var(--ns-ink2)', ex: 'use.unknown', kpi: 'use_not_classified' },
-    { v: fmt.format(n.gaps), label: `${noun(n.gaps, 'dark stretch')} (60 m)`, tone: 'var(--ns-ink)', ex: 'gaps', kpi: 'streetlight_gaps' },
+    { v: fmt.format(n.gaps), label: `${noun(n.gaps, 'possible dark stretch')} (60 m)`, tone: 'var(--ns-ink)', ex: 'gaps', kpi: 'streetlight_gaps' },
     { v: `${fmt.format(n.gaps_m)} m`, label: 'of road with no streetlight seen', tone: 'var(--ns-ink)', ex: 'gaps', kpi: 'streetlight_gaps' },
   ]
   return (
@@ -296,6 +297,7 @@ function Coverage({ h }: { h: HoodData }) {
             : 'Almost every photo faces a building that is on the map, so buildings, lights and signs are all analysed.'}
             tech={<>Verdict (meta.run.coverage): “{c.verdict ?? '—'}”. plan.json views with footprint == null: {fmt.format(c.views_unmapped)} of {fmt.format(c.views)}.</>} />
         </p>
+        <ImageryLine h={h} />
       </div>
     </div>
   )
@@ -377,7 +379,7 @@ function StreetsTable({ h }: { h: HoodData }) {
             <div className="grid items-start gap-4 md:grid-cols-[420px_minmax(0,1fr)]">
               <StreetMini area={area} mini={mini} street={cur.street} records={records} gaps={gaps} />
               <div>
-              <p className="t-small">{cur.street}: {fmt.format(cur.length_m)} m, {plural(cur.buildings, 'building')}, {fmt.format(cur.no_record)} not in the register, {plural(cur.gaps, 'dark stretch')}.</p>
+              <p className="t-small">{cur.street}: {fmt.format(cur.length_m)} m, {plural(cur.buildings, 'building')}, {fmt.format(cur.no_record)} not in the register, {plural(cur.gaps, 'possible dark stretch')}.</p>
               <button className="btn btn-line mt-2" onClick={() => openStreet(cur.street)}><MapPin /> Open in Explore</button>
               </div>
             </div>
@@ -394,13 +396,15 @@ const SV_LIST_PRICE = 'Photo cost is at Google’s list price — Google’s fre
 function CostTime({ h }: { h: HoodData }) {
   const c = h.cost
   const sv = c.lines.find((l) => l.key === 'street_view')
+  const vlm = c.lines.find((l) => l.key === 'vlm')
   if (c.live) return <LiveCost h={h} />
   const time = c.model_card?.gpu_minutes != null ? `About ${c.model_card.gpu_minutes} min on a Colab GPU` : 'Time: not recorded for this run'
-  const money = sv?.value != null
+  const svText = sv?.value != null
     ? `about $${sv.value.toFixed(2)} in Street View photos (${sv.photos != null ? fmt.format(sv.photos) : '—'} photos)` : 'Street View cost not recorded'
   return (
     <Section id="cost" title="Time and cost">
-      <p className="t-body" title={sv?.source ?? undefined}>{time}; {money}.</p>
+      <p className="t-body" title={sv?.source ?? undefined}>{time}; {svText}.</p>
+      {vlm?.value != null && <p className="t-body mt-1" title={vlm.source ?? undefined}>Cloud AI: about {usdText(vlm.value)} ({vlm.detail}).</p>}
       {sv?.value != null && <p className="t-small ink2 mt-1">{SV_LIST_PRICE}</p>}
       {sv?.source && <p className="t-small ink3 mt-1">Where the photo count comes from: {sv.source}.</p>}
     </Section>
@@ -431,6 +435,89 @@ function LiveCost({ h }: { h: HoodData }) {
   )
 }
 
+/** P8: when the photos were taken (panos.json capture month of each camera stop; nothing fetched) */
+function ImageryLine({ h }: { h: HoodData }) {
+  const im = h.imagery
+  if (!im?.oldest) return null
+  const flagged = Object.values(im.outdated_findings ?? {}).reduce((a, b) => a + b, 0)
+  const years = Object.entries(im.by_year).map(([y, k]) => `${y}: ${fmt.format(k)}`).join(' · ')
+  return (
+    <p className="t-small ink2 mt-2" title={`${im.source}. Camera positions by year: ${years}`}>
+      Photos taken <b className="text-ink">{monthText(im.oldest)}</b> to <b className="text-ink">{monthText(im.newest)}</b>
+      {im.older_than_cutoff ? <> · {plural(im.older_than_cutoff, 'camera position')} of {fmt.format(im.camera_stops)} with photos more than 3 years old</> : <> · none more than 3 years old</>}
+      {flagged ? <> · <span className="sodium">{plural(flagged, 'missing or not-in-register finding')} marked “imagery may be outdated”</span></> : null}.
+    </p>
+  )
+}
+
+// ---------------------------------------------------------------------------------------------------- routing
+const usdText = (v: number | null | undefined) => (v == null ? '—' : usd(v, v < 0.01 ? 4 : 3))
+
+/** P8: which model handled what (small local models first; the cloud model, Nova Lite, only for what they can't do or
+ *  aren't sure of) with count, latency and $ per route, from this run's own saved cloud calls (backend/app/routing.py). */
+function RoutingCost({ r }: { r: RoutingData }) {
+  const ev = r.every_view, ac = r.all_cloud, chk = r.model_card_check
+  const det = r.tasks.find((t) => t.key === 'detect')?.routes[0]
+  const totalRows = [
+    { key: 'routed', label: 'As run (routed)', value: r.totals.usd, note: `${fmt.format(r.totals.calls)} cloud calls · ${r.totals.status}` },
+    ...(ac ? [{ key: 'all', label: 'No local router', value: ac.usd, tone: 'var(--ns-ink3)', note: `${fmt.format(ac.calls)} cloud calls · ${ac.src}` }] : []),
+    ...(ev ? [{ key: 'every', label: 'Every photo (est.)', value: ev.usd, tone: 'var(--ns-ink3)', note: `estimate · ${ev.src}` }] : []),
+  ]
+  return (
+    <Section id="routing" title="Routing and cost" lead={<>Small models on the analysis computer handle everything first: the detector (YOLO) finds objects, OCR reads signs, a CLIP model decides building use. Only what they can’t do, or aren’t sure of, goes to the cloud model (Amazon Nova Lite), which is billed per call. Counts, times and dollars come from this run’s own saved calls.</>}>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[720px]">
+          <thead><tr className="rule-b">{['task', 'route', 'how many', 'time each', 'cost', ''].map((x, i) => <th key={i} className={cn('t-micro py-1.5 pr-3 font-[600]', i >= 2 && i <= 4 ? 'text-right' : 'text-left')}>{x}</th>)}</tr></thead>
+          <tbody>
+            {r.tasks.filter((t) => t.input > 0).map((t) => t.routes.map((x: RouteRow, i) => (
+              <tr key={`${t.key}-${i}`} className={cn('align-baseline', i === t.routes.length - 1 && 'rule-b')}>
+                <td className="t-small py-1.5 pr-3">{i === 0 ? <><b>{t.title}</b><div className="ink3 text-[13px]">{fmt.format(t.input)} {t.input_unit}</div></> : null}</td>
+                <td className="t-small py-1.5 pr-3"><span className="tag mr-1.5" style={x.route === 'cloud' ? { color: 'var(--ns-sodium)', boxShadow: 'inset 0 0 0 1px var(--ns-sodium)' } : undefined}>{x.route}</span>{x.model}<div className="ink3 text-[13px]">{x.label}</div></td>
+                <td className="t-data py-1.5 pr-3 text-right">{fmt.format(x.n)}</td>
+                <td className="t-data py-1.5 pr-3 text-right" title={x.lat_src}>{x.lat_s != null ? `${x.lat_s < 1 ? x.lat_s.toFixed(3) : x.lat_s.toFixed(2)} s` : <span className="ink3">—</span>}</td>
+                <td className="t-data py-1.5 pr-3 text-right" title={x.usd_src}>{x.route === 'local' ? '$0' : usdText(x.usd)}</td>
+                <td className="t-small ink3 py-1.5 text-[13px]" title={x.route === 'local' ? x.lat_src : x.usd_src}>{x.route === 'local' ? (x.lat_s == null ? 'time not measured' : '') : x.usd_status}</td>
+              </tr>
+            )))}
+          </tbody>
+        </table>
+      </div>
+      <p className="t-small ink3 mt-2">Hover a number for its source. “Time each” is the median seconds per cloud call, or the model card’s speed for the detector (T4 GPU). Local models use GPU time, not a per-call fee. Derived = the run’s own cost counter minus the calls measured one by one; estimate = calls × the measured cost of the same prompt.</p>
+
+      <h3 className="t-title mt-6">Cloud-AI cost for this run, three ways</h3>
+      <div className="mt-2 max-w-[640px]"><AlignedBars rows={totalRows} fmtV={(v) => usdText(v)} /></div>
+      <ul className="t-small ink2 mt-2 max-w-[760px] space-y-1">
+        <li><b className="text-ink">As run:</b> {fmt.format(r.totals.calls)} cloud calls, {usdText(r.totals.usd)} ({r.totals.status}).</li>
+        {ac && <li><b className="text-ink">No local router:</b> {fmt.format(ac.calls)} calls, {usdText(ac.usd)}. The {fmt.format(ac.extra_calls)} buildings the local model decided would each need one more cloud call ({usdText(ac.extra_usd)} in all). The saving is modest because the use call is one of the cheapest; the floors call (three photos per building) costs most and runs for every building either way.</li>}
+        {ev && <li><b className="text-ink">Cloud model on every photo (estimate):</b> {fmt.format(ev.photos)} photos × {usd(ev.usd_per_call, 6)} per one-photo call (measured average) = {usdText(ev.usd)}{ev.minutes != null ? `, about ${ev.minutes} min of calls (${ev.workers} at a time)` : ''}. That still would not count floors or place anything on the map; the detector does that locally{det?.lat_s != null ? ` in ${Math.round(det.lat_s * 1000)} ms per photo` : ''}.</li>}
+        {r.measured_every_view && <li><b className="text-ink">Measured on whole photos (model card, n = {r.measured_every_view.n}):</b> reading shop names with the cloud model on every photo cost {usdText(r.measured_every_view.usd_all_vlm)} vs {usdText(r.measured_every_view.usd_routed)} routed ({r.measured_every_view.ratio}), at the same accuracy ({Math.round(r.measured_every_view.all_vlm * 100)}% vs {Math.round(r.measured_every_view.routed * 100)}%).</li>}
+      </ul>
+
+      {!!r.accuracy.length && <>
+        <h3 className="t-title mt-6">Accuracy: routed vs cloud only</h3>
+        <p className="t-small ink2 mt-1">Hand-labelled samples from the team’s model card. Small samples: one item either way moves a result by about 3 points.</p>
+        <div className="mt-3 grid gap-6 md:grid-cols-2">
+          {r.accuracy.map((a) => (
+            <div key={a.task}>
+              <div className="t-micro mb-1.5">{a.task} · n = {a.n}</div>
+              <AlignedBars rows={a.rows.map((x) => ({ key: x.label, label: x.label, value: x.value, tone: x.production ? undefined : 'var(--ns-ink3)', note: `${a.src}${x.production ? ' (production)' : ''}` }))} fmtV={(v) => `${Math.round(v * 100)}%`} />
+              <p className="t-small ink3 mt-1">{a.note}.</p>
+            </div>
+          ))}
+        </div>
+      </>}
+
+      {chk && (
+        <div role="note" className="mt-6 max-w-[760px] rounded-[var(--ns-r-control)] px-3 py-2" style={{ boxShadow: 'inset 0 0 0 1px var(--ns-line-strong)' }}>
+          <div className="t-small"><b>Model card check.</b> The model card lists ${chk.stored_with} with the router ({fmt.format(chk.stored_calls_with)} calls) and ${chk.stored_without} without ({fmt.format(chk.stored_calls_without)} calls).
+            Recounted from the run’s saved calls: {usdText(chk.computed_with)} ({fmt.format(chk.computed_calls_with)} calls) and {usdText(chk.computed_without)} ({chk.computed_calls_without != null ? fmt.format(chk.computed_calls_without) : '—'} calls).</div>
+          <p className="t-small ink2 mt-1">{chk.why}</p>
+        </div>
+      )}
+    </Section>
+  )
+}
+
 // ---------------------------------------------------------------------------------------------------- compare
 function Compare({ slugs, onOpen }: { slugs: string[]; onOpen: (slug: string) => void }) {
   const qs = useHoods(slugs)
@@ -451,7 +538,7 @@ function Compare({ slugs, onOpen }: { slugs: string[]; onOpen: (slug: string) =>
   ]
   return (
     <div id="compare">
-      <p className="t-small ink2 mb-5 max-w-[720px]"><T plain="The same pipeline on three places. Where the open map has few building outlines (Tiruppur), buildings can’t be checked, but streetlights, poles and shop signs still are."
+      <p className="t-small ink2 mb-5 max-w-[720px]"><T plain="The same pipeline on every analysed place. Where the open map has few building outlines (Tiruppur), buildings can’t be checked, but streetlights, poles and shop signs still are."
         tech="Same code, three runs (Trichy was produced by an older package version). Bars in each group share one scale. Percentages are computed from hood.n." /></p>
       <div className="grid gap-4 md:grid-cols-3">
         {hs.map((h) => (
@@ -464,7 +551,8 @@ function Compare({ slugs, onOpen }: { slugs: string[]; onOpen: (slug: string) =>
               <dt className="ink3">buildings</dt><dd className="t-data text-right">{fmt.format(h.n.buildings)}</dd>
               <dt className="ink3">not in register</dt><dd className="t-data text-right">{fmt.format(h.n.match_no_record)}</dd>
               <dt className="ink3">use not known</dt><dd className="t-data text-right">{fmt.format(h.n.use_unknown)}</dd>
-              <dt className="ink3">dark stretches</dt><dd className="t-data text-right">{fmt.format(h.n.gaps)}</dd>
+              <dt className="ink3">possible dark stretches</dt><dd className="t-data text-right">{fmt.format(h.n.gaps)}</dd>
+              <dt className="ink3">photos taken</dt><dd className="t-data text-right">{h.imagery?.oldest ? `${monthText(h.imagery.oldest)} – ${monthText(h.imagery.newest)}` : '—'}</dd>
               <dt className="ink3">story corrections</dt><dd className="t-data text-right">{h.corrections.length}</dd>
             </dl>
             <div className="flex-1" />

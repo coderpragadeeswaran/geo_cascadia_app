@@ -175,7 +175,7 @@ There are two routers.
 2. A **local model** (a CLIP picture summary + logistic regression, trained on the cloud model's own answers) guesses the use. If it is confident enough, that answer is used: route "local model", no cloud call.
 3. Otherwise the cloud model is asked with the red-rectangle prompt: wrong target?, roofline visible?, floors, use, shop units, facade condition, name → route "cloud model".
 - **Ward 29:** 163 local, 58 cloud (counted from the results; the stored counter says 193/73, see [Appendix B](05_EXPLAIN_AND_DEFEND.md#appendix-b-conflicts-found)).
-- **Accuracy (model card):** on 31 held-out Ward 29 buildings: cloud only 0.90, local only 0.94, routed 0.90, 23% sent on. On 12 Trichy buildings: 0.92 for all three. Full Ward 29 run: cloud calls 782 → 339, use accuracy 0.89 before and after (n=28).
+- **Accuracy (model card):** on 31 held-out Ward 29 buildings: cloud only 0.90, local only 0.94, routed 0.90, 23% sent on. On 12 Trichy buildings: 0.92 for all three. Full Ward 29 run: use accuracy 0.89 before and after (n=28). The model card's "cloud calls 782 → 339" is not like for like (the 339 leaves out 250 name and business-sign checks); like for like it is 782 → 589 ([§9.5](#95-the-fresh-full-ward-29-colab-run-vs-the-apps-numbers)).
 - **Error owner:** MODEL (router and cloud model); OUR RULES (confidence threshold, 0.7 name gate).
 
 ### 7.9 Floors
@@ -297,7 +297,7 @@ Every registered building gets a predicted position by one fixed rule, tried in 
 | gap60-008 | Korathottam Road | 78 m | 4 |
 | gap60-002 | Sathy Main Road | 67 m | 5 |
 
-- **Why "no visible streetlight", never "broken":** the detector finds 43% of lamp heads (model card, n=49). A dark stretch means *no lamp was seen*, not *no lamp exists*, and a photo can't tell whether a lamp works (D16).
+- **Why "possible dark stretch" (P8) and "no visible streetlight", never "broken":** the detector finds 43% of lamp heads (model card, n=49); the card and the list say so. A dark stretch means *no lamp was seen*, not *no lamp exists*, and a photo can't tell whether a lamp works (D16).
 - **Length caveat:** the pipeline measures length on a straight line fitted to the stops. On a bending street that is too short: Sathy Main Road 376 m vs ≈ 424 m along the road (D13).
 - **Error owner:** MODEL (lamp recall), OUR RULES (30 m / 60 m rule, straight-line length).
 
@@ -374,7 +374,7 @@ Test set: 150 hand-labelled Ward 29 photos, never used for training (MC). Traini
 | Local router only (CLIP + logistic regression), Ward 29 held out | 0.94 | 31 | MC | — |
 | **Routed** (local when confident, else cloud), Ward 29 held out | **0.90** (23% sent to the cloud) | 31 | MC | **production** |
 | Routed, Trichy (unseen city) | 0.92 (50% sent to the cloud) | 12 | MC | — |
-| Full Ward 29 run: cloud calls 782 → 339, use accuracy 0.89 → 0.89 | — | 28 | MC | — |
+| Full Ward 29 run: use accuracy 0.89 → 0.89; cloud calls 782 → 589 like for like (the model card's 339 leaves out the name and business-sign checks, D50) | — | 28 | MC | — |
 | Sign text → use (D32 rule) | **not measured** | — | Trust | in use, flagged |
 | Old "any sign ⇒ commercial" heuristic | flagged 142 of 381 buildings; precision 0.02–0.04 on planted use changes | 10 planted | H1 | abandoned |
 
@@ -542,7 +542,7 @@ Test set: 150 hand-labelled Ward 29 photos, never used for training (MC). Traini
 
   Most moves are small: in Ward 29, 248 of the 570 moved crops go to an outline less than 5 m from the aimed one (120 to one farther away; 202 come from a photo aimed at no outline). Moved signs sit near the photo's edge: a median 33° from the photo's aim, against 22° for signs that stay. A spot-check by eye is still on the to-do list.
 - Whether a lamp works (a photo can't tell).
-- The capture dates of the photos. The pipeline stores them but nothing checks them against the register's survey year.
+- The capture dates of the photos are shown (P8: "Photo from Nov 2022"; a missing / not-in-register finding whose newest photo is more than 3 years old is marked "imagery may be outdated"), but nothing checks them against the register's survey year.
 - The Ward 29 hand-label sets themselves: they are not in the repository, only their numbers (D32).
 
 
@@ -565,9 +565,11 @@ The app recomputes every count from the records. Where a saved number disagrees,
 - **The real full run (owner, D41):** 28 Sep 2026, Colab T4, **router on** (as set in the setup cell). **11.5 min**, **1,420 Street View images**, **cloud AI $0.0887**. These are the full-run time and cost to quote.
   - 11.5 min matches the model card's full-run GPU minutes.
   - 1,420 agrees with the saved run results: **1,154 planned photos + 266 building crops** re-fetched for the use/floors step. 266 is the number of usable best boxes, which include 45 unregistered outlines. 1,420 × $0.007 = **$9.94**.
-  - **Cloud AI:** the model card's earlier benchmark lists $0.056 with the router and $0.089 without. The fresh run, router on, measured **$0.0887**. The results of that run are not in the repository, so the reason for the gap is not confirmed ([Appendix C](05_EXPLAIN_AND_DEFEND.md#appendix-c-open-questions)). The router's measured saving in calls (782 → 339, model card) is unaffected.
+  - **Cloud AI (answered in P8, D50):** The model card's "$0.056 with the router" counted only 339 of the run's 589 cloud calls: it is the cost counter of a resumed run, which re-used the 166 name checks and 84 business-sign checks from saved files. Its "$0.089 without" counts all 782. Recounted like for like from the saved calls (P8, D50): **$0.070 with the router (589 calls) vs $0.089 without (782 calls)**. The router saves 193 calls (25%) but only about $0.019 (21%), because the call it skips (building use, one photo, ~$0.0001) is cheap, while the floors call (three photos, ~$0.00019) is 70% of the bill and runs for every building either way.
+  - **The fresh run's $0.0887** is the *without-router* figure, not a with-router one: like for like the router should have given about $0.070, and $0.0887 − $0.070 ≈ 190 extra use calls × $0.000097, i.e. almost every building's use went to the cloud. The likeliest cause: the router file was not found, and the pipeline then silently sent every building to the cloud model. It now prints a warning and records `use_router` in the run summary (D50). Not confirmed: that run's files are not in the repository (check: count `tier1_local_clip` in its `vlm_buildings.json`).
+  - The per-call costs are consistent across runs: a use call ≈ $0.000097 (Ward 29) / $0.000098 (Vadakku Masi Veethi, measured); a floors call ≈ $0.000185 (Ward 29, derived) / $0.000187 (Vadakku, measured); a name check ≈ $0.000055 in both. Vadakku's own counter (123 calls, $0.0134) equals the recount exactly.
 - **The app's numbers for Ward 29:**
-  - Under the Hood's cost line counts only the planned photos: 1,154 × $0.007 = **$8.08**. It misses the 266 building crops, so it under-counts the real 1,420 by about 19% ([Appendix B](05_EXPLAIN_AND_DEFEND.md#appendix-b-conflicts-found)). Using the real full-run count is on the P7 list ([§18](05_EXPLAIN_AND_DEFEND.md#18-still-to-do-p7)).
+  - Under the Hood's photo cost counts the run files' 1,420 photos (≈ $9.94, since P7.2), and its cloud-AI line the like-for-like $0.070 (P8). The new **Routing and cost** section shows each route's count, time per call and $, with the no-router ($0.089) and cloud-on-every-photo (≈ $0.112, an estimate) comparisons.
   - The run timings shown for Ward 29 (3.3 min, 187 s in the cloud stage) are marked **"resumed run, not representative"** (D1).
 - **Live runs, by contrast, report their own real counters.** Vadakku Masi Veethi (383 m, not resumed): 162 photos ($1.13), 123 cloud calls ($0.0134), 35 Google look-ups, 4.0 pipeline minutes (6.2 min from claim to upload).
 

@@ -46,7 +46,7 @@ export function darkLines(gs: { props: { length_m: number; street: string; along
   return gs.map((g) => {
     const rec = Math.round(g.props.length_m), along = g.props.along_road_m
     return { coords: (g.geometry.coordinates as [number, number][]).map(([lo, la]) => [la, lo] as [number, number]), tone: 'dark',
-      legend: 'dark stretch (no light within 60 m)', measure, measureText: `${rec} m`,
-      tip: `Dark stretch, ${rec} m on ${g.props.street}${along && g.props.length_differs ? ` (about ${Math.round(along)} m along the road)` : ''}` }
+      legend: 'possible dark stretch (no light seen within 60 m)', measure, measureText: `${rec} m`,
+      tip: `Possible dark stretch, ${rec} m on ${g.props.street}${along && g.props.length_differs ? ` (about ${Math.round(along)} m along the road)` : ''}` }
   })
 }

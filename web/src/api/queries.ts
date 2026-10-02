@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
 import type { ModelCard } from '@/types/modelCard'
 import { api } from './client'
-import type { AreaCard, AreaDetail, AreaGeoJSON, Asset, Building, EvidenceViewData, Job, PublicConfig, ReviewItem, ReviewRow, UnmappedBusiness, WorkerStatus } from './types'
+import type { AreaCard, AreaDetail, AreaGeoJSON, Asset, Building, EvidenceViewData, Imagery, Job, PublicConfig, ReviewItem, ReviewRow, UnmappedBusiness, WorkerStatus } from './types'
 
 export const useConfig = () =>
   useQuery({ queryKey: ['config'], queryFn: () => api<PublicConfig>('/config/public'), staleTime: Infinity, retry: 1 })
@@ -44,10 +44,12 @@ export const useReviewRows = (slug: string | null) =>
 export const useObjectDetail = (area: string | null, kind: 'building' | 'asset' | null, id: string | null) =>
   useQuery({
     queryKey: ['detail', area, kind, id],
-    queryFn: () => api<{ review_item: ReviewItem | null; building?: Building; asset?: Asset }>(`/${kind === 'building' ? 'buildings' : 'assets'}/${area}/${encodeURIComponent(id!)}`),
+    queryFn: () => api<{ review_item: ReviewItem | null; building?: Building; asset?: Asset; front_wall?: FrontWall | null }>(`/${kind === 'building' ? 'buildings' : 'assets'}/${area}/${encodeURIComponent(id!)}`),
     enabled: !!(area && kind && id),
   })
 
+/** P8: the building's street-facing wall from its OpenStreetMap outline (backend/app/frontwall.py) */
+export interface FrontWall { length_m: number; edge_m: number; rect_long_side_m: number | null; street: string | null; source: string; rect_note: string }
 /** detection boxes on each evidence photo of an object (design pass B §2) */
 type EvidenceResponse = { views: EvidenceViewData[]; links?: BuildingLinks }
 /** P7.3: what the photos link to one building outline (sign boxes by their own line of sight, and the photos they are in) */
@@ -61,6 +63,10 @@ export const useEvidence = (area: string | null, kind: 'building' | 'asset' | 'u
   useQuery({ ...evidenceQuery(area, kind, id), select: (r: EvidenceResponse) => r.views })
 export const useBuildingLinks = (area: string | null, id: string) =>
   useQuery({ ...evidenceQuery(area, 'building', id), select: (r: EvidenceResponse) => r.links ?? null })
+
+/** P8: when the photos were taken; `objects` keyed "building:<id>", "asset:<id>", "gap:<id>", "missing:<asset_no>" */
+export const useImagery = (area: string | null) =>
+  useQuery({ queryKey: ['imagery', area], queryFn: () => api<Imagery>(`/areas/${area}/imagery`), enabled: !!area, staleTime: Infinity })
 
 export const useModelCard = () =>
   useQuery({ queryKey: ['model-card'], queryFn: () => api<ModelCard>('/model-card'), staleTime: Infinity })

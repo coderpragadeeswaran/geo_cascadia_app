@@ -153,10 +153,11 @@ def test_google_count_explained(offline, ward29):
 
 # ------------------------------------------------------------------ 7. any script: unknown words are ignored, never dropped
 def test_tamil_word_is_reported_ignored(offline):
-    u = q(offline, "கடைகள்")["understanding"]
-    assert u["status"] == "not_understood" and u["ignored"] == ["கடைகள்"]
-    u2 = q(offline, "shops கடைகள்")["understanding"]
-    assert u2["status"] == "partial" and u2["ignored"] == ["கடைகள்"]
+    # P8: கடைகள் ("shops") is now understood; a Tamil word with no rule (மரங்கள், "trees") is still reported
+    u = q(offline, "மரங்கள்")["understanding"]
+    assert u["status"] == "not_understood" and u["ignored"] == ["மரங்கள்"]
+    u2 = q(offline, "shops மரங்கள்")["understanding"]
+    assert u2["status"] == "partial" and u2["ignored"] == ["மரங்கள்"]
 
 
 # ------------------------------------------------------------------ 8. loose street names

@@ -130,7 +130,7 @@ function Status({ branch, s }: { branch: DriveBranch; s: number }) {
         <div className="flex items-start gap-3">
           <span className="mt-1 h-3 w-8 shrink-0 rounded-sm" style={{ background: 'var(--ns-dark)', boxShadow: '0 0 0 1px var(--ns-dark-edge)' }} />
           <div>
-            <div className="text-[17.5px] font-[580]">{gap.mode === 'check' ? 'Dark stretch to check' : 'Dark stretch: no streetlight seen'}</div>
+            <div className="text-[17.5px] font-[580]">{gap.mode === 'check' ? 'Possible dark stretch to check' : 'Possible dark stretch: no streetlight seen'}</div>
             <div className="t-small ink2">{fmt.format(Math.round(gap.length_m))} m of this road{gap.mode === 'check' ? ' (the road bends; some lights were seen part way along)' : ''}</div>
           </div>
         </div>

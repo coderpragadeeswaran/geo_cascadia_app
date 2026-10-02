@@ -9,7 +9,7 @@ export const fmt = new Intl.NumberFormat('en-IN')
 export const fmt1 = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 1 })
 
 /** Singular / plural in one place (review fix 14): noun(1, 'floor') → 'floor', noun(2, 'floor') → 'floors'. */
-const PLURALS: Record<string, string> = { stretch: 'stretches', 'dark stretch': 'dark stretches', business: 'businesses', match: 'matches',
+const PLURALS: Record<string, string> = { stretch: 'stretches', 'dark stretch': 'dark stretches', 'possible dark stretch': 'possible dark stretches', business: 'businesses', match: 'matches',
   'pole or streetlight': 'poles and streetlights', 'shop or business': 'shops & businesses', copy: 'copies', person: 'people' }
 export const noun = (n: number, one: string, many?: string) => (n === 1 ? one : many ?? PLURALS[one] ?? `${one}s`)
 /** "1 building", "2 buildings", "1,234 dark stretches" (Indian digit grouping, like fmt) */
@@ -44,3 +44,16 @@ export function usd(v: number | null | undefined, digits = 4) {
   if (v > 0 && v < step / 2) return `< $${step.toFixed(digits)}`
   return `$${v.toFixed(digits)}`
 }
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+/** P8: a Street View capture month "2023-03" → "Mar 2023" (null when unknown) */
+export function monthText(d: string | null | undefined) {
+  const m = /^(\d{4})-(\d{2})/.exec(d ?? '')
+  return m ? `${MONTHS[+m[2] - 1]} ${m[1]}` : null
+}
+/** P8: whole months between a capture month and today (the imagery-age rule: older than 36 months = may be outdated) */
+export function monthsAgo(d: string | null | undefined, now = new Date()) {
+  const m = /^(\d{4})-(\d{2})/.exec(d ?? '')
+  return m ? now.getFullYear() * 12 + now.getMonth() - (+m[1] * 12 + +m[2] - 1) : null
+}
+export const OLD_PHOTO_MONTHS = 36

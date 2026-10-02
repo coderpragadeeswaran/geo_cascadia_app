@@ -28,3 +28,6 @@ docs/screenshots/
 
 # pipeline package zip for the Colab S0 cell (built by tools/build_pkg_zip.py, uploaded to Drive)
 geo_cascadia_pkg*.zip
+
+# P8: field-check exports (tools/review_route.py), regenerable
+data/exports/
