@@ -147,3 +147,22 @@ def test_forget_deletes_every_photo_crop(W, tmp_path):
     W["drive_dir"] = lambda job: None
     assert W["forget"]({"id": "x"}, str(out)) == 5
     assert not out.exists()
+
+
+# ------------------------------------------------------------------------------------------------ D51 frontage
+def test_saved_exports_carry_frontage_and_longest_side():
+    """footprint.frontage_m = the road-facing wall (same function as the drawer); the old value is longest_side_m."""
+    for slug in ("ward29", "trichy_bharathidasan_salai", "vadakku_masi_veethi_f17937"):
+        b = JS.bundle(slug)
+        for x in b["buildings"]:
+            fp = x["footprint"]
+            assert fp["frontage_source"] == "road-facing wall of the OSM outline" and fp["longest_side_m"] > 0
+            assert fp["frontage_m"] == frontwall.front_wall(b, x)["length_m"]
+
+
+def test_pipeline_front_wall_length_matches_the_backend():
+    from geo_cascadia.buildloc import front_wall_length, road_facing_edge
+    from shapely.geometry import LineString, Polygon
+    poly = Polygon([(0, 0), (8, 0), (8.2, 0.05), (20, 0), (20, 15), (0, 15)])
+    edge = road_facing_edge(poly, LineString([(-50, -10), (50, -10)]))
+    assert front_wall_length(poly, edge) == 20.0 and front_wall_length(poly, None) is None

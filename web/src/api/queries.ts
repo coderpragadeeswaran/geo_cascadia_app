@@ -49,7 +49,7 @@ export const useObjectDetail = (area: string | null, kind: 'building' | 'asset' 
   })
 
 /** P8: the building's street-facing wall from its OpenStreetMap outline (backend/app/frontwall.py) */
-export interface FrontWall { length_m: number; edge_m: number; rect_long_side_m: number | null; street: string | null; source: string; rect_note: string }
+export interface FrontWall { length_m: number; edge_m: number; longest_side_m: number | null; street: string | null; source: string; longest_note: string }
 /** detection boxes on each evidence photo of an object (design pass B §2) */
 type EvidenceResponse = { views: EvidenceViewData[]; links?: BuildingLinks }
 /** P7.3: what the photos link to one building outline (sign boxes by their own line of sight, and the photos they are in) */

@@ -451,13 +451,18 @@ function ImageryLine({ h }: { h: HoodData }) {
 }
 
 // ---------------------------------------------------------------------------------------------------- routing
-const usdText = (v: number | null | undefined) => (v == null ? '—' : usd(v, v < 0.01 ? 4 : 3))
+const usdText = (v: number | null | undefined) => (v == null ? '—' : usd(v, v >= 1 ? 2 : v < 0.01 ? 4 : 3))
 
 /** P8: which model handled what (small local models first; the cloud model, Nova Lite, only for what they can't do or
  *  aren't sure of) with count, latency and $ per route, from this run's own saved cloud calls (backend/app/routing.py). */
 function RoutingCost({ r }: { r: RoutingData }) {
   const ev = r.every_view, ac = r.all_cloud, chk = r.model_card_check
   const det = r.tasks.find((t) => t.key === 'detect')?.routes[0]
+  // P8 fix: the run's whole cost, photos vs cloud AI, in one plain line; and which AI task costs most
+  const sv = r.street_view, ai = r.totals.usd
+  const total = sv.usd != null && ai != null ? sv.usd + ai : null
+  const cloudRoutes = r.tasks.flatMap((t) => t.routes.filter((x) => x.route === 'cloud' && x.usd != null).map((x) => ({ task: t.key, usd: x.usd! })))
+  const top = cloudRoutes.sort((a, b) => b.usd - a.usd)[0]
   const totalRows = [
     { key: 'routed', label: 'As run (routed)', value: r.totals.usd, note: `${fmt.format(r.totals.calls)} cloud calls · ${r.totals.status}` },
     ...(ac ? [{ key: 'all', label: 'No local router', value: ac.usd, tone: 'var(--ns-ink3)', note: `${fmt.format(ac.calls)} cloud calls · ${ac.src}` }] : []),
@@ -465,6 +470,12 @@ function RoutingCost({ r }: { r: RoutingData }) {
   ]
   return (
     <Section id="routing" title="Routing and cost" lead={<>Small models on the analysis computer handle everything first: the detector (YOLO) finds objects, OCR reads signs, a CLIP model decides building use. Only what they can’t do, or aren’t sure of, goes to the cloud model (Amazon Nova Lite), which is billed per call. Counts, times and dollars come from this run’s own saved calls.</>}>
+      {total != null && (
+        <p className="t-body mb-4" title={`Photos: ${fmt.format(sv.photos)} × $${sv.usd_per_photo} (Google list price, model card). Cloud AI: ${r.totals.status}, from this run's saved calls.`}>
+          This run cost about <b>{usdText(total)}</b>: Street View photos <b>{usdText(sv.usd)}</b> ({fmt.format(sv.photos)} at Google’s list price, {Math.round((100 * sv.usd!) / total)}%) and cloud AI (Nova Lite) <b>{usdText(ai)}</b> ({((100 * ai!) / total).toFixed(1)}%).
+          {top?.task === 'floors' && <> Floor counting is the largest AI cost; it isn’t routed yet.</>}
+        </p>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[720px]">
           <thead><tr className="rule-b">{['task', 'route', 'how many', 'time each', 'cost', ''].map((x, i) => <th key={i} className={cn('t-micro py-1.5 pr-3 font-[600]', i >= 2 && i <= 4 ? 'text-right' : 'text-left')}>{x}</th>)}</tr></thead>

@@ -48,7 +48,11 @@ export function makeExportSchemas(mode: SchemaMode) {
     type: z.literal('building'),
     lat: z.number(), lon: z.number(), street: z.string(),
     footprint: obj({
-      source: z.string(), osm_id: z.string(), area_m2: z.number(), frontage_m: z.number(),
+      source: z.string(), osm_id: z.string(), area_m2: z.number(),
+      /** D51: frontage = the road-facing wall of the outline (null when none was found); before D51 this was the longest side */
+      frontage_m: z.number().nullable(),
+      /** D51: the outline's longest side (the longer side of its rotated rectangle, whichever way it faces) */
+      longest_side_m: z.number().optional(), frontage_source: z.string().optional(),
       depth_m: z.number().nullable(),
       polygon_latlon: z.array(LatLon).nullable(),
     }),

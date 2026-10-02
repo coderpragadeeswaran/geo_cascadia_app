@@ -54,7 +54,11 @@ def build_export(area_name, cfg, buildings, results, views, vlm_bld, ocr_res, as
                 price(vb.get("in"), vb.get("out")) * max(vcalls, 1) if vcalls else 0)
         blds.append({
             "id": bid, "type": "building", "lat": m["lat"], "lon": m["lon"], "street": m["street"],
-            "footprint": {"source": "OSM", "osm_id": bid, "area_m2": m["area_m2"], "frontage_m": m["frontage_m"],
+            # P8 (D51): frontage = the road-facing wall's length (buildloc.front_wall_length); the outline's longest side
+            # (plan.building_register's old "frontage_m") is kept as longest_side_m
+            "footprint": {"source": "OSM", "osm_id": bid, "area_m2": m["area_m2"],
+                          "frontage_m": (positions or {}).get(bid, {}).get("front_wall_m"), "longest_side_m": m["frontage_m"],
+                          "frontage_source": "road-facing wall of the OSM outline",
                           "depth_m": b.get("depth_m"), "polygon_latlon": b.get("footprint_latlon")},
             "attributes": {
                 "use": {"value": m["obs_use"], "route": m.get("use_route") or ("tier3_vlm" if m["obs_use"] else None),
