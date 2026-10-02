@@ -247,6 +247,40 @@ def road_facing_edge(poly, street_line):
     return min(edges, key=lambda e: (round(street_line.distance(e.interpolate(0.5, normalized=True)), 1), -e.length))
 
 
+FRONT_STRAIGHT_DEG = 12.0      # P8: an outline edge continuing the front wall within this angle …
+FRONT_ONLINE_M = 0.6           # … and with its far end this close to the wall's line is part of the same wall
+
+
+def front_wall_length(poly, edge):
+    """P8 (D50/D51): the building's frontage = the length of its road-facing wall (`edge`, from road_facing_edge) plus the
+    outline edges that continue it straight (outlines often draw one wall as several edges; a jog shorter than
+    ROAD_EDGE_MIN_M only has to stay on the wall's line). Metres in the frame of `poly`; None without an edge."""
+    if edge is None:
+        return None
+    (ax, ay), (bx, by) = edge.coords[0], edge.coords[-1]
+    L = edge.length
+    ux, uy = (bx - ax) / L, (by - ay) / L
+    d0 = math.degrees(math.atan2(by - ay, bx - ax)) % 180
+    pts = list(poly.exterior.coords)[:-1]
+    n = len(pts)
+    i0 = next((i for i in range(n) if math.dist(pts[i], (ax, ay)) < 1e-6 and math.dist(pts[(i + 1) % n], (bx, by)) < 1e-6), None)
+    if i0 is None:
+        return round(L, 1)
+    off = lambda p: abs((p[0] - ax) * uy - (p[1] - ay) * ux)
+
+    def walk(step):
+        i, extra = ((i0 + 1) % n if step > 0 else i0), 0.0
+        for _ in range(n - 1):
+            p, q = (pts[i], pts[(i + 1) % n]) if step > 0 else (pts[i], pts[(i - 1) % n])
+            dd = abs(math.degrees(math.atan2(q[1] - p[1], q[0] - p[0])) % 180 - d0)
+            if (min(dd, 180 - dd) > FRONT_STRAIGHT_DEG and math.dist(p, q) >= ROAD_EDGE_MIN_M) or off(q) > FRONT_ONLINE_M:
+                break
+            extra += math.dist(p, q)
+            i = (i + step) % n
+        return extra
+    return round(L + walk(1) + walk(-1), 1)
+
+
 def _corner_bearing(r, side):
     return pixel_to_bearing(r["heading"], r["x1"] if side == "left" else r["x2"], r["W"], r["fov"])
 
@@ -360,5 +394,6 @@ def predict_positions(dets, area, buildings, street_lines, cfg, min_sep=MIN_SEP_
             pos = {"lat": b["lat"], "lon": b["lon"], "method": "footprint_centre", "n_cameras": 0,
                    "uncertainty_m": None, **base}
         pos["reason"] = reason
+        pos["front_wall_m"] = front_wall_length(poly, edge)          # P8: the frontage (the export's footprint.frontage_m)
         out[bid] = pos
     return out

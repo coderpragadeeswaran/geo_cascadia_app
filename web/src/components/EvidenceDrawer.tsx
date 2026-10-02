@@ -127,6 +127,10 @@ function BuildingBody({ b }: { b: Building }) {
   const at = b.attributes, reg = b.register
   const name = at?.name
   const use = at?.use?.value
+  // D51: frontage = the road-facing wall (export footprint.frontage_m); the outline's longest side is shown only as a note
+  const fw = detail.data?.front_wall
+  const frontage = b.footprint?.frontage_m ?? fw?.length_m ?? null
+  const longest = b.footprint?.longest_side_m ?? fw?.longest_side_m ?? null
   const title = name?.quality === 'good' && name.value ? name.value : `${useLabel(use) === 'Use not known' ? 'Building' : useLabel(use)} on ${b.street}`
   return (
     <>
@@ -138,7 +142,7 @@ function BuildingBody({ b }: { b: Building }) {
         <Section title="What we saw">
           <Row k="Use">{use ? <>{useLabel(use)}</> : <span className="ink3">Not known: no clear photo of the front</span>}</Row>
           <Row k="Floors">{at?.floors?.value != null ? floorsText(at.floors.value, at.floors.status) : <span className="ink3">Not known</span>}</Row>
-          <Row k="Front wall">{detail.data?.front_wall ? <>{fmt1.format(detail.data.front_wall.length_m)} m <span className="ink3">along the street, from the map outline</span></> : <span className="ink3">{detail.isPending ? '…' : 'Not known'}</span>}</Row>
+          <Row k="Frontage">{frontage != null ? <>{fmt1.format(frontage)} m <span className="ink3">along the street, from the map outline</span></> : <span className="ink3">{detail.isPending ? '…' : 'Not known'}</span>}</Row>
           <Row k="Sign">{name?.value ? <>{name.value}{name.quality !== 'good' && <span className="ink3"> (hard to read, to double-check)</span>}</> : <span className="ink3">No sign read</span>}</Row>
           {name?.google_confirmed && name.google_place_id && <Row k="Google Maps"><PlaceName id={name.google_place_id} /></Row>}
           <HowWeKnow summary={buildingSummary(b)} links={[{ page: 'trust', section: 'use', label: 'Use accuracy' }, { page: 'trust', section: 'floors', label: 'Floors accuracy' },
@@ -150,7 +154,7 @@ function BuildingBody({ b }: { b: Building }) {
             {!!at?.property_identifiers?.length && <Fact k="Door numbers">{at.property_identifiers.join(', ')} <span className="ink3">(not confirmed)</span></Fact>}
             <Fact k="Condition" hint="withheld"><span className="ink3">Not shown: our condition check was not accurate enough (see Trust)</span></Fact>
             {!!b.google_flags?.length && <Fact k="Google check">{b.google_flags.map(googleFlagPlain).join('. ')}.</Fact>}
-            {detail.data?.front_wall && <Fact k="Front wall" hint="OpenStreetMap outline">{fmt1.format(detail.data.front_wall.length_m)} m. Source: {detail.data.front_wall.source}.{detail.data.front_wall.rect_long_side_m != null && Math.abs(detail.data.front_wall.rect_long_side_m - detail.data.front_wall.length_m) >= 1 && <span className="ink3"> Not the same as the {fmt1.format(detail.data.front_wall.rect_long_side_m)} m “frontage” in the analysis file: {detail.data.front_wall.rect_note}.</span>}</Fact>}
+            {frontage != null && <Fact k="Frontage" hint="OpenStreetMap outline">{fmt1.format(frontage)} m. Source: {fw?.source ?? 'the road-facing wall of the OpenStreetMap outline'}.{longest != null && <span className="ink3"> Longest side of the outline: {fmt1.format(longest)} m ({fw?.longest_note ?? 'the longer side of its rotated rectangle, whichever way it faces; not the front'}).</span>}</Fact>}
             <Fact k="AI checks" hint="VLM calls">{plural(b.cost?.vlm_calls ?? 0, 'AI image check')}, {costText(b.cost?.vlm_calls ?? 0, b.cost?.vlm_usd) === 'cost not recorded' ? 'cost not recorded' : `cost ${costText(b.cost?.vlm_calls ?? 0, b.cost?.vlm_usd)}`}</Fact>
             <Fact k="Map position" hint="footprint centre"><span className="t-data">{b.lat.toFixed(5)}, {b.lon.toFixed(5)}</span>: the middle of the building outline on the map</Fact>
             <Fact k="ID"><span className="t-data">{b.id}</span></Fact>

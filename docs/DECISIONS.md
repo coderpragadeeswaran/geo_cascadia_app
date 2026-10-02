@@ -1755,3 +1755,27 @@ the crops it deletes, deletes any locked images one by one and warns if one is l
 
 Tests: `backend/tests/test_p8.py`; the D23 Tamil test now uses an unlisted word. Dev-only hook `window.__gcUi` (store) for
 `web/scripts/p8-shots.ts`, absent from the production build like `__gcMap`.
+
+### D51. Frontage = the road-facing wall; the old value is "longest side"; cost split on Routing and cost (P8 follow-up)
+**Frontage.** The pipeline's old `frontage_m` is the longer side of the outline's minimum rotated rectangle, whichever way
+it faces — not the front. Every place it was shown or used:
+- `export.json` `footprint.frontage_m` (all 7 areas) now holds the frontage = the road-facing wall + straight
+  continuations (`buildloc.front_wall_length`, moved from the backend into the pipeline so both share it); the old value
+  is `footprint.longest_side_m`; `frontage_source` says where it comes from. Applied from saved files only by
+  `tools/frontage_fix.py --write` (originals in `data/cache/p8fix_before/<slug>/`; nothing else in the files changed,
+  checked field by field; a second run changes nothing); the database was reloaded (row counts = meta.counts). Ratio
+  frontage / longest side, median: Ward 29 0.75 (< 0.6 for 119 of 381), Trichy 0.59 (35 of 66), Vadakku Masi Veethi 0.51
+  (28 of 49), Sanganur 0.70 (21 of 52), 3rd Street 0.68 (8 of 25), Kattabomman 0.76 (2 of 8), Tiruppur 0.32 (1 of 1).
+- Pipeline export (new live runs): `predict_positions` stores `front_wall_m`; `export.py` writes it as `frontage_m` and the
+  longest side as `longest_side_m`. Inside the pipeline (`plan` → `match` / `register` → `buildings.json`) the internal key
+  `frontage_m` keeps the longest side (renaming it would break resumed runs); no rule uses it. **Upload the rebuilt
+  `geo_cascadia_pkg_p7b.zip`** (worker cell unchanged in this follow-up).
+- Drawer: "Front wall" → **Frontage** (row and "How do we know?"); the longest side appears only as a labelled note.
+- Web schema (`types/export.ts`): `frontage_m` nullable, `longest_side_m` and `frontage_source` added.
+- Not shown or used anywhere else: the findings table, the question engine, `export.geojson`, the review-route export,
+  Hood, Trust and the run report never read it. "frontage" in sentences such as "photos face frontage with no building
+  outline" means the street front in general, not this value, and is unchanged.
+
+**Cost split.** Routing and cost opens with one line computed from the run: Ward 29 "This run cost about $10.01: Street
+View photos $9.94 (1,420 at Google's list price, 99%) and cloud AI (Nova Lite) $0.070 (0.7%). Floor counting is the
+largest AI cost; it isn't routed yet." The floors sentence appears only when floors is the run's largest cloud route.

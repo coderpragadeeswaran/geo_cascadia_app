@@ -58,7 +58,7 @@ async function main() {
   // its "How do we know?" with the front-wall source
   await page.locator('[aria-label=Evidence] button', { hasText: 'How do we know' }).nth(1).click().catch(() => {})
   await page.waitForTimeout(800)
-  await top(page, '[aria-label=Evidence]', 'Source: OpenStreetMap outline')
+  await top(page, '[aria-label=Evidence]', 'Longest side of the outline')
   await shot(page, 'd2-building-front-wall-source')
   // a recent building for comparison (photo date, no outdated note)
   await ui(page, 'select', { kind: 'building', id: 'w1252504515' }); await page.waitForTimeout(5000)

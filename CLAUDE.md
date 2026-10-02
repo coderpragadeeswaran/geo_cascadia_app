@@ -80,7 +80,7 @@ Top level: `meta`, `dashboard`, `buildings[]`, `assets[]`, `missing_asset_record
   `charts{building_use, floor_distribution, floors_status, asset_type, match_status, discrepancy_type,
   by_street{<street>:{buildings, no_record, discrepancy, streetlights, poles, gap_m_60}}}`, `cost_panel`, `streets[]`
 - `buildings[]`: `id` (OSM `w…`/`r…` or `ms_…`), `lat`, `lon`, `street`,
-  `footprint{source, osm_id, area_m2, frontage_m, depth_m, polygon_latlon[[lat,lon],…]}`,
+  `footprint{source, osm_id, area_m2, frontage_m (= the road-facing wall since D51), longest_side_m, frontage_source, depth_m, polygon_latlon[[lat,lon],…]}`,
   `attributes{use{value, route('tier1_local_clip'|'tier3_vlm'), validated}, property_identifiers[] (unverified),
   floors{value, status('measured'|'low_confidence'|'not_measured'), route, validated},
   name{value, quality('good'|'fragment'|'tamil_unverified'), route('tier2_ocr'|'tier3_vlm+ocr_gate'|'tier3_vlm_unverified'),

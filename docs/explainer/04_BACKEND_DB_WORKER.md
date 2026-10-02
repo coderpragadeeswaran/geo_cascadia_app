@@ -65,7 +65,8 @@ FastAPI app `backend/app/main.py` (start: `backend\.venv\Scripts\python -m uvico
 P8 endpoints: `GET /areas/{slug}/imagery` (capture-month range and per-object `{date, newest, outdated}`, `backend/app/imagery.py`);
 `GET /areas/{slug}/hood` adds `routing` (`backend/app/routing.py`: per-route counts, tokens × the pipeline's Nova Lite prices,
 median `lat_s`, with status measured / derived / estimate / not recorded) and `imagery`; `GET /buildings/{area}/{id}` adds
-`front_wall` (`backend/app/frontwall.py`, the pipeline's `buildloc.road_facing_edge` + straight continuations); evidence
+`front_wall` (`backend/app/frontwall.py`, the pipeline's `buildloc.road_facing_edge` + `front_wall_length`). Since D51
+`export.json` `footprint.frontage_m` is that frontage and the old value is `footprint.longest_side_m` (`tools/frontage_fix.py`); evidence
 views carry `date`. `tools/review_route.py <slug>` writes the waiting review items as an ordered walking route
 (`data/exports/review_route_<slug>.csv / .geojson`; nearest neighbour + 2-opt, straight lines).
 

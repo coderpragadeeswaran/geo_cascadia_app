@@ -88,6 +88,8 @@ def building_register(area, plan):
         sides = [math.dist((xs[i], ys[i]), (xs[i + 1], ys[i + 1])) for i in range(4)]
         out.append({"building_id": fid, "footprint_source": area.fp_source[area.idx_of[fid]],
                     "lat": round(lat, 7), "lon": round(lon, 7),
+                    # NB "frontage_m" here is the outline's LONGEST SIDE (internal name kept for saved runs); the export
+                    # writes it as footprint.longest_side_m and the real frontage (road-facing wall) as frontage_m (D51)
                     "area_m2": round(poly.area, 1), "frontage_m": round(max(sides[0], sides[1]), 1),
                     "depth_m": round(min(sides[0], sides[1]), 1), "street": st[0],
                     "dist_to_street_m": round(st[1].distance(c), 1), "n_views": len(views),
