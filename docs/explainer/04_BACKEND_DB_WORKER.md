@@ -62,6 +62,13 @@ FastAPI app `backend/app/main.py` (start: `backend\.venv\Scripts\python -m uvico
 
 🔑 = needs the `X-Worker-Token` header (compared in constant time; missing or wrong → 401; not configured → 503).
 
+P8 endpoints: `GET /areas/{slug}/imagery` (capture-month range and per-object `{date, newest, outdated}`, `backend/app/imagery.py`);
+`GET /areas/{slug}/hood` adds `routing` (`backend/app/routing.py`: per-route counts, tokens × the pipeline's Nova Lite prices,
+median `lat_s`, with status measured / derived / estimate / not recorded) and `imagery`; `GET /buildings/{area}/{id}` adds
+`front_wall` (`backend/app/frontwall.py`, the pipeline's `buildloc.road_facing_edge` + straight continuations); evidence
+views carry `date`. `tools/review_route.py <slug>` writes the waiting review items as an ordered walking route
+(`data/exports/review_route_<slug>.csv / .geojson`; nearest neighbour + 2-opt, straight lines).
+
 ### 11.2 How errors reach the browser
 - **Offline:** writes → **503** `{"detail": "offline data mode — read only", "offline": true}`; the UI says "Offline — read-only. Nothing was saved."
 - **Validation:** 422 with a plain message ("an appeal needs a note", "a reviewer name is needed", "give {lat, lon} or {polygon}").
@@ -333,7 +340,7 @@ A trigger `review_events_no_change` refuses every UPDATE and DELETE.
 | `data/cache/` | Overpass answers (`overpass_cache/`, `p45_overpass/`), Microsoft tiles (`ms_cache/`), picker answers (`streetpick/overpass`, `picks2/`, `google_route/`), the pre-P7a files (`p7a_before/<slug>/`) | — |
 | `data/registers/` | imported real registers, normalised (`tools/import_register.py`) | — |
 | **Google Drive** (worker account) | the pipeline package, weights, floor examples, router; per-job progress `MyDrive/gc_worker_jobs/<job id>/` while a job is unfinished | `training_runs/v8s_640_s2/weights/best.pt` |
-| **Colab session** | the working folder `gc_jobs/<slug>`, sign crops, building crops; keys in memory only | — |
+| **Colab session** | the working folder `gc_jobs/<slug>`, sign crops, building crops; keys in memory only. `forget()` deletes the folder (and its Drive copy) once the result is delivered, prints "deleted N Street View photo crops (X MB)" and checks none is left (P8). Kept only for a retryable failure or expired keys (Retry / resume reuse them) | — |
 | **Browser `localStorage`** | preferences: area, Night/Daylight, 3D switch, layer toggles, minimap, reviewer name (keys `gc.*`) | reviewer "PRAGA" |
 | **Browser `sessionStorage`** | small session state (e.g. the lights-on intro) | — |
 | **API process memory** | which workers were seen in the last 45 s; cached area bundles | — |
@@ -351,7 +358,7 @@ A trigger `review_events_no_change` refuses every UPDATE and DELETE.
 - **Colab (T4 GPU):**
   - **S0** installs the pipeline package from the newest zip in `/MyDrive/alldataset` (it deletes `geo_cascadia_pkg/` there
     first, then extracts). The zip's entries must be `geo_cascadia_pkg/geo_cascadia/<file>.py`. Build it with
-    `backend\.venv\Scripts\python tools\build_pkg_zip.py` (writes `geo_cascadia_pkg_p7a.zip` at the repo root: every `.py` of
+    `backend\.venv\Scripts\python tools\build_pkg_zip.py` (writes `geo_cascadia_pkg_p7b.zip` at the repo root: every `.py` of
     `pipeline/geo_cascadia`, no `__pycache__`, entry names checked), then upload it to `/MyDrive/alldataset`. The worker
     refuses an older package copy.
   - **S1a** installs dependencies, with these fixes:
@@ -503,6 +510,16 @@ stateDiagram-v2
 ### 12.6 Testing without Colab
 `worker/fake_worker.py` claims a job as a **test** job and replays a saved area with fake progress (Tiruppur in about 40 s). `--simulate needs-approval | expired | no-street-view | die`. The area is named "<street> (test)" and Hood says it is a replay. "Clear test jobs" removes it.
 
+**Street View imagery on disk (P8 inventory, 2 Oct 2026).** Google's terms allow no stored copies outside its APIs.
+| Where | Images | Size | What |
+|---|---|---|---|
+| `data/` (areas, cache, model card) | **0** | — | only derived JSON (boxes, text, positions, capture months); `data/cache/` is Overpass / picker / planner JSON |
+| Colab `gc_jobs/<slug>/crops_signboard`, `crops_building` | per running job (Ward 29: 2,065 sign + 266 building crops) | — | deleted after delivery (`forget`); full photos stay in memory (`detect.py`) |
+| Drive `MyDrive/gc_worker_jobs/<job id>/` | per unfinished / failed job | — | deleted on delivery, cancel, or at worker start when the job can't continue (`prune_drive`) |
+| Drive `MyDrive/alldataset` (notebook era) | not visible from the laptop | ? | the owner checks: notebook-era crops / views, the floor-example photos (`floors_shots`) |
+| `docs/screenshots/` (git-ignored, laptop only) | 92 PNG (+26 P8) | 41 MB (+P8) | app screenshots; those of the evidence drawer, Review, Drive and the tour's building step show Street View photos |
+| Repository / git history | 0 | — | screenshots and caches are git-ignored |
+
 ---
 
 ## 13. Costs and performance
@@ -513,7 +530,8 @@ stateDiagram-v2
 |---|---|---|
 | Street View photo | $0.007 each | model_card |
 | **Ward 29 full run (the real one)** | **11.5 min on a T4 · 1,420 photos ≈ $9.94 · cloud AI $0.0887** | owner's fresh run, 28 Sep 2026, router on (D41) |
-| Ward 29 cloud AI benchmark, with / without the local router | $0.056 / $0.089 | model_card (earlier measurement) |
+| Ward 29 cloud AI, with / without the local router | model_card $0.056 (339 calls) / $0.089 (782); **like for like $0.0702 (589) / $0.0889 (782)** | model_card; recount `backend/app/routing.py` (D50) |
+| Ward 29 cloud model on every photo | ≈ $0.112 (1,154 × $0.000097, ~7.5 min of calls) — an estimate | `routing.py` `every_view` |
 | Ward 29 names: routed vs cloud on every photo | $0.0079 vs $0.105 | model_card |
 | Ward 29 photos as Under the Hood counts them (since P7.2) | 1,154 views + 266 building photos = 1,420 × $0.007 ≈ $9.94, captioned "at Google's list price — Google's free monthly allowance may cover it" (P7 R3) | computed from the run files |
 | Ward 29 photos, full run incl. building crops | 1,154 + 266 = 1,420: the run files agree with the owner's count | computed |

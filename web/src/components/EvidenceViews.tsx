@@ -6,7 +6,7 @@ import { Rotate3d } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useConfig, useEvidence } from '@/api/queries'
 import type { EvidenceBox, EvidenceViewData } from '@/api/types'
-import { cn, plural } from '@/lib/utils'
+import { cn, monthText, monthsAgo, OLD_PHOTO_MONTHS, plural } from '@/lib/utils'
 import { useUi } from '@/store/ui'
 import { Crosshair, EvidencePhoto } from './EvidencePhoto'
 import { Fact, HowWeKnow } from './HowWeKnow'
@@ -94,6 +94,7 @@ export function EvidenceViews({ kind, id, at, target }: {
       {v.user_note ? <p className="t-small ink2 mt-1.5">{v.user_note}</p>
         : v.target === 'none' && <p className="t-small ink3 mt-1.5">No box for this {kind === 'asset' ? 'object' : 'building'} in this view.</p>}
       <div className="mt-2 flex flex-wrap items-center gap-1">
+        <PhotoDate date={v.date} />
         {(views?.length ?? 0) > 1 && views!.map((x, k) => (
           <button key={x.key} onClick={() => setI(k)} aria-pressed={k === i} className="btn h-7">{x.label}</button>
         ))}
@@ -119,8 +120,23 @@ export function EvidenceViews({ kind, id, at, target }: {
             : 'No detector results are stored for this photo.'}</Fact>
         {v.target === 'box' && v.aim_offset_deg != null && <Fact k="Which box">The box closest to where the camera was aimed: {v.aim_offset_deg}° from the middle of the photo</Fact>}
         {v.note && !(v.source === 'projected' && v.target === 'box') && <Fact k="Note">{v.note}</Fact>}
+        <Fact k="Taken" hint="panorama capture month (Google)">{monthText(v.date) ?? 'Date not stored for this photo'}</Fact>
         <Fact k="Photo ID" hint="Street View panorama"><span className="t-data">{v.pano_id}</span></Fact>
       </HowWeKnow>
     </div>
+  )
+}
+
+/** P8: "Photo from Mar 2023": Google's capture month of this panorama (stored by the analysis, nothing fetched). Older
+ *  than three years is said plainly, because the street may have changed since. */
+export function PhotoDate({ date }: { date?: string | null }) {
+  const t = monthText(date)
+  if (!t) return null
+  const old = (monthsAgo(date) ?? 0) > OLD_PHOTO_MONTHS
+  return (
+    <span className="tag mr-1" title={old ? 'Taken more than 3 years ago: the street may have changed since' : 'When Google took this photo'}
+      style={old ? { color: 'var(--ns-sodium)', boxShadow: 'inset 0 0 0 1px var(--ns-sodium)' } : undefined}>
+      Photo from {t}{old ? ' · over 3 years old' : ''}
+    </span>
   )
 }

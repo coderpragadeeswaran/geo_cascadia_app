@@ -1683,3 +1683,75 @@ themes (`web/scripts/tour-shots.ts`, every step screenshotted).
 IPv6; the fallback table; tests), `worker/colab_setup_cells.md` (each cell described; the exact S0 / S1a / S1ba / S1bb
 text marked "PASTE CELL HERE"), CLAUDE.md, DESIGN.md (Hood chapters, tour, states), the pages document, and the
 explainer (§13.3 estimate, §13.4 memory, §18, appendices) brought up to date.
+
+## 2026-10-02 — P8 (review fixes)
+
+### D50. Cloud-AI cost recount, Routing and cost, photo dates, possible dark stretches, front wall, Tamil, imagery storage
+**1. Why "$0.0887" ≈ "$0.089 without the router" (answer).** A miscount in the model card's *with-router* figure, plus one
+real effect. Recounted from Ward 29's saved calls (`backend/app/routing.py`; tokens × the pipeline's Nova Lite prices):
+- The model card's **$0.056 / 339 calls** is `meta.run.vlm_cost_usd / vlm_calls` of a **resumed** run: 339 = 73 use calls +
+  266 floors calls. The 166 name checks and 84 business-sign checks were re-used from saved files and not counted.
+- Its **$0.089 / 782 calls** counts all four kinds with every building's use in the cloud: 266 + 266 + 166 + 84 = 782. The
+  recount gives **$0.0889** — the model card's number, reproduced.
+- **Like for like with the router: 589 calls, $0.0702** (use $0.0071 measured, floors $0.0493 derived = run counter −
+  use calls, names $0.0091 measured, business signs $0.0046 estimated at the name check's per-call cost; same prompt).
+- Real effect: the router skips 193 use calls (25% of calls) but saves only ≈ $0.019 (21%): a use call costs ≈ $0.000097,
+  while the floors call (two solved examples + the photo, ≈ $0.000185) is 70% of the bill and runs for every building.
+- Cross-check: Vadakku Masi Veethi (a full live run) — its counter (123 calls, $0.0134) equals the recount; floors call
+  measured $0.000187, use $0.000098, names $0.000055.
+- **The fresh 28 Sep run ($0.0887, "router on")** matches the no-router figure (+ ≈ 190 use calls). Likeliest cause: the router
+  file was not found, and `run_area` silently sent every building to the cloud. **Fix (pipeline, logging only):** a warning
+  and `meta.run.use_router` ("local" / "off: file not found (…)" / "off: not configured"). Not confirmed: that run's files are
+  not in the repository. model_card.json is not edited; Trust › Stored vs computed lists both model-card rows with the
+  recount, and the "every building to the VLM → router" experiment notes that 339 is not like for like. Hood's Ward 29
+  cloud-AI line is the recount; a resumed live run's line uses the recount too (its counter covers only the last part).
+- Worker estimate constant `VLM_USD_PER_BUILDING` 0.056/381 → 0.0702/381 (used only when a job carries no rates).
+
+**2. Under the Hood › Routing and cost** (new section, all areas): per task (detect · signs · use · floors · business
+signs) the local and cloud routes with count, time per call (median `lat_s`; detector 17 ms/photo on a T4 from the model
+card; local OCR / CLIP time not measured) and $ with its status (measured / derived / estimate / not recorded). Three
+totals: as run, no local router, and **cloud model on every photo = an estimate** (1,154 planned photos × the measured
+one-photo use call, $0.000097 → $0.112, ~7.5 min of calls 4 at a time), next to the model card's measured whole-photo
+names test (n=16: $0.105 vs $0.0079, 56% = 56%). Accuracy, both n=31 from the model card: use 90% cloud only / 94% local
+only / 90% routed; names 65% / 71% OCR only / 74% routed. Trichy and Tiruppur stored no floors tokens and have no
+covering counter: their total is "not recorded" (the known parts are shown).
+
+**3. Photo dates.** `panos.json` already stores each panorama's capture month (all 7 areas, every panorama). Nothing
+fetched. `GET /areas/{slug}/imagery` (`imagery.py`) and `date` on every evidence view. Drawer/Review badge "Photo from
+Nov 2022" (orange "· over 3 years old" past 36 months). A *not in register* building, an *unrecorded* pole/light, a
+*register entry not seen* or a *dark stretch* whose **newest** photo (own evidence; for stretches and entries, camera
+stops within 30 m) is older than 36 months gets "Imagery may be outdated". Ward 29 (as of Oct 2026, cutoff 2023-10):
+photos Jun 2018 – Feb 2026, 40 of 203 camera positions older; flagged 4 buildings, 4 poles/lights, 1 stretch, 1 entry.
+Hood coverage card and Compare show each area's range.
+
+**4. "Possible dark stretch"** everywhere a user reads it (key number, list, card, hover card, layer, key, drive, query
+chip, tour, Hood, Jobs, Trust card title). The list, the drawer card and the hover card quote the lamp-head recall from
+the model card (43%, n=49); Trust's card says "the app calls it a possible dark stretch".
+
+**5. Front wall** in the building drawer: length of the outline's road-facing edge (`buildloc.road_facing_edge`, the
+same wall as the Gate 1 position) plus straight continuations (≤ 12°, ≤ 0.6 m off its line; jogs < 1 m only need to stay
+on the line), source in "How do we know?" (`GET /buildings/{area}/{id}` → `front_wall`). The export's
+`footprint.frontage_m` is the longer side of the outline's rotated rectangle, whichever way it faces — not the front:
+in Ward 29 the street-facing wall is < 60% of it for 119 of 381 buildings. Shown as a note when they differ ≥ 1 m.
+
+**6. Tamil questions** (`queryparse.tamil`, run before the English rules; table in docs/QUERY.md). Stems for shop,
+commercial, building, house, residential, pole, light, street, road, floor, register, unmatched, discrepancy, review,
+Google, chart, count, show…; phrases for Tamil word order (N மாடி… மேல் = more than N floors; பதிவேட்டில் இல்லாத = no
+record; விளக்கு இல்லாத = no streetlight; 60 மீட்டருக்குள் = within 60 m; தெரு வாரியாக = by street; குறைந்த நம்பக… =
+low confidence). இல் only as a whole word (never swallows இல்லாத). Tested live and in pytest: the four spec questions +
+"poles on Sathy Main Road" in Tamil = the English filters and row counts, status ok, nothing ignored. Unknown Tamil words
+(e.g. மரங்கள்) are still "ignored".
+
+**7. Street View imagery stored (inventory, 2 Oct).** `data/` 0 images (derived JSON only); git 0 (screenshots and caches
+git-ignored); `docs/screenshots/` 92 PNG / 41 MB before P8 (+26 P8 shots), local only — evidence drawer, Review, Drive and
+tour-building shots contain Street View photos; Colab `gc_jobs/<slug>/crops_*` and Drive `gc_worker_jobs/<job>` hold crops
+only while a job is unfinished or retryable; Drive `alldataset` (notebook era, floor examples) not visible from the
+laptop — owner to check. The worker already deleted the job folder after delivery (P6); now `forget()` counts and reports
+the crops it deletes, deletes any locked images one by one and warns if one is left. Nothing existing was deleted.
+**Re-paste the worker cell; upload `geo_cascadia_pkg_p7b.zip`** (run_area change).
+
+**8. Review route** (`tools/review_route.py`): the 218 waiting Ward 29 items as one walking order (nearest neighbour +
+2-opt, straight lines: 6,628 m) → `data/exports/review_route_ward29.csv / .geojson` (git-ignored, regenerable).
+
+Tests: `backend/tests/test_p8.py`; the D23 Tamil test now uses an unlisted word. Dev-only hook `window.__gcUi` (store) for
+`web/scripts/p8-shots.ts`, absent from the production build like `__gcMap`.

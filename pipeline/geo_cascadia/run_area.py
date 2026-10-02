@@ -120,6 +120,11 @@ def run_area(polygon, out_dir, cfg=None, area_name="area", street_filter=None, p
     if cfg.use_router_path and os.path.exists(cfg.use_router_path):
         from .localuse import UseRouter
         router = UseRouter(cfg.use_router_path, cfg.device)
+    elif cfg.use_router_path:
+        # P8: this used to fall back silently, so a run "with the router" could send every building to the cloud model
+        print(f"WARNING: use router not found at {cfg.use_router_path}: building use goes to the cloud model for every building")
+    use_router = ("local" if router is not None else
+                  f"off: file not found ({os.path.basename(cfg.use_router_path)})" if cfg.use_router_path else "off: not configured")
     vbld, shots_ok = run_building_attrs(views, sv, vlm, cfg, out_dir, progress, router=router)
     final = finalize_buildings(buildings, ocr_res, ocr_names, vnames, vbld, cfg)
     # D32: a building whose use is still unknown but has a readable business sign is commercial (rule, no model call)
@@ -174,7 +179,7 @@ def run_area(polygon, out_dir, cfg=None, area_name="area", street_filter=None, p
                  "ocr_mode": ocr_stats["mode"], "ocr_sec_per_crop": ocr_stats["sec_per_crop"],
                  "buildings_use_local": sum((b.get("vlm") or {}).get("use_route") == "tier1_local_clip" for b in vbld),
                  "buildings_use_vlm": sum((b.get("vlm") or {}).get("use_route", "tier3_vlm") == "tier3_vlm" for b in vbld if "vlm" in b),
-                 "buildings_use_sign": sign_use_stats["filled"],
+                 "buildings_use_sign": sign_use_stats["filled"], "use_router": use_router,
                  "vlm_calls": vlm.calls, "vlm_cost_usd": round(vlm.cost(), 4), "places_calls": pstats["places_calls"],
                  "device": cfg.device, "floors_examples_found": shots_ok, "stage_seconds": T,
                  "total_minutes": round((time.time() - t0) / 60, 1),

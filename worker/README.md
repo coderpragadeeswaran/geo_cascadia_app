@@ -37,7 +37,7 @@ stops at once and says so.
   `geo_cascadia_pkg/geo_cascadia/<file>.py`. Build it from the repo root and upload the file to `/MyDrive/alldataset`
   (S0 picks the newest zip):
   ```powershell
-  backend\.venv\Scripts\python tools\build_pkg_zip.py     # writes geo_cascadia_pkg_p7a.zip and checks every entry name
+  backend\.venv\Scripts\python tools\build_pkg_zip.py     # writes geo_cascadia_pkg_p7b.zip and checks every entry name
   ```
   It contains every `.py` file of `pipeline/geo_cascadia` (no `__pycache__`), and the tool fails if any entry is not
   under `geo_cascadia_pkg/geo_cascadia/`. Then restart the runtime and run S0, S1a, S1ba and S1bb again.

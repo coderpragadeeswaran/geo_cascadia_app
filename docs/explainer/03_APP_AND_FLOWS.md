@@ -145,6 +145,12 @@ sequenceDiagram
   5. Compare with openstreetmap.org around the same street.
 - **Honest limit:** the app answers "what's wrong along *these* streets", not "every building in the ward".
 
+### 10.5b Photo dates, front wall and old imagery (P8)
+- **Every evidence photo** (Explore drawer, Review) carries a badge **"Photo from Nov 2022"**: Google's capture month of that panorama, which the analysis stored; nothing is fetched. Older than 3 years, it reads "· over 3 years old" in orange.
+- **"Imagery may be outdated"**: a *not in the register* building, a pole or light *not in the register*, a *register entry not seen* or a *possible dark stretch* whose **newest** photo is more than 3 years old gets this note at the top of its drawer (the street may have changed since). Ward 29: 4 buildings, 4 poles/lights, 1 dark stretch, 1 register entry.
+- **Front wall** in "What we saw": the length of the building's street-facing wall on the OpenStreetMap outline (the same wall whose centre is the building's position), with its source in "How do we know?". It differs from the analysis file's "frontage" figure, which is the longer side of the outline's rectangle whichever way it faces (for 119 of Ward 29's 381 buildings the wall is under 60% of that figure).
+- **Under the Hood › Coverage** says when the photos were taken ("Jun 2018 to Feb 2026 · 40 camera positions of 203 with photos more than 3 years old"); Compare shows each area's range.
+
 ### 10.6 Poles, streetlights and dark stretches on the map
 - **"The photo shows 4 poles close together but the map has 1."** This is expected; see asset-0160 ([§7.11](02_PIPELINE_AND_ACCURACY.md#711-asset-positions-and-pole-merging)).
   - Each pole box becomes a point from its direction and base-to-ground distance.
@@ -236,7 +242,8 @@ Each sentence is clickable (KPI filter or Review).
 
 - The spec wording ("Show commercial buildings with more than two visible floors that do not have a matching property record") parses to the same chips.
 - Other intervals work: "…within 100 m" gives 7 stretches, labelled "computed by the app with the pipeline's method".
-- If a word is not understood (e.g. Tamil "கடைகள்"), the panel says "partly understood", lists the ignored word, offers close questions, and **applies nothing** until you accept or edit the chips.
+- **Tamil works for the main words (P8):** shop, building, house, pole, light, street, floors, register, review, chart, "not in the register", "more than two floors", "within 60 m", "by street" (e.g. "பதிவேட்டில் இல்லாத கடைகள்" = shops not in the register). The four spec questions and "poles on Sathy Main Road" asked in Tamil give exactly the same answer as in English.
+- If a word is not understood (e.g. Tamil "மரங்கள்", trees), the panel says "partly understood", lists the ignored word, offers close questions, and **applies nothing** until you accept or edit the chips.
 - Loose street names work: "sathy road" → Sathy Main Road.
 - An object ID typed in the bar (e.g. w1252504945) opens that object.
 
@@ -250,7 +257,7 @@ Each sentence is clickable (KPI filter or Review).
 - **Pole / streetlight:** photos "Camera 1, 2…" re-aimed at the asset (fov 60°). For a single-camera asset the position line reads "Approximate: about ±2.4 m (one camera, 4 m away)" (D45). Boxes are **projected** from the same panorama's planned photos; the pole box nearest the aimed direction (≤ 6°, lamp ≤ 12°) is "This pole". Then "Pinpointed: seen from N camera positions" or "Approximate: seen from one camera position", the register line, How do we know? ("Found 7 times in the photos… About ±2.4 m: one camera, 4 m away. At that distance, 8 in 10 single-camera estimates of poles that two cameras pinpointed were within 2.4 m (a consistency check)." For a pole more than 8 m away: "About ±5 m… An earlier surveyed check found a typical error of 4.55 m for poles 8–15 m from the camera, so about half of such poles fall inside this circle."), and a mini-map with lines of sight.
 - **Business with no analysed building:** the sign photo, and either "A shop sign was read here, on a building outline that is not one of the analysed buildings…" (placed where the sign's line of sight meets that outline) or "…OpenStreetMap has no building outline at this spot…" (about 12 m along the camera's line of sight). Seen in N photos.
 - **In the register, not seen:** "The register lists a pole or light here (EB-G01), but none was seen in the photos within 25 m" (synthetic).
-- **Dark stretch:** "376 m of Sathy Main Road has no visible streetlight. 22 poles stand here, but no lamp was seen on them." Plus the "check" note where relevant, and recorded vs along-road length.
+- **Possible dark stretch (P8 wording):** "376 m of Sathy Main Road has no visible streetlight. Possible, not certain: the detector finds about 43% of lamp heads in a photo (checked by hand on 49 lamps). 22 poles stand here, but no lamp was seen on them." Plus the "check" note where relevant, and recorded vs along-road length.
 
 **Drive the street** (D20; the server sends the street's camera stops in driving order):
 - A scrubber moves through the pipeline's **real camera stops** in driving order (strictly forward, per branch).
@@ -354,12 +361,12 @@ sequenceDiagram
 ### 10.12 Trust (For anyone digging deeper)
 Sections (sticky navigation), every number quoted from the model card with where it sits in it, and "Source: the team's model card, checked by hand on n examples":
 
-1. **What each result is worth**: cards: Building use (routed 90% of 31, same as cloud-only, 92% of 12 in Trichy); Number of floors (61% exact of 36, 100% within one; plain prompt 42%); Shop names (74% of 31 vs 65% all-cloud); **Building use from a shop sign** (accuracy "not measured"; known limits: posters such as "FOOTBALL COACHING", OCR garble; spot-check planned); Streetlight seen / not seen (43% of lamp heads found, n=49, "a dark stretch means no streetlight was seen, not proof there is none"); Building position (status "not verified").
+1. **What each result is worth**: cards: Building use (routed 90% of 31, same as cloud-only, 92% of 12 in Trichy); Number of floors (61% exact of 36, 100% within one; plain prompt 42%); Shop names (74% of 31 vs 65% all-cloud); **Building use from a shop sign** (accuracy "not measured"; known limits: posters such as "FOOTBALL COACHING", OCR garble; spot-check planned); Possible dark stretches (streetlight seen / not seen: 43% of lamp heads found, n=49, "a possible dark stretch: no streetlight was seen, not proof there is none"); Building position (status "not verified").
 2. **Tried and dropped**: lanes Detector (v8n replaced, v8s production, YOLO26n tried, YOLO26s rejected), Floors (plain replaced; 3-example, zoom re-shoot, v4 rejected), Building use (Google Places type rejected; every building to the cloud replaced), Shop names (every photo to the cloud rejected; cloud-only names rejected), Streetlights (cloud lamp check rejected), Withheld (condition, door numbers).
 3. **Detector · YOLOv8s**: per-class precision/recall with n, benchmark chart.
 4. **Positions of poles and streetlights**: synthetic error, camera check, pin-noise stress, and the **single-camera error by distance** table (D45: camera-to-pole band, n, median, 8 in 10 within, the surveyed check's median, and the circle the map draws with which of the two it came from). The notes say the consistency check leans small, and that beyond 8 m the circle is the surveyed median, so about half of those poles fall inside it.
 5. **Register tests: planted mistakes and pairing by location** (D42/D43, computed): caught / missed / false alarms per planted kind for all areas together, how many records paired with their own building (530 of 538; moved pins 18 of 26), and a per-area table. Note: "This tests the comparison logic end to end on made-up data; real accuracy needs a real register." Then **Register matching (planted errors, notebook era)** from the model card.
-6. **Cost and accuracy: routed vs all-cloud** (§10 test 6): use $0.056 vs $0.089 at 0.89 accuracy; names $0.0079 vs $0.105.
+6. **Cost and accuracy: routed vs all-cloud** (§10 test 6): model card use $0.056 vs $0.089 at 0.89 accuracy (the $0.056 leaves out the name and business-sign checks; like for like $0.070, Under the Hood › Routing and cost and Trust › Stored vs computed); names $0.0079 vs $0.105.
 7. **Stored vs computed**: every mismatch ([§9.4](02_PIPELINE_AND_ACCURACY.md#94-stored-vs-computed-corrections-trust--stored-vs-computed-d2-d29)) with a jump link.
 8. **Gap length checks**: recorded vs along-road lengths.
 9. **Limits of this data**: use not classified, low OSM coverage, single-camera positions, lamps can't be judged working, synthetic registers.

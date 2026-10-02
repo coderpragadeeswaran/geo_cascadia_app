@@ -20,6 +20,8 @@ from collections import Counter, defaultdict
 
 from .evidence import view_key
 from .minimap import street_lines
+from .imagery import imagery
+from .routing import routing
 
 RESUMED_BADGE = "resumed run, not representative"
 TIER = {-1: "skipped", 0: "watermark", 1: "no_text", 2: "ocr", 3: "vlm"}
@@ -48,7 +50,7 @@ def _slug_key(s):
 class RunFiles:
     """The run files of each area, loaded once per file change (small slices only)."""
     NAMES = ("panos", "plan", "plan_anomalies", "_views_done", "detections", "ocr", "building_views", "vlm_unmapped",
-             "live_run", "sign_links")
+             "live_run", "sign_links", "vlm_buildings", "vlm_names")
 
     def __init__(self, areas_dir):
         self.dir = areas_dir
@@ -396,7 +398,7 @@ def story(n, verdict, stored):
     return out
 
 
-def cost(bundle, n, model_card, live_run=None):
+def cost(bundle, n, model_card, live_run=None, rt=None):
     """D1: the stored runs' timings and cost counters are from resumed runs. What can be stated: model_card figures
     (Ward 29; Trichy's VLM spend), and counts from the records (VLM calls per building; calls with no recorded cost)."""
     run = bundle["meta"].get("run") or {}
@@ -420,6 +422,10 @@ def cost(bundle, n, model_card, live_run=None):
         lines = [
             {"key": "street_view", "label": "Street View photos", "value": round(sv * price, 2) if price else None,
              "detail": f"{sv:,} photos × ${price} per image", "source": "run counter × model_card price", "status": "measured"},
+            # P8: a resumed run's counter covers only the last part; the run's cloud-call files cover every call
+            {"key": "vlm", "label": "Cloud AI calls", "value": rt["totals"]["usd"], "detail": f"{rt['totals']['calls']:,} calls",
+             "source": "computed from this run's cloud-call files (the run counter covers only the last part)", "status": "computed"}
+            if resumed and rt and rt["totals"]["usd"] is not None else
             {"key": "vlm", "label": "Cloud AI calls", "value": run.get("vlm_cost_usd"),
              "detail": f"{run.get('vlm_calls') or 0:,} calls", "source": "run counter", "status": "measured"},
             {"key": "places", "label": "Google look-ups", "value": None,
@@ -442,12 +448,19 @@ def cost(bundle, n, model_card, live_run=None):
                     f"{n['building_photos']:,} building photos for use and floors (reliable rows of building_views.json) = "
                     f"{n['photos_fetched']:,} photos, × ${price} per image (model card)"),
          "status": "computed" if price else "not recorded"},
-        {"key": "vlm", "label": "Vision-language model (VLM) calls",
-         "value": ct.get("ward29_vlm_usd_with_router") if ward else gen.get("vlm_usd"),
-         "detail": ("with the local router; without it $" + str(ct.get("ward29_vlm_usd_without_router"))) if ward else
-                   ("Trichy run" if gen.get("vlm_usd") is not None else "cost not recorded"),
-         "source": "model_card.cost_time" if ward else ("model_card.generalisation" if gen.get("vlm_usd") is not None else None),
-         "status": "model_card" if (ward or gen.get("vlm_usd") is not None) else "not recorded"},
+        # P8: the run files' own calls (tokens × price), like for like; model_card's Ward 29 "$0.056 with router" counts
+        # only the use + floors calls of a resumed run (routing.py), so it is no longer the headline
+        ({"key": "vlm", "label": "Vision-language model (VLM) calls", "value": rt["totals"]["usd"],
+          "detail": f"{rt['totals']['calls']:,} calls with the local router ({rt['totals']['status']}); every building's use to the "
+                    f"cloud model too: ${(rt.get('all_cloud') or {}).get('usd')}",
+          "source": "computed from this run's cloud-call files (see Routing and cost)", "status": "computed"}
+         if rt and rt["totals"]["usd"] is not None else
+         {"key": "vlm", "label": "Vision-language model (VLM) calls",
+          "value": ct.get("ward29_vlm_usd_with_router") if ward else gen.get("vlm_usd"),
+          "detail": ("with the local router; without it $" + str(ct.get("ward29_vlm_usd_without_router"))) if ward else
+                    ("Trichy run" if gen.get("vlm_usd") is not None else "cost not recorded"),
+          "source": "model_card.cost_time" if ward else ("model_card.generalisation" if gen.get("vlm_usd") is not None else None),
+          "status": "model_card" if (ward or gen.get("vlm_usd") is not None) else "not recorded"}),
         {"key": "places", "label": "Google Places look-ups", "value": None, "detail": "cost not recorded",
          "source": None, "status": "not recorded"},
     ]
@@ -469,6 +482,7 @@ def hood(bundle, F, model_card=None):
     share = round(n["views_unmapped"] / n["views"], 3) if n["views"] else None
     stored_story = (bundle.get("run_report") or {}).get("story") or []
     st = story(n, verdict, stored_story)
+    rt = routing(bundle, F, n, model_card)
     return {"area": bundle["slug"], "name": bundle["name"], "files": F.get("present", []), "n": n, "src": src,
             "pipeline": bundle["meta"].get("pipeline") or {}, "live": bool(bundle.get("live")),
             "coverage": {"level": "full" if (verdict or "").startswith("full") else "partial" if verdict else None,
@@ -479,7 +493,8 @@ def hood(bundle, F, model_card=None):
                        "names": {"ocr": n["name_route_tier2_ocr"], "vlm_gate": n["name_route_tier3_vlm_ocr_gate"],
                                  "vlm_only": n["name_route_tier3_vlm_unverified"]}},
             "streets": per_street(bundle, F), "story": st,
-            "corrections": [s for s in st if s["changed"]], "cost": cost(bundle, n, model_card, F.get("live_run"))}
+            "corrections": [s for s in st if s["changed"]], "cost": cost(bundle, n, model_card, F.get("live_run"), rt), "routing": rt,
+            "imagery": imagery(bundle, F)["summary"]}
 
 
 # ------------------------------------------------------------------------------------------------------ examples

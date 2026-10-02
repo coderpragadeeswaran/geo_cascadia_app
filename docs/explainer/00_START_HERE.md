@@ -84,7 +84,8 @@ Section numbers ([§1](#1-one-page-summary)…[§18](05_EXPLAIN_AND_DEFEND.md#18
 | Single-camera poles and streetlights: circle within 8 m of the camera / farther | 132 at ±2.4 m / 116 at ±5 m | the area's results (D45) |
 | Building position vs OSM front-wall centre (Gate 1, the fair number) | median **2.8 m**, **60.4%** within 3.5 m, n=260 | model card, Gate 1 position |
 | **Fresh full Ward 29 run** (owner, Colab T4, 28 Sep 2026, router on) | **11.5 min · 1,420 Street View images (≈ $9.94) · cloud AI $0.0887** | owner (D41); 11.5 min also in the model card's cost and time section |
-| Cloud-AI cost benchmark, with / without the local router | $0.056 / $0.089 | model card, cost and time (earlier measurement; see [§9.5](02_PIPELINE_AND_ACCURACY.md#95-the-fresh-full-ward-29-colab-run-vs-the-apps-numbers)) |
+| Cloud-AI cost with / without the local router, like for like | **$0.070 (589 calls) / $0.089 (782 calls)** | recounted from the run's saved calls (P8, D50); the model card's "$0.056 / 339 calls" left out 250 name and business-sign checks ([§9.5](02_PIPELINE_AND_ACCURACY.md#95-the-fresh-full-ward-29-colab-run-vs-the-apps-numbers)) |
+| Street View photos of Ward 29 taken | Jun 2018 – Feb 2026; 40 of 203 camera positions older than 3 years | the stored panorama dates (P8) |
 | Street View cost | $0.007 per photo | model card, cost and time |
 
 **The honest one-liners you should be ready to say:**

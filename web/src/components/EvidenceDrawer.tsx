@@ -6,13 +6,13 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Check, CircleSlash, Flag, Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { ApiError } from '@/api/client'
-import { useBuildingLinks, useObjectDetail } from '@/api/queries'
+import { useBuildingLinks, useImagery, useObjectDetail } from '@/api/queries'
 import type { AnyProps, Asset, Building, GapProps, MissingProps, ReviewItem, UnmappedBusiness } from '@/api/types'
 import { assetRegLabel, ASSET_REG, diffLabel, onMapSeenIn, floorsStatusPlain, floorsText, googleFlagPlain, matchLabel, nameQualityPlain, reviewLabel, reviewReasons, useLabel, useNoun } from '@/lib/labels'
 import { RouteLine } from '@/lib/routes'
 import { miniStreets } from '@/lib/mini'
 import { useAreaData } from '@/lib/useAreaData'
-import { cn, costText, fmt, fmt1, plural, withArticle } from '@/lib/utils'
+import { cn, costText, fmt, fmt1, monthText, plural, withArticle } from '@/lib/utils'
 import { DONE_LABEL, patchReviewCaches, PHOTO_TYPES, photoProblem, saveDecision, undoDecision, type Decision } from '@/lib/review'
 import { useUi } from '@/store/ui'
 import { EvidenceViews } from './EvidenceViews'
@@ -20,6 +20,7 @@ import { ObjectMini, type MiniObject } from './ObjectMini'
 import { PositionMini } from './PositionMini'
 import { StatusDot } from './FindingsTable'
 import { GapHow } from './GapList'
+import { LampRecall } from './LampRecall'
 import { Fact, HowWeKnow } from './HowWeKnow'
 import { PanelHead } from './Panel'
 import { ReviewerForm } from './ReviewerName'
@@ -131,11 +132,13 @@ function BuildingBody({ b }: { b: Building }) {
     <>
       <PanelHead eyebrow="Building" title={title} sub={<StatusDot s={b.match_status} label={matchLabel(b.match_status, true, !!b.attributes?.use?.value)} />} />
       <Body>
+        <OldImagery k={`building:${b.id}`} />
         <EvidenceViews kind="building" id={b.id} at={{ lat: b.lat, lng: b.lon }} target="building" />
         <LinkedLine area={area} id={b.id} />
         <Section title="What we saw">
           <Row k="Use">{use ? <>{useLabel(use)}</> : <span className="ink3">Not known: no clear photo of the front</span>}</Row>
           <Row k="Floors">{at?.floors?.value != null ? floorsText(at.floors.value, at.floors.status) : <span className="ink3">Not known</span>}</Row>
+          <Row k="Front wall">{detail.data?.front_wall ? <>{fmt1.format(detail.data.front_wall.length_m)} m <span className="ink3">along the street, from the map outline</span></> : <span className="ink3">{detail.isPending ? '…' : 'Not known'}</span>}</Row>
           <Row k="Sign">{name?.value ? <>{name.value}{name.quality !== 'good' && <span className="ink3"> (hard to read, to double-check)</span>}</> : <span className="ink3">No sign read</span>}</Row>
           {name?.google_confirmed && name.google_place_id && <Row k="Google Maps"><PlaceName id={name.google_place_id} /></Row>}
           <HowWeKnow summary={buildingSummary(b)} links={[{ page: 'trust', section: 'use', label: 'Use accuracy' }, { page: 'trust', section: 'floors', label: 'Floors accuracy' },
@@ -147,6 +150,7 @@ function BuildingBody({ b }: { b: Building }) {
             {!!at?.property_identifiers?.length && <Fact k="Door numbers">{at.property_identifiers.join(', ')} <span className="ink3">(not confirmed)</span></Fact>}
             <Fact k="Condition" hint="withheld"><span className="ink3">Not shown: our condition check was not accurate enough (see Trust)</span></Fact>
             {!!b.google_flags?.length && <Fact k="Google check">{b.google_flags.map(googleFlagPlain).join('. ')}.</Fact>}
+            {detail.data?.front_wall && <Fact k="Front wall" hint="OpenStreetMap outline">{fmt1.format(detail.data.front_wall.length_m)} m. Source: {detail.data.front_wall.source}.{detail.data.front_wall.rect_long_side_m != null && Math.abs(detail.data.front_wall.rect_long_side_m - detail.data.front_wall.length_m) >= 1 && <span className="ink3"> Not the same as the {fmt1.format(detail.data.front_wall.rect_long_side_m)} m “frontage” in the analysis file: {detail.data.front_wall.rect_note}.</span>}</Fact>}
             <Fact k="AI checks" hint="VLM calls">{plural(b.cost?.vlm_calls ?? 0, 'AI image check')}, {costText(b.cost?.vlm_calls ?? 0, b.cost?.vlm_usd) === 'cost not recorded' ? 'cost not recorded' : `cost ${costText(b.cost?.vlm_calls ?? 0, b.cost?.vlm_usd)}`}</Fact>
             <Fact k="Map position" hint="footprint centre"><span className="t-data">{b.lat.toFixed(5)}, {b.lon.toFixed(5)}</span>: the middle of the building outline on the map</Fact>
             <Fact k="ID"><span className="t-data">{b.id}</span></Fact>
@@ -185,6 +189,7 @@ function AssetBody({ a }: { a: Asset }) {
       <PanelHead eyebrow={a.type === 'streetlight' ? 'Streetlight' : 'Pole, no lamp seen'} title={a.street ?? '—'}
         sub={<StatusDot s={ASSET_REG[reg?.status ?? '']?.status ?? null} label={assetRegLabel(reg?.status, true)} />} />
       <Body>
+        <OldImagery k={`asset:${a.id}`} />
         <EvidenceViews kind="asset" id={a.id} at={{ lat: a.lat, lng: a.lon }} target={a.type === 'streetlight' ? 'lamp' : 'pole'} />
         <Section title="What we saw">
           <Row k="What">{a.type === 'streetlight' ? 'A streetlight (pole with a lamp)' : 'A pole with no lamp seen'}</Row>
@@ -250,6 +255,7 @@ function MissingBody({ p }: { p: MissingProps }) {
     <>
       <PanelHead eyebrow="In the register, not seen" title={p.street ?? p.id} />
       <Body>
+        <OldImagery k={`missing:${p.id}`} />
         <p className="t-body">The register lists a pole or light here (<span className="t-data">{p.id}</span>), but none was seen in the photos within 25 m.</p>
         <p className="mt-2"><Synthetic /></p>
         <HowWeKnow summary="The register lists a pole or light here, but the detector did not find one in the photos within 25 m." links={[{ page: 'trust', section: 'matching', label: 'How matching was tested' }]}>
@@ -264,9 +270,11 @@ function MissingBody({ p }: { p: MissingProps }) {
 function GapBody({ p }: { p: GapProps }) {
   return (
     <>
-      <PanelHead eyebrow="Dark stretch" title={`${fmt.format(Math.round(p.length_m))} m of ${p.street} has no visible streetlight`} />
+      <PanelHead eyebrow="Possible dark stretch" title={`${fmt.format(Math.round(p.length_m))} m of ${p.street} has no visible streetlight`} />
       <Body>
-        <p className="t-body">{p.poles_inside ? `${plural(p.poles_inside, 'pole')} ${p.poles_inside === 1 ? 'stands' : 'stand'} here, but no lamp was seen on ${p.poles_inside === 1 ? 'it' : 'them'}.` : 'No pole or lamp was seen here.'}</p>
+        <OldImagery k={`gap:${p.id}`} />
+        <LampRecall />
+        <p className="t-body mt-2">{p.poles_inside ? `${plural(p.poles_inside, 'pole')} ${p.poles_inside === 1 ? 'stands' : 'stand'} here, but no lamp was seen on ${p.poles_inside === 1 ? 'it' : 'them'}.` : 'No pole or lamp was seen here.'}</p>
         {p.display_mode === 'check' && <p className="t-small mt-2 border-l-2 pl-2 ink2" style={{ borderColor: 'var(--ns-sodium)' }}>Needs checking on the ground: the road bends here and some lights were seen part way along.</p>}
         <GapHow g={{ ...p }} />
       </Body>
@@ -374,3 +382,15 @@ function DrawerMini({ obj }: { obj: MiniObject }) {
   return <ObjectMini area={area} obj={obj} streets={mini} height={200} label="Where it stands: its street, the buildings around it, and the cameras that saw it" />
 }
 
+
+/** P8: a "missing" or "not in the register" finding that rests only on photos more than three years old */
+function OldImagery({ k }: { k: string }) {
+  const area = useUi((s) => s.area)
+  const o = useImagery(area).data?.objects[k]
+  if (!o?.outdated) return null
+  return (
+    <p role="note" className="t-small mb-3 rounded-[var(--ns-r-control)] px-3 py-2" style={{ boxShadow: 'inset 0 0 0 1px var(--ns-sodium)', background: 'var(--ns-sodium-soft)' }}>
+      <b className="sodium">Imagery may be outdated.</b> The newest Street View photo of this spot is from {monthText(o.newest)}, more than 3 years ago. The street may have changed since, so check before acting on this.
+    </p>
+  )
+}

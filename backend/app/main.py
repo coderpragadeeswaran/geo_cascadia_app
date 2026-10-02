@@ -24,7 +24,7 @@ from .settings import ROOT, Settings
 
 sys.path.insert(0, os.path.join(ROOT, "pipeline"))   # geo_cascadia (import only — never modified)
 
-from . import drive, evidence, gaps, hood, loader, minimap, namepick, registertest, trust, views  # noqa: E402
+from . import drive, evidence, frontwall, gaps, hood, imagery, loader, minimap, namepick, registertest, trust, views  # noqa: E402
 from . import streetpick as streetpick_mod  # noqa: E402
 from .storage import StorageError  # noqa: E402
 from .store import Data, OfflineError  # noqa: E402
@@ -299,7 +299,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             if rec is None:
                 raise HTTPException(404, f"building {id!r} not found in {area!r}")
             item = next((q for q in b["review_queue"] if q["item_type"] == "building" and q["ref_id"] == id), None)
-            return {"area": area, "building": rec, "review_item": item}
+            return {"area": area, "building": rec, "review_item": item, "front_wall": frontwall.front_wall(b, rec)}
         res, off = D.read(fn)
         return {"offline": off, **res}
 
@@ -329,6 +329,13 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             return {"area": area, "asset": rec, "review_item": item}
         res, off = D.read(fn)
         return {"offline": off, **res}
+
+    @app.get("/areas/{slug}/imagery", tags=["evidence"])
+    def area_imagery(slug: str, D: Data = Depends(get_data)):
+        """P8: when the photos were taken (panos.json capture month): the area's range and, per object, its photo's month,
+        its newest photo's month and whether a missing / not-in-register finding rests only on photos > 3 years old."""
+        res, off = D.read(lambda s: imagery.imagery(need(s, slug), app.state.runfiles.get(slug)))
+        return {"offline": off, "area": slug, **res}
 
     @app.get("/areas/{slug}/evidence/{kind}/{obj_id}", tags=["evidence"])
     def evidence_boxes(slug: str, kind: str, obj_id: str, D: Data = Depends(get_data)):

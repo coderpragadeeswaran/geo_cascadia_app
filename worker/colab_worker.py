@@ -41,8 +41,10 @@ WORK_DIR = WORK_DIR or ("/content/gc_jobs" if ON_COLAB else os.path.join(os.path
 os.makedirs(WORK_DIR, exist_ok=True)
 STAGES = ["panoramas", "area", "plan", "detect", "geometry", "ocr", "vlm", "reference", "match", "export"]
 SUB = {"detect": "detect", "ocr": "ocr", "vlm_names": "vlm", "building_crops": "vlm", "vlm_buildings": "vlm", "places": "reference"}
-# Ward 29 reference (model card): cloud-AI spend per building with the local router, used only for the ESTIMATE
-VLM_USD_PER_BUILDING = 0.056 / 381
+# Ward 29 reference: cloud-AI spend per building with the local router, used only for the ESTIMATE when the job carries no
+# rates. P8: recounted like for like from the run's saved calls ($0.0702 for 381 buildings: use, floors, name and
+# business-sign checks); the model card's $0.056 left out the name and business-sign checks (a resumed run's counter).
+VLM_USD_PER_BUILDING = 0.0702 / 381
 # transformers versions this worker was checked with (the S1a pin). Others usually work (the pipeline handles both the
 # 4.x tensor and the 5.x output object from CLIP), but the worker says so.
 TESTED_TRANSFORMERS = ("4.57.6",)
@@ -644,11 +646,48 @@ def sync(src, dst):
 STAGE_FILES = ("panos.json", "plan.json", "buildings.json", "_views_done.json", "detections.json")
 
 
+IMAGE_EXT = (".jpg", ".jpeg", ".png", ".webp")
+
+
+def count_images(d):
+    """(number, bytes) of image files under d: the Street View photo crops the pipeline saved (crops_signboard/,
+    crops_building/). Full photos are never written to disk (detect.py keeps them in memory)."""
+    n = size = 0
+    for root, _, files in os.walk(d or ""):
+        for f in files:
+            if f.lower().endswith(IMAGE_EXT):
+                n += 1
+                try:
+                    size += os.path.getsize(os.path.join(root, f))
+                except OSError:
+                    pass
+    return n, size
+
+
 def forget(job, out):
-    """The job finished or was cancelled: delete its saved progress (Drive) and its local files, photo crops included."""
+    """The job finished or was cancelled: delete its saved progress (Drive) and its local files, photo crops included.
+    P8 (Google terms): after a delivered result only the derived data stays, in the app; this says how many Street View
+    crops were deleted and checks that none is left."""
+    n = size = 0
     for d in (drive_dir(job), out):
         if d and os.path.isdir(d):
+            k, s = count_images(d)
+            n, size = n + k, size + s
             shutil.rmtree(d, ignore_errors=True)
+            if os.path.isdir(d) and count_images(d)[0]:            # a locked file: delete the images one by one
+                for root, _, files in os.walk(d):
+                    for f in files:
+                        if f.lower().endswith(IMAGE_EXT):
+                            try:
+                                os.remove(os.path.join(root, f))
+                            except OSError:
+                                pass
+            left = count_images(d)[0] if os.path.isdir(d) else 0
+            if left:
+                print(f"  ⚠ {left} photo crop(s) could not be deleted in {d}: delete them by hand (Google terms).")
+    if n:
+        print(f"  deleted {n:,} Street View photo crops ({size / 1e6:.1f} MB); only the derived results are kept, in the app.")
+    return n
 
 
 def run_job(api, job, base_cfg, run_area, state):

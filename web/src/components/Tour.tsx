@@ -63,8 +63,8 @@ const STEPS: Step[] = [
       if (!c.cur) return <>The map shows every analysed area. No area is loaded right now, so the numbers are empty; the rest of the tour still works.</>
       const k = c.records ? kpis(c.records, null) : null
       return k
-        ? <>{shortArea(c.cur.name)}: <b>{fmt.format(k.buildings_analysed)}</b> buildings checked from Street View photos. <b>{fmt.format(k.unmatched_properties)}</b> are not in the property register and <b>{fmt.format(k.buildings_with_discrepancy)}</b> differ from it; <b>{plural(k.streetlight_gaps, 'dark stretch')}</b> have no streetlight seen in 60 m. Click any number to see those places on the map.</>
-        : <>These numbers sum up {shortArea(c.cur.name)}: buildings checked, ones missing from the register or different from it, and dark stretches of road. Click one to see those places on the map.</>
+        ? <>{shortArea(c.cur.name)}: <b>{fmt.format(k.buildings_analysed)}</b> buildings checked from Street View photos. <b>{fmt.format(k.unmatched_properties)}</b> are not in the property register and <b>{fmt.format(k.buildings_with_discrepancy)}</b> differ from it; <b>{plural(k.streetlight_gaps, 'possible dark stretch')}</b> have no streetlight seen in 60 m (the detector misses some lamps). Click any number to see those places on the map.</>
+        : <>These numbers sum up {shortArea(c.cur.name)}: buildings checked, ones missing from the register or different from it, and possible dark stretches of road. Click one to see those places on the map.</>
     },
   },
   {

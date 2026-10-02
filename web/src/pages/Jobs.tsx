@@ -49,7 +49,7 @@ export default function Jobs() {
             <li key={a.slug} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rule-t py-3">
               <div className="min-w-0">
                 <div className="truncate text-[17.5px]">{shortArea(a.name)}</div>
-                <div className="t-small ink3 mt-0.5">{plural(a.counts.buildings, 'building')} · {plural(a.counts.assets, 'pole or light', 'poles & lights')} · {plural(a.counts.streetlight_gaps_60m, 'dark stretch')}{a.coverage.level === 'partial' ? ' · few buildings on the map here' : ''}</div>
+                <div className="t-small ink3 mt-0.5">{plural(a.counts.buildings, 'building')} · {plural(a.counts.assets, 'pole or light', 'poles & lights')} · {plural(a.counts.streetlight_gaps_60m, 'possible dark stretch')}{a.coverage.level === 'partial' ? ' · few buildings on the map here' : ''}</div>
               </div>
               <div className="flex gap-1.5">
                 <button className="btn btn-line" onClick={() => open(a.slug, 'explore')}>Open on the map</button>

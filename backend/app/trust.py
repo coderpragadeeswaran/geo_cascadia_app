@@ -95,7 +95,7 @@ def cards(mc):
         "section": "use"})
     pc = "detector.per_class"
     out.append({
-        "id": "streetlights", "title": "Streetlight seen / not seen", "measured": get(mc, "detector.test_set"),
+        "id": "streetlights", "title": "Possible dark stretches (streetlight seen / not seen)", "measured": get(mc, "detector.test_set"),
         "method": get(mc, "detector.production"),
         "result": _num(mc, f"{pc}.lamp_head.R", "lamp heads found (recall)", n_src=f"{pc}.lamp_head.n"),
         "baseline": _num(mc, f"{pc}.lamp_head.P", "lamp boxes that are real lamps (precision)", n_src=f"{pc}.lamp_head.n"),
@@ -103,7 +103,7 @@ def cards(mc):
                  _num(mc, "streetlights.vlm_lamp_check", "VLM lamp check (rejected)"),
                  _num(mc, f"{pc}.pole.R", "poles found (recall)", n_src=f"{pc}.pole.n")],
         "verdict": (f"The detector finds {_pct(get(mc, f'{pc}.lamp_head.R'))} of lamp heads in a photo "
-                    f"(n={get(mc, f'{pc}.lamp_head.n')}), so a dark stretch means no streetlight was seen, not proof there is none. "
+                    f"(n={get(mc, f'{pc}.lamp_head.n')}), so the app calls it a possible dark stretch: no streetlight was seen, not proof there is none. "
                     "It cannot tell whether a lamp works."),
         "caveat": "Lamps are small in the photo; a missed lamp makes a stretch look darker than it is.", "section": "detector"})
     g = "gate1_position"
@@ -171,9 +171,11 @@ def experiments(mc):
           {"label": "accuracy", "value": get(mc, f"{fr}.use_accuracy_before"), "kind": "pct", "src": f"{fr}.use_accuracy_before"}],
          "the local router gives the same accuracy with fewer cloud calls", fr)
     item("Building use", "local router (CLIP) first, VLM when unsure", "production",
-         [{"label": "VLM calls", "value": get(mc, f"{fr}.vlm_calls_after"), "kind": "num", "src": f"{fr}.vlm_calls_after"},
+         [{"label": "VLM calls (use + floors only, see note)", "value": get(mc, f"{fr}.vlm_calls_after"), "kind": "num", "src": f"{fr}.vlm_calls_after"},
           {"label": "accuracy", "value": get(mc, f"{fr}.use_accuracy_after"), "kind": "pct", "src": f"{fr}.use_accuracy_after"},
-          {"label": "n", "value": get(mc, f"{fr}.n"), "kind": "num", "src": f"{fr}.n"}], None, fr)
+          {"label": "n", "value": get(mc, f"{fr}.n"), "kind": "num", "src": f"{fr}.n"}],
+         "the 'after' call count is a resumed run's counter and leaves out the name and business-sign checks; like for like "
+         "the router removes one cloud call per locally decided building (Under the Hood › Routing and cost)", fr)
     item("Shop names", "every photo to the VLM", "rejected",
          [{"label": "accuracy", "value": get(mc, "names.full_view_n16.all_vlm_per_view"), "kind": "pct", "src": "names.full_view_n16.all_vlm_per_view"},
           {"label": "cost vs routed", "value": get(mc, "names.full_view_n16.cost_ratio"), "kind": "text", "src": "names.full_view_n16.cost_ratio"}],
@@ -220,7 +222,17 @@ def consistency(bundles, files, model_card):
         base = views.consistency(exp, b["run_report"], model_card) + gap_consistency(b["streetlight_gaps"], b.get("gap_display") or {})
         for r in base:
             rows.append({"area": b["slug"], "area_name": b["name"], **r, "jump": _jump(r["field"])})
-        for s in hood.hood(b, files.get(b["slug"]), model_card)["corrections"]:
+        h = hood.hood(b, files.get(b["slug"]), model_card)
+        chk = (h.get("routing") or {}).get("model_card_check")
+        if chk:   # P8: model_card's Ward 29 "with router" cost counts only the use + floors calls of a resumed run
+            for field, stored, computed in (
+                    ("model_card.cost_time.ward29_vlm_usd_with_router", f"${chk['stored_with']}", f"≈ ${chk['computed_with']}"),
+                    ("model_card.building_use.local_router.full_ward29_run.vlm_calls_after", chk["stored_calls_with"],
+                     chk["computed_calls_with"])):
+                rows.append({"area": b["slug"], "area_name": b["name"], "field": field, "stored": stored, "computed": computed,
+                             "source": "model_card.json vs this run's cloud-call files", "note": chk["why"], "kind": "numbers",
+                             "jump": {"page": "hood", "section": "routing"}})
+        for s in h["corrections"]:
             rows.append({"area": b["slug"], "area_name": b["name"], "field": f"run_report.story ({s['chapter']})", "stored": s["stored"],
                          "computed": s["text"], "source": "run_report.json story[]", "note": s["why"], "kind": s["kind"],
                          "jump": {"page": "hood", "section": "story"}})

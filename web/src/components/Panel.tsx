@@ -141,7 +141,7 @@ function KpiPanel() {
 
   if (filter.gaps) {
     const rows = gaps.map((g) => g.props as GapProps).filter((g) => !filter.street || g.street === filter.street)
-    return (<><PanelHead eyebrow="Dark stretches" title={title} sub={sub} /><div className="min-h-0 flex-1 overflow-y-auto pb-4"><GapList rows={rows} /></div></>)
+    return (<><PanelHead eyebrow="Possible dark stretches" title={title} sub={sub} /><div className="min-h-0 flex-1 overflow-y-auto pb-4"><GapList rows={rows} /></div></>)
   }
   const subject = filter.subject
   const B = subject === 'buildings' ? records.buildings.filter((b) => matchBuilding(b, filter)) : []

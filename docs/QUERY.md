@@ -72,7 +72,38 @@ any, all. So the brief's "Show street segments where no streetlight was detected
 ## Words in any script
 
 Words are tokenised in any script. A word the rules don't know, e.g. Tamil "கடைகள்", is listed under **Ignored** and the
-question goes through the didn't-understand flow. It is never dropped silently. There are no Tamil synonyms yet.
+question goes through the didn't-understand flow. It is never dropped silently.
+
+**Tamil (P8, `queryparse.tamil`).** Tamil is rewritten to English before the English rules run, and each rewrite is
+shown like a synonym. Words are matched by their **stem** (Tamil adds suffixes: கடை → கடைகள் → கடைகளை); "இல்"
+(in/on) only as a whole word, so இல்லாத ("not having") is never swallowed.
+
+| Tamil | read as |
+|---|---|
+| கடை…, வணிக…, வியாபார… | shops / commercial |
+| கட்டிட…, கட்டட… | buildings |
+| வீடு…, குடியிருப்பு… | houses / residential |
+| கம்ப…, மின்கம்ப… | poles |
+| தெருவிளக்கு…, விளக்கு… | streetlights |
+| தெரு…, சாலை | streets / road |
+| மாடி…, தளம் | floors |
+| N மாடி… மேல் / அதிக… (இரண்டு மாடிகளுக்கு மேல்) | more than N floors |
+| N மாடி… குறைவ… / கீழ் | less than N floors |
+| (சொத்து) பதிவேட்டில் / பதிவு … இல்லாத | no record (not in the register) |
+| பதிவேட்டிலிருந்து வேறுபட்ட / முரண் | discrepancy |
+| பொருந்தாத | unmatched |
+| (தெரு)விளக்கு இல்லாத | no streetlight |
+| 60 மீட்டருக்குள் | within 60 m |
+| இருண்ட | dark |
+| குறைந்த நம்பகத்தன்மை | low confidence |
+| மறுஆய்வு (வரிசை) | review (queue) |
+| தெரு வாரியாக | by street |
+| கூகுள் … இல்லாத | not in google |
+| வரைபடம், விளக்கப்படம் | chart |
+| காட்டு, காண்பி, பட்டியல், மட்டும், உள்ள, கொண்ட, இல் | show, list, only, … (filler) |
+
+Numbers: digits or ஒன்று/ஒரு 1, இரண்டு/இரு 2, மூன்று 3, நான்கு 4, ஐந்து 5, ஆறு 6. Tested (`test_p8.py`): the four spec
+questions and "poles on Sathy Main Road" asked in Tamil parse to exactly the English filters, nothing ignored.
 
 ## Street names (loose matching)
 

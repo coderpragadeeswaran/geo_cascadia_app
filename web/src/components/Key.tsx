@@ -42,7 +42,7 @@ export function Key() {
             <>
               <Item sw={<span className="h-1 w-5 rounded" style={{ background: c.sodiumGlow, boxShadow: night ? `0 0 8px ${c.sodium}` : undefined }} />}>Analysed road, lit</Item>
               {layers.gaps && <Item sw={<span className="h-2 w-5 rounded-sm" style={{ background: c.dark, boxShadow: `0 0 0 1px ${c.darkEdge}` }} />}>Dark: no streetlight seen in 60 m</Item>}
-              {layers.gaps && hasCheck && <Item sw={<span className="h-2 w-5 rounded-sm" style={{ background: c.dark, outline: `1.5px dotted ${c.ink2}` }} />}>Dark stretch to check (road bends)</Item>}
+              {layers.gaps && hasCheck && <Item sw={<span className="h-2 w-5 rounded-sm" style={{ background: c.dark, outline: `1.5px dotted ${c.ink2}` }} />}>Possible dark stretch to check (road bends)</Item>}
               {layers.assets && <Item sw={lamp}>Streetlight</Item>}
               {layers.assets && near && <Item sw={<span className="size-[6px] rounded-full" style={{ background: night ? c.ink2 : c.ink3 }} />}>Pole, no lamp seen</Item>}
               {layers.buildings && (

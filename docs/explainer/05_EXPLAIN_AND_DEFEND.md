@@ -40,12 +40,14 @@ Before the demo: the server and the web app running, the database awake (or the 
 9. **Why is use unknown for 139 buildings?** Use is read only from a clear photo of the front; 117 photos failed the quality check and 43 buildings were never boxed. A readable shop sign on the building fills in 21 of them.
 10. **Where do accuracy numbers come from?** Only the model card, measured on hand labels. The app never computes an accuracy on its own.
 11. **Is an LLM answering my questions?** No. A fixed rule engine from the pipeline, with a synonym layer. If a word isn't understood, it tells you and applies nothing.
-12. **Why a cloud model at all?** Only for uncertain cases: 180 of 2,065 sign crops and 58 of 221 building uses in Ward 29, plus floor counts. Routing keeps accuracy (0.90 routed = 0.90 cloud-only) and cuts cloud calls from 782 to 339.
-13. **How much does a street cost?** Vadakku Masi Veethi, 383 m: 162 photos ($1.13) + $0.0134 of cloud AI. The whole of Ward 29 (4.8 km, the owner's fresh run on 28 Sep): 11.5 min on a T4, 1,420 photos ≈ $9.94, cloud AI $0.0887. The imagery dominates.
+12. **Why a cloud model at all?** Only for uncertain cases: 180 of 2,065 sign crops and 58 of 221 building uses in Ward 29, plus floor counts. Routing keeps accuracy (0.90 routed = 0.90 cloud-only, n=31) and cuts cloud calls from 782 to 589 like for like ($0.089 → $0.070). The saving is modest because the expensive call (floors, three photos) runs for every building; Under the Hood › Routing and cost shows each route.
+13. **How much does a street cost?** Vadakku Masi Veethi, 383 m: 162 photos ($1.13) + $0.0134 of cloud AI. The whole of Ward 29 (4.8 km, the owner's fresh run on 28 Sep): 11.5 min on a T4, 1,420 photos ≈ $9.94, cloud AI $0.0887 (that is the no-router figure: the router most likely did not load in that run, D50; with it, ≈ $0.070). The imagery dominates.
 14. **What if the database is down on demo day?** The server serves the same data read-only from the saved results; the UI shows "Offline — read-only".
 15. **What if no worker is online?** New streets stay "Queued, waiting for a worker"; everything already analysed still works.
 16. **How do you know which building a box belongs to?** A ray from the camera through the box's middle; the first OSM outline it crosses within 40 m.
-17. **Does a dark stretch mean the lights are broken?** No, only that no lamp was seen in the photos. The detector finds 43% of lamp heads, and a photo can't tell whether a lamp works.
+17. **Does a dark stretch mean the lights are broken?** No, only that no lamp was seen in the photos, which is why the app says "possible dark stretch". The detector finds 43% of lamp heads (n=49), and a photo can't tell whether a lamp works.
+17b. **How old are the photos?** Ward 29: Jun 2018 – Feb 2026. Every evidence photo shows its month; a missing / not-in-register finding whose newest photo is over 3 years old is marked "imagery may be outdated" (10 in Ward 29).
+17c. **Can I ask in Tamil?** Yes, for the main words (shop, building, pole, light, street, floors, register, review…); the spec questions in Tamil give the same answers as in English. Other Tamil words are listed as not understood.
 18. **Why Google Maps and not Mapbox?** Street View content may only be shown through Google's APIs, with attribution.
 19. **Are Street View photos stored?** No. The browser fetches them live; the server stores only ids, headings and boxes.
 20. **Why does Trichy have fewer buildings per street?** 33% of its photos faced no OSM outline; Tiruppur 90%. Open building maps are sparse outside big cities, which is why businesses with no outline exist and why Microsoft outlines fill in where OSM is under 8%.
@@ -228,7 +230,7 @@ The project brief (CLAUDE.md), the design notes, the older pages document and th
 Things that could not be confirmed from the code or data. **Resolved by the owner on 30 Sep (D41), no longer open:** the fresh full Ward 29 run (11.5 min, 1,420 photos, $0.0887 cloud AI, router on); the FarmwiseAI doubt-session guidance (incl. "register data may come later"); the Google keys and the D40 incident (the server key was refused until the Street View Static API was added).
 
 Still **not confirmed**:
-1. **Why the fresh run's cloud-AI cost ($0.0887, router on) is close to the model card's *without-router* $0.089** rather than its with-router $0.056. The run's results are not in the repository.
+1. ~~Why the fresh run's cloud-AI cost is close to the without-router $0.089~~ — **answered in P8 (D50):** the model card's $0.056 / 339 calls left out the 166 name and 84 business-sign checks (a resumed run's counter); like for like the router run costs ≈ $0.070 (589 calls) and no router $0.089 (782). $0.0887 matches the no-router figure, so the router most likely did not load in that run (the pipeline fell back silently; it now warns). Still not confirmed from that run's own files.
 2. **Whether Geocoding is enabled on the server key today** (the owner says "if enabled"; D36 found it disabled then).
 3. **A realistic (spatial) register matcher** for real data: the notebook's realistic mode (97.8% precision) is not in the current pipeline, and whether it exists elsewhere is not confirmed.
 4. **The hand-label sets** (use n=29/31, floors n=36, names n=31, detector test set) are not in the repository; only their numbers are (D32).
@@ -243,7 +245,7 @@ Still **not confirmed**:
 12. **The true stage timings of the three original runs** (D1): the original logs are not available.
 13. **Microsoft outline IDs** (built from the outline's centre) change between Microsoft releases: how a reloaded live area keeps its review decisions after a re-fetch is not confirmed.
 14. **Google Places price** is not in the model card, so Places cost is "not recorded".
-15. **Photo dates:** the app does not show a panorama's capture date, and whether Google's embedded panorama shows it in this configuration (address control off) is not confirmed.
+15. ~~Photo dates~~: shown since P8 from the stored capture months ("Photo from Nov 2022"); old imagery is flagged on missing / not-in-register findings.
 16. ~~Production memory after P6~~: re-measured in P7 R3 (21.6–46.3 MB, [§13.4](04_BACKEND_DB_WORKER.md#134-memory-d3-d21-production-build-js-heap-after-gc)).
 
 ---

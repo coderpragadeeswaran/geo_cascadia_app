@@ -19,7 +19,7 @@ import { WhyEmpty } from './WhyEmpty'
 type Key = 'show' | 'street' | 'use' | 'floors' | 'match_status' | 'discrepancy' | 'ref_flag' | 'group_by' | 'interval_m' | 'reason_has'
 const SHOW: { v: string; label: string; f: QueryFilters }[] = [
   { v: 'buildings', label: 'Buildings', f: { intent: 'buildings' } },
-  { v: 'gaps', label: 'Dark stretches', f: { intent: 'streetlight_gaps', interval_m: 60 } },
+  { v: 'gaps', label: 'Possible dark stretches', f: { intent: 'streetlight_gaps', interval_m: 60 } },
   { v: 'poles', label: 'Poles', f: { intent: 'assets', asset_type: 'pole' } },
   { v: 'streetlights', label: 'Streetlights', f: { intent: 'assets', asset_type: 'streetlight' } },
   { v: 'review', label: 'Review items', f: { intent: 'review' } },
@@ -63,7 +63,7 @@ const DEFAULTS: Partial<Record<Key, Partial<QueryFilters>>> = {
 
 /** "dark stretch" / "dark stretches", "building(s)", "pole(s)", "review item(s)" for a result count */
 function nounOf(q: QueryResponse, n: number) {
-  const one = q.intent === 'streetlight_gaps' ? 'dark stretch' : q.intent === 'review' ? 'review item'
+  const one = q.intent === 'streetlight_gaps' ? 'possible dark stretch' : q.intent === 'review' ? 'review item'
     : q.intent === 'assets' ? (q.parsed_filters.asset_type ?? 'asset') : 'building'
   return noun(n, one)
 }

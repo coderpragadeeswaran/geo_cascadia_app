@@ -128,7 +128,7 @@ class Detections:
         return idx
 
     def cameras(self, slug):
-        """pano_id -> {lat, lon} of the camera (panos.json), for the mini-map's camera and line of sight"""
+        """pano_id -> {lat, lon, date} of the camera (panos.json), for the mini-map's camera and line of sight and the photo date"""
         path, stamp = self._read(slug, "panos.json")
         if not path:
             return {}
@@ -138,7 +138,8 @@ class Detections:
             if hit and hit[0] == stamp:
                 return hit[1]
         with open(path, encoding="utf-8") as f:
-            cams = {p["pano_id"]: {"lat": p["camera_lat"], "lon": p["camera_lon"]} for p in json.load(f)
+            # P8: + the panorama's capture month ("YYYY-MM", Google's metadata stored by the pipeline) for the photo-age badge
+            cams = {p["pano_id"]: {"lat": p["camera_lat"], "lon": p["camera_lon"], "date": p.get("date")} for p in json.load(f)
                     if p.get("pano_id") and p.get("camera_lat") is not None}
         with self._lock:
             self._cache[key] = (stamp, cams)
@@ -291,7 +292,9 @@ def evidence(D, bundle, kind, obj_id):
     if views:
         cams = D.cameras(bundle["slug"])
         for v in views:
-            v["camera"] = cams.get(v.get("pano_id"))
+            c = cams.get(v.get("pano_id"))
+            v["camera"] = {"lat": c["lat"], "lon": c["lon"]} if c else None
+            v["date"] = (c or {}).get("date")
     return views
 
 

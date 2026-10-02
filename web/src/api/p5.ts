@@ -37,6 +37,22 @@ export interface Hood {
     run_counters: Record<string, unknown> & { representative: boolean; badge: string | null }
     timings: { stage_seconds: Record<string, number>; total_minutes: number | null; device: string | null; representative: boolean; badge: string | null }
   }
+  routing: Routing | null
+  imagery: import('./types').ImagerySummary
+}
+/** P8: routing and cost, computed from the run's cloud-call files (backend/app/routing.py) */
+export interface RouteRow { route: 'local' | 'cloud'; model: string; label: string; n: number; unit: string; usd: number | null
+  usd_status: string; usd_src: string; usd_per_call?: number | null; lat_s: number | null; lat_src: string }
+export interface Routing {
+  tasks: { key: string; title: string; input: number; input_unit: string; routes: RouteRow[] }[]
+  totals: { calls: number; usd: number | null; status: string; run_counter: { calls: number | null; usd: number | null } }
+  all_cloud: { calls: number; usd: number; extra_calls: number; extra_usd: number; src: string } | null
+  every_view: { photos: number; usd_per_call: number; usd: number; minutes: number | null; workers: number; lat_s: number | null; status: 'estimate'; src: string } | null
+  accuracy: { task: string; n: number; src: string; note: string; rows: { label: string; value: number; production?: boolean }[] }[]
+  measured_every_view: { n: number; routed: number; all_vlm: number; usd_routed: number; usd_all_vlm: number; ratio: string; src: string } | null
+  model_card_check: { stored_with: number; stored_without: number; stored_calls_with: number; stored_calls_without: number; computed_with: number | null
+    computed_calls_with: number; computed_without: number | null; computed_calls_without: number | null; names_and_signs_calls: number; why: string } | null
+  street_view: { photos: number; usd_per_photo: number | null; usd: number | null }
 }
 export interface HoodBox { cls: 'building' | 'pole' | 'lamp_head' | 'signboard'; conf: number; x1: number; y1: number; x2: number; y2: number; geom_ok: boolean; target: boolean }
 export interface HoodExample {
