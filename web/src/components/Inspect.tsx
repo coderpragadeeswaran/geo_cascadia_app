@@ -58,6 +58,11 @@ function Body({ p }: { p: AnyProps }) {
         <Title eyebrow="In the register, not seen" title={p.id} />
         <Line>{p.street ?? '—'} · synthetic register</Line>
       </>)
+    case 'camera_building':
+      return (<>
+        <Title eyebrow="Building seen by camera only" title="No map outline here" />
+        <Line>{p.n_cameras != null ? `Seen from ${plural(p.n_cameras, 'camera position')}` : 'Seen by several cameras'} · not an analysed building</Line>
+      </>)
   }
 }
 

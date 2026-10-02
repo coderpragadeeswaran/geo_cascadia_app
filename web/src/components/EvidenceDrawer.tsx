@@ -3,11 +3,11 @@
  *  model_card accuracy, confidences, positions, register ids, costs) is behind "How do we know?" (D16). */
 import { useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, CircleSlash, Flag, Loader2 } from 'lucide-react'
+import { Check, CircleSlash, Flag, Loader2, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { ApiError } from '@/api/client'
-import { useBuildingLinks, useImagery, useObjectDetail } from '@/api/queries'
-import type { AnyProps, Asset, Building, GapProps, MissingProps, ReviewItem, UnmappedBusiness } from '@/api/types'
+import { useBuildingLinks, useImagery, useModelCard, useObjectDetail, type PositionCheck } from '@/api/queries'
+import type { AnyProps, Asset, Building, CameraBuildingProps, GapProps, MissingProps, ReviewItem, UnmappedBusiness } from '@/api/types'
 import { assetRegLabel, ASSET_REG, diffLabel, onMapSeenIn, floorsStatusPlain, floorsText, googleFlagPlain, matchLabel, nameQualityPlain, reviewLabel, reviewReasons, useLabel, useNoun } from '@/lib/labels'
 import { RouteLine } from '@/lib/routes'
 import { miniStreets } from '@/lib/mini'
@@ -16,6 +16,7 @@ import { cn, costText, fmt, fmt1, monthText, plural, withArticle } from '@/lib/u
 import { DONE_LABEL, patchReviewCaches, PHOTO_TYPES, photoProblem, saveDecision, undoDecision, type Decision } from '@/lib/review'
 import { useUi } from '@/store/ui'
 import { EvidenceViews } from './EvidenceViews'
+import { GeoMini } from './GeoMini'
 import { ObjectMini, type MiniObject } from './ObjectMini'
 import { PositionMini } from './PositionMini'
 import { StatusDot } from './FindingsTable'
@@ -34,6 +35,7 @@ export function EvidenceDrawer({ sel }: { sel: AnyProps }) {
       case 'unmapped_business': { const u = records?.unmapped.find((x) => x.id === sel.id); return u ? <UnmappedBody u={u} /> : records ? <Gone /> : <Loading /> }
       case 'missing_asset_record': return <MissingBody p={sel} />
       case 'streetlight_gap': return <GapBody p={sel} />
+      case 'camera_building': return <CameraOnlyBody p={sel} />
       default: return null
     }
   })()
@@ -143,10 +145,12 @@ function BuildingBody({ b }: { b: Building }) {
           <Row k="Use">{use ? <>{useLabel(use)}</> : <span className="ink3">Not known: no clear photo of the front</span>}</Row>
           <Row k="Floors">{at?.floors?.value != null ? floorsText(at.floors.value, at.floors.status) : <span className="ink3">Not known</span>}</Row>
           <Row k="Frontage">{frontage != null ? <>{fmt1.format(frontage)} m <span className="ink3">along the street, from the map outline</span></> : <span className="ink3">{detail.isPending ? '…' : 'Not known'}</span>}</Row>
+          <Row k="Position"><PositionLine pc={detail.data?.position_check} pending={detail.isPending} /></Row>
           <Row k="Sign">{name?.value ? <>{name.value}{name.quality !== 'good' && <span className="ink3"> (hard to read, to double-check)</span>}</> : <span className="ink3">No sign read</span>}</Row>
           {name?.google_confirmed && name.google_place_id && <Row k="Google Maps"><PlaceName id={name.google_place_id} /></Row>}
           <HowWeKnow summary={buildingSummary(b)} links={[{ page: 'trust', section: 'use', label: 'Use accuracy' }, { page: 'trust', section: 'floors', label: 'Floors accuracy' },
-            { page: 'trust', section: 'names', label: 'Names accuracy' }, { page: 'hood', section: 'buildings', label: 'How buildings are read' }]}>
+            { page: 'trust', section: 'names', label: 'Names accuracy' }, { page: 'trust', section: 'gate1', label: 'Position accuracy (Gate 1)' },
+            { page: 'hood', section: 'buildings', label: 'How buildings are read' }]}>
             <Fact k="Use"><RouteLine route={at?.use?.route} /></Fact>
             <Fact k="Floors"><RouteLine route={at?.floors?.route} />{at?.floors?.status && <span className="ink3"> Result: {floorsStatusPlain(at.floors.status)}.</span>}</Fact>
             <Fact k="Sign / name"><RouteLine route={name?.route} />{name?.quality && <span className="ink3"> The sign was {nameQualityPlain(name.quality)}.</span>}</Fact>
@@ -156,6 +160,7 @@ function BuildingBody({ b }: { b: Building }) {
             {!!b.google_flags?.length && <Fact k="Google check">{b.google_flags.map(googleFlagPlain).join('. ')}.</Fact>}
             {frontage != null && <Fact k="Frontage" hint="OpenStreetMap outline">{fmt1.format(frontage)} m. Source: {fw?.source ?? 'the road-facing wall of the OpenStreetMap outline'}.{longest != null && <span className="ink3"> Longest side of the outline: {fmt1.format(longest)} m ({fw?.longest_note ?? 'the longer side of its rotated rectangle, whichever way it faces; not the front'}).</span>}</Fact>}
             <Fact k="AI checks" hint="VLM calls">{plural(b.cost?.vlm_calls ?? 0, 'AI image check')}, {costText(b.cost?.vlm_calls ?? 0, b.cost?.vlm_usd) === 'cost not recorded' ? 'cost not recorded' : `cost ${costText(b.cost?.vlm_calls ?? 0, b.cost?.vlm_usd)}`}</Fact>
+            <PositionFacts pc={detail.data?.position_check} />
             <Fact k="Map position" hint="footprint centre"><span className="t-data">{b.lat.toFixed(5)}, {b.lon.toFixed(5)}</span>: the middle of the building outline on the map</Fact>
             <Fact k="ID"><span className="t-data">{b.id}</span></Fact>
             <Fact k="Where it stands"><PositionMini b={b} /></Fact>
@@ -386,6 +391,97 @@ function DrawerMini({ obj }: { obj: MiniObject }) {
   return <ObjectMini area={area} obj={obj} streets={mini} height={200} label="Where it stands: its street, the buildings around it, and the cameras that saw it" />
 }
 
+
+/** Gate 1 for this building, in plain words (backend/app/gate1pos.py). Camera-derived: its distance to the middle of the
+ *  front wall on the map, the same number Trust's Gate 1 table uses. Taken from the outline: not measured (that point IS
+ *  the reference, so "0 m" would mean nothing and is never shown). */
+const posMetres = (d: number, target: number) => {
+  const one = fmt1.format(d)
+  return Number(one) === target && d > target ? d.toFixed(2) : one        // 3.54 must not read as "3.5 m ✗"
+}
+function PositionLine({ pc, pending }: { pc: PositionCheck | null | undefined; pending: boolean }) {
+  if (!pc) return <span className="ink3">{pending ? '…' : 'Not known'}</span>
+  return (
+    <>
+      {pc.case === 'camera' && pc.distance_m != null ? (
+        <span>
+          <span className="t-data">{posMetres(pc.distance_m, pc.target_m)} m</span> from the middle of the front wall on the map <span className="ink3">(target ≤ {fmt1.format(pc.target_m)} m)</span>{' '}
+          <span className="inline-flex items-center gap-0.5 whitespace-nowrap align-[-2px]" style={{ color: pc.within ? 'var(--ns-ink)' : 'var(--ns-discrepancy)' }}>
+            {pc.within ? <Check size={16} strokeWidth={2.6} aria-hidden /> : <X size={16} strokeWidth={2.6} aria-hidden />}<span className="t-small">{pc.within ? 'within' : 'outside'}</span>
+          </span>
+        </span>
+      ) : pc.case === 'map' ? <span>Position taken from the map outline — error not measured.</span>
+        : <span className="ink3">No position worked out for this building.</span>}
+      {(pc.corner || pc.back_street) && pc.front_street && (
+        <div className="t-small ink2 mt-1">Front wall chosen: the one facing {pc.front_street}
+          <span className="ink3"> ({pc.corner ? 'a corner building: another wall faces a street too' : 'a street runs behind it too'})</span></div>
+      )}
+    </>
+  )
+}
+const wallWord = (w: PositionCheck['other_walls'][number]) => `${w.side === 'back' ? 'the back wall' : 'a side wall'} faces ${w.street ?? 'an unnamed road'} (${fmt1.format(w.dist_m)} m away)`
+function PositionFacts({ pc }: { pc: PositionCheck | null | undefined }) {
+  const status = useModelCard().data?.gate1_position?.status
+  if (!pc || pc.case === 'none') return null
+  const st = pc.area_stats
+  return (
+    <>
+      <Fact k="Position check" hint="Gate 1, vs OSM front-wall centre">
+        {pc.case === 'camera' && pc.distance_m != null ? (
+          <>The predicted point ({pc.method === 'triangulated' ? 'where camera views cross' : 'where a camera’s line of sight meets the front wall'}) is <span className="t-data">{pc.distance_m.toFixed(2)} m</span> from {pc.reference}; the target is ≤ {fmt1.format(pc.target_m)} m.{' '}
+            {pc.from_trust && st
+              ? <>This is the number Trust uses: this area’s camera-derived row is n = <span className="t-data">{fmt.format(st.n)}</span>, median <span className="t-data">{st.median_m} m</span>, <span className="t-data">{st.within_3_5_m_pct}%</span> within {fmt1.format(pc.target_m)} m.</>
+              : <>This area was analysed from the app and is not in Trust’s table; the distance is worked out the same way.</>}</>
+        ) : (
+          <>No camera line of sight reached this building’s front wall, so its position is {pc.method === 'footprint_centre' ? 'the middle of its outline (no front wall could be found)' : 'the middle of its front wall on the map'}. That is the point the error is measured against, so the error is not measured; Trust leaves these buildings out of the fair row.</>
+        )}
+        {status && <span className="ink3"> Gate 1 status on Trust: {status} (OpenStreetMap is the reference; there is no surveyed check).</span>}
+      </Fact>
+      {pc.front_street && (
+        <Fact k="Front wall" hint={pc.roads_checked}>
+          The front wall is the outline wall whose middle is nearest the line of {pc.front_street}.{' '}
+          {pc.other_walls.length ? <>Other walls facing a street (a road within 10 m straight out from the wall’s middle): {pc.other_walls.map(wallWord).join('; ')}.</> : <>No other wall faces a street within 10 m.</>}
+        </Fact>
+      )}
+    </>
+  )
+}
+
+/** Gate 1 case 3: a building only the cameras saw (rays from several cameras cross where OpenStreetMap has no outline;
+ *  building_positions.json "no_footprint"). Not an analysed building: no register check, no photo record. */
+function CameraOnlyBody({ p }: { p: CameraBuildingProps }) {
+  const { area, streets } = useAreaData()
+  const mini = useMemo(() => miniStreets(streets), [streets])
+  const what = p.from === 'signboard' ? 'shop sign' : 'building'
+  return (
+    <>
+      <PanelHead eyebrow="Building seen by camera only" title="No map outline here" sub="Not an analysed building (no register check)" />
+      <Body>
+        <div className="mt-3">
+          <GeoMini area={area} outlines="auto" streets={mini} height={200} minSpanM={60} frame={[{ lat: p.lat, lon: p.lon }]}
+            points={[{ lat: p.lat, lon: p.lon, tone: 'sodium', shape: 'diamond', r_m: p.uncertainty_m, dashed: true, legend: 'seen by camera only',
+              tip: `Where ${p.n_cameras != null ? plural(p.n_cameras, 'camera view') : 'the camera views'} cross` }]}
+            label="Where the camera-only building is: the outlines around it, none at this spot" />
+        </div>
+        <Section title="What we saw">
+          <p className="t-body">Lines of sight to a {what} from {p.n_cameras != null ? plural(p.n_cameras, 'camera position') : 'several camera positions'} cross here, but the map has no building outline at this spot.</p>
+          <Row k="Position">No map outline for this building — error can’t be measured.</Row>
+          <Row k="Uncertainty">{p.uncertainty_m != null
+            ? <>About ±<span className="t-data">{fmt1.format(p.uncertainty_m)} m</span>: every camera line of sight passes within that of this point <span className="ink3">(how well the cameras agree; there is no outline to check it against)</span></>
+            : <span className="ink3">Not estimated</span>}</Row>
+          <HowWeKnow summary={<>Lines of sight from the cameras’ {what} boxes that hit no OpenStreetMap outline were crossed in pairs; crossings within 3 m were grouped, and a group seen from 3 or more camera positions was solved and kept when every line passes within 3 m.</>}
+            links={[{ page: 'trust', section: 'gate1', label: 'Position accuracy (Gate 1)' }]}>
+            <Fact k="Method" hint="triangulated_no_footprint">Camera views cross, with no map outline</Fact>
+            <Fact k="Cameras">{p.n_cameras ?? '—'}</Fact>
+            <Fact k="Uncertainty" hint="largest ray residual">{p.uncertainty_m != null ? `${fmt1.format(p.uncertainty_m)} m: the farthest camera line of sight from the point (at least 0.5 m)` : 'not estimated'}</Fact>
+            <Fact k="Why no error">Gate 1 measures a position against the middle of the building’s front wall on its OpenStreetMap outline. This building has no outline, so there is nothing to measure against.</Fact>
+            <Fact k="Map position"><span className="t-data">{p.lat.toFixed(6)}, {p.lon.toFixed(6)}</span></Fact>
+          </HowWeKnow>
+        </Section>
+      </Body>
+    </>
+  )
+}
 
 /** P8: a "missing" or "not in the register" finding that rests only on photos more than three years old */
 function OldImagery({ k }: { k: string }) {

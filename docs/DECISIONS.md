@@ -1779,3 +1779,36 @@ it faces — not the front. Every place it was shown or used:
 **Cost split.** Routing and cost opens with one line computed from the run: Ward 29 "This run cost about $10.01: Street
 View photos $9.94 (1,420 at Google's list price, 99%) and cloud AI (Nova Lite) $0.070 (0.7%). Floor counting is the
 largest AI cost; it isn't routed yet." The floors sentence appears only when floors is the run's largest cloud route.
+
+## 2026-10-02 — Gate 1 per building in the drawer
+
+### D52. Each building's own position error, from Trust's own rows; camera-only buildings clickable; corner fronts
+**What the drawer shows** (`backend/app/gate1pos.py` → `GET /buildings/{area}/{id}` `position_check`; Explore drawer row
+"Position", details in "How do we know?"):
+1. **Camera-derived position** (triangulated or wall_hit): "Position: X.X m from the middle of the front wall on the map
+   (target ≤ 3.5 m)" with ✓ within / ✗ outside. The number is the building's row in `gate1_eval.json`
+   (`official_front_m`), the same set and reference point as Trust's "All camera-derived positions" row. A value that
+   rounds to 3.5 but is above it shows two decimals (no "3.5 m ✗"). Areas Trust does not cover (analysed from the app)
+   get the distance computed with the same wall (`frontwall.road_edge`, shared with Frontage); it reproduces every stored
+   Ward 29 row to < 0.005 m (pytest), and "How do we know?" says the area is not in Trust's table.
+2. **Position from the outline** (wall_centre; footprint_centre has 0 buildings): "Position taken from the map outline —
+   error not measured." No distance is returned for this case, so "0 m" can't appear.
+3. **Camera-only building** (`building_positions.json` `no_footprint`, the orange diamonds): the diamonds are now
+   clickable (hover card + drawer): "No map outline for this building — error can't be measured.", plus the stored
+   uncertainty (largest ray residual, ≥ 0.5 m) as "About ±N m", labelled as camera agreement.
+
+**Ward 29 counts:** case 1 = **260** (all 260 from Trust's rows; median 2.8 m, 60.4% ≤ 3.5 m = Trust), case 2 = 121,
+case 3 = 9. Trichy 49 / 17 / 79 (49 = Trust's n, 3.64 m, 49.0%), Tiruppur 1 / 0 / 12.
+
+**Corner buildings** (display only; no rule changed). An outline wall ≥ 3 m faces a street when the line straight out of
+its middle meets a road within 10 m without crossing another analysed building; a hit within 4 m of the building's own
+street is that street. Roads: the analysed streets + OpenStreetMap's roads from the mini-map cache (service ways left
+out; most Ward 29 residential roads are unnamed in OSM, so unnamed roads count). A wall turned 60–120° from the front is
+a corner, > 120° a street behind. Either adds "Front wall chosen: the one facing <street>"; "How do we know?" lists the
+other walls. Ward 29: **157** buildings with another street-facing wall — **131 corners**, 26 with a street behind only.
+Ganapathy's narrow blocks have lanes on several sides, hence the high share. Limits: outlines that are not analysed
+buildings don't block a wall's line; without the cached roads only the analysed streets are checked (the answer says so).
+
+**Tests / checks:** `backend/tests/test_gate1_drawer.py` (Trust set and numbers for all three Trust areas, the computed
+distance vs the stored rows, no distance for case 2, corners, a synthetic corner block, the endpoint);
+`web/scripts/gate1-shots.ts` (both themes); `docs/P7_MANUAL_CHECKS.md` item 36.

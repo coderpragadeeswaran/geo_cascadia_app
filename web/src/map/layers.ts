@@ -12,7 +12,7 @@ import { FillStyleExtension, PathStyleExtension } from '@deck.gl/extensions'
 import { IconLayer, PathLayer, PolygonLayer, ScatterplotLayer } from '@deck.gl/layers'
 import type { LineString, MultiLineString, MultiPolygon, Point, Polygon } from 'geojson'
 import type {
-  AnyProps, AreaCard, AreaFeature, AssetProps, Band, BuildingProps, GapProps, Job, MissingProps, StreetProps, UnmappedProps,
+  AnyProps, AreaCard, CameraBuildingProps, AreaFeature, AssetProps, Band, BuildingProps, GapProps, Job, MissingProps, StreetProps, UnmappedProps,
 } from '@/api/types'
 import { colors, rgba, statusColor, type Mode, type RGBA } from '@/design/tokens'
 import type { Focus } from '@/lib/derive'
@@ -118,7 +118,7 @@ export interface LayerCtx {
   /** drive the street: the branch being driven, camera position, travel heading and view heading */
   drive: DriveMark | null
   /** P7.3: buildings seen by the camera only (no map outline) */
-  cameraBuildings?: { lat: number; lon: number }[] | null
+  cameraBuildings?: { lat: number; lon: number; p: CameraBuildingProps }[] | null
   /** D27: the selected building's predicted position (point + uncertainty radius in metres, null = not estimated) */
   predicted?: { position: Position; radius_m: number | null } | null
 }
@@ -340,9 +340,9 @@ export function buildLayers(ctx: LayerCtx): Layer[] {
   }
   // ---------------------------------------------------------------- P7.3: buildings seen by the camera only (street level)
   if (ctx.cameraBuildings?.length) {
-    L.push(new IconLayer<{ lat: number; lon: number }>({ id: 'camera-buildings', visible: !!on.cameraBuildings && near, data: ctx.cameraBuildings,
-      getPosition: (d) => [d.lon, d.lat], getIcon: () => ICONS.cameraBuilding, sizeUnits: 'pixels', getSize: 17,
-      getColor: rgba(night ? c.sodiumGlow : c.sodium, 235), updateTriggers: { getColor: mode } }))
+    L.push(new IconLayer<{ lat: number; lon: number; p: CameraBuildingProps }>({ id: 'camera-buildings', visible: !!on.cameraBuildings && near, data: ctx.cameraBuildings,
+      getPosition: (d) => [d.lon, d.lat], getIcon: () => ICONS.cameraBuilding, sizeUnits: 'pixels', getSize: (d) => (d.p.id === ctx.selectedId ? 23 : 17), pickable: true,
+      getColor: rgba(night ? c.sodiumGlow : c.sodium, 235), updateTriggers: { getColor: mode, getSize: ctx.selectedId } }))
   }
   // ---------------------------------------------------------------- unmapped businesses (hollow ring = approximate) + register records not seen
   L.push(
