@@ -99,6 +99,10 @@ def test_report_numbers_equal_the_app(api, slug):
     assert len(T["review"]["rows"]) == len(items) == kpi["low_confidence_observations"]
     geo = api.get(f"/areas/{slug}/geojson?layers=assets").json()["features"]
     assert len(T["assets"]["rows"]) == sum(f["properties"]["register_status"] in ("unrecorded_asset", "discrepancy") for f in geo)
+    # D56: the Excel sheet lists every pole and streetlight; the finding rows come first and equal the PDF's
+    assert len(T["assets_all"]["rows"]) == len(geo) == kpi["streetlights"] + kpi["poles"]
+    assert T["assets_all"]["rows"][:len(T["assets"]["rows"])] == T["assets"]["rows"]
+    assert all(r[5] == "" for r in T["assets_all"]["rows"][len(T["assets"]["rows"]):])
 
     light = api.get(f"/areas/{slug}/lighting").json()["rows"]
     assert [(r[3], r[1], r[2]) for r in T["stretches"]["rows"]] == \
@@ -148,11 +152,12 @@ def _files_carry_the_same_values(c):
     import pypdfium2
     from openpyxl import load_workbook
     wb = load_workbook(io.BytesIO(report.xlsx(c)))
-    for t in c["tables"].values():
+    for key in ("buildings", "assets_all", "stretches", "review"):
+        t = c["tables"][key]
         sh = wb[t["sheet"]]
         got = [[cell.value for cell in row] for row in sh.iter_rows(min_row=1)]
         assert got[0] == t["columns"]
-        assert got[1:] == [[v for v in r] for r in t["rows"]]
+        assert got[1:] == [[v if v != "" else None for v in r] for r in t["rows"]]     # Excel keeps a blank cell empty
         for i, link in enumerate(t["links"], start=2):
             assert sh.cell(row=i, column=len(t["columns"])).hyperlink.target == link
     about = {r[0].value: r[1].value for r in wb["About"].iter_rows() if r[0].value}
@@ -178,4 +183,19 @@ def test_report_offline_builds_and_says_so(offline):
     wb = load_workbook(io.BytesIO(r.content))
     rows = list(wb["Possible dark stretches"].iter_rows(min_row=2, values_only=True))
     assert len(rows) == 11 and all(x[1] == "not available" and x[2] == lighting.OFFLINE_NOTE for x in rows)
+    assert len(list(wb["Assets"].iter_rows(min_row=2))) == 268
     assert offline.get("/areas/ward29/report.pdf?street=Sathy Main Road").status_code == 200
+
+
+def test_camera_only_count_is_shown_next_to_the_building_count(api):
+    """D56: "+ N seen only by camera" comes from building_positions.json no_footprint, is the same in the area card, Hood
+    and the report, and is never added to the building count"""
+    cards = {a["slug"]: a for a in api.get("/areas").json()["areas"]}
+    expect = {"ward29": 9, "trichy_bharathidasan_salai": 79, "tiruppur_uthukuli_road": 12}
+    for slug, n in expect.items():
+        assert cards[slug]["counts"]["camera_only_buildings"] == n
+        assert api.get(f"/areas/{slug}/camera-buildings").json()["count"] == n
+        assert api.get(f"/areas/{slug}/hood").json()["n"]["camera_only_buildings"] == n
+    c = _content(api, "ward29")
+    assert c["numbers"][0]["value"] == 381 and c["numbers"][0]["note"] == "+ 9 seen only by camera (no map outline)"
+    assert _content(api, "ward29", "Sathy Main Road")["numbers"][0].get("note") == ""      # no street on camera-only points

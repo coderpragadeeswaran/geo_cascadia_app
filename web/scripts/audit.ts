@@ -113,7 +113,7 @@ async function run(mode: 'night' | 'daylight') {
       await page.waitForTimeout(800)
       await shot(page, mode, '08-trust-gate1')
       const g = await page.locator('#gate1').innerText()
-      ui.gate1_status = /Status: [^\n]+/.exec(g)?.[0] ?? ''
+      ui.gate1_status = /Status: [^\n]+/i.exec(g)?.[0] ?? ''          // the badge is shown in capitals (CSS)
       ui.gate1_camera = g.split('\n').filter((l) => /Ward 29/.test(l) && /camera/i.test(l)).join(' | ').replace(/\s+/g, ' ')
       ui.trust_has_73 = String(/\b73(\.0)?\s?%/.test(await page.locator('body').innerText()))
     }

@@ -25,7 +25,7 @@ from .settings import ROOT, Settings
 
 sys.path.insert(0, os.path.join(ROOT, "pipeline"))   # geo_cascadia (import only — never modified)
 
-from . import drive, evidence, frontwall, gaps, gate1pos, hood, imagery, lighting, loader, mapdata, minimap, namepick, registertest, spatial, trust, views  # noqa: E402
+from . import camonly, drive, evidence, frontwall, gaps, gate1pos, hood, imagery, lighting, loader, mapdata, minimap, namepick, registertest, spatial, trust, views  # noqa: E402
 from . import streetpick as streetpick_mod  # noqa: E402
 from .storage import StorageError  # noqa: E402
 from .store import Data, OfflineError  # noqa: E402
@@ -120,6 +120,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     app.state.gapcalc = gaps.GapCalc(settings.areas_dir)
     app.state.runfiles = hood.RunFiles(settings.areas_dir)
     app.state.gate1rows = gate1pos.EvalRows(settings.areas_dir)
+    camonly.configure(settings.areas_dir)                       # D56: "+ N seen only by camera" next to the building count
     app.state.workers = {}
     # D53: local OpenStreetMap + Microsoft footprints for the covered cities (street click, mini-maps, cost planner)
     mapdata.configure(app.state.data.pool if settings.local_map_data else None)

@@ -8,7 +8,9 @@ A fixed points rule, no model and no tuning. Every stretch gets three scores of 
   residential street, living street, service lane or any other class = 1; no road found = 0 ("road type not known").
   The class is the one with the most road length within 15 m of the stretch.
 - Activity: places of activity within 30 m of the stretch: analysed buildings whose use is commercial or mixed
-  (shop + home), plus OpenStreetMap shop / amenity / office points that are not inside one of those buildings, plus
+  (shop + home) OR that have a shop name read clearly from a sign linked to them (name quality "good"; D56: use is not
+  known for many buildings, 139 of 381 in Ward 29, so counting by use alone undercounted), plus OpenStreetMap shop /
+  amenity / office points that are not inside one of those buildings, plus
   businesses read from signs with no analysed building that are not inside one of those buildings and not within 10 m
   of a counted OpenStreetMap point (taken as the same place). 0 places = 0, 1-4 = 1, 5-9 = 2, 10 or more = 3.
 High = 7-9 points, Medium = 5-6, Low = 0-4. Ties: more points, then longer, then id.
@@ -33,12 +35,14 @@ ROAD_M = 15                                                  # road length withi
 ACTIVITY_M = 30                                              # places of activity within this distance count
 SAME_PLACE_M = 10                                            # a sign-read business this close to a counted OSM point = same place
 SHOP_USES = ("commercial", "mixed")
+SIGN_QUALITY = "good"                                        # D56: a shop name read clearly from the building's own sign
 RULE = {
     "length": "recorded length: under 120 m = 1 point, 120-239 m = 2, 240 m or more = 3",
     "road": "OpenStreetMap road class under the stretch: main road (trunk / primary / secondary) = 3, connecting road "
             "(tertiary / unclassified) = 2, residential street / service lane / other = 1, not known = 0",
     "activity": f"shops and businesses within {ACTIVITY_M} m: none = 0, 1-4 = 1, 5-9 = 2, 10 or more = 3 "
-                "(commercial or mixed-use buildings, OpenStreetMap shop / amenity / office points, businesses read from signs)",
+                "(buildings that are commercial or mixed use or carry a shop name read clearly from their sign, "
+                "OpenStreetMap shop / amenity / office points, businesses read from signs with no analysed building)",
     "levels": f"High = {HIGH_MIN}-9 points, Medium = {MEDIUM_MIN}-{HIGH_MIN - 1}, Low = 0-{MEDIUM_MIN - 1}",
     "why": "A fixed rule written down before any result was seen (D54); it ranks possible dark stretches, it does not "
            "confirm them.",
@@ -95,7 +99,8 @@ with s as (
   select x->>'id' id, ST_SetSRID(ST_GeomFromGeoJSON(x->>'geom'), 4326) geom from jsonb_array_elements(%(s)s::jsonb) x
 ), a as (select id from areas where slug = %(slug)s
 ), shops as (
-  select b.id, coalesce(b.footprint, b.geom) g from buildings b where b.area_id = (select id from a) and b.use = any(%(uses)s)
+  select b.id, coalesce(b.footprint, b.geom) g from buildings b where b.area_id = (select id from a)
+    and (b.use = any(%(uses)s) or b.name_quality = %(sign_q)s)
 ), road as (
   select s.id, r.highway,
          sum(ST_Length(ST_Intersection(r.geom, ST_Buffer(s.geom::geography, {ROAD_M})::geometry)::geography)) m
@@ -155,7 +160,7 @@ def compute(pool, bundle, rows=None, display=None):
         return {}
     payload = json.dumps([{"id": i, "geom": json.dumps(g)} for i, _, g in S])
     with pool.connection() as c:
-        res = c.execute(SQL, {"s": payload, "slug": bundle["slug"], "uses": list(SHOP_USES)}).fetchall()
+        res = c.execute(SQL, {"s": payload, "slug": bundle["slug"], "uses": list(SHOP_USES), "sign_q": SIGN_QUALITY}).fetchall()
     length = {i: m for i, m, _ in S}
     out = {}
     for sid, roads, bids, n_osm, sids in res:

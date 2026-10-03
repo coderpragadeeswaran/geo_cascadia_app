@@ -9,7 +9,7 @@ from collections import Counter
 
 from geo_cascadia.workspace import QueryEngine, build_dashboard
 
-from . import lighting, queryparse, spatial
+from . import camonly, lighting, queryparse, spatial
 from .derived import computed_counts, consistency
 from .streetgeo import gap_consistency
 
@@ -97,7 +97,9 @@ def area_card(bundle):
             "coverage": coverage(bundle, s),
             "counts": {k: s[k] for k in ("buildings", "assets", "streets", "streetlight_gaps_60m", "review_items",
                                          "unmapped_businesses", "missing_asset_records", "use_not_classified",
-                                         "assets_triangulated")},
+                                         "assets_triangulated")}
+                      # D56: shown next to the building count, never added to it (no outline, no register check)
+                      | {"camera_only_buildings": camonly.count(bundle["slug"])},
             "match_status": s["match_status"]}
 
 
@@ -112,7 +114,8 @@ def coverage(bundle, s=None):
     return {"level": "full" if verdict.startswith("full") else "partial" if verdict else None,
             "verdict": verdict or None, "views_planned": vp, "views_facing_no_mapped_building": vn,
             "share_views_no_mapped_building": share, "osm_footprints": (cov.get("footprints") or {}).get("osm"),
-            "buildings": s["buildings"], "unmapped_businesses": s["unmapped_businesses"], "assets": s["assets"]}
+            "buildings": s["buildings"], "unmapped_businesses": s["unmapped_businesses"], "assets": s["assets"],
+            "camera_only_buildings": camonly.count(bundle["slug"])}
 
 
 def area_detail(bundle, model_card):

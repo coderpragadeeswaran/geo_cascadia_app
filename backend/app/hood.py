@@ -208,6 +208,9 @@ def facts(bundle, F, model_card=None):
     bv = {q["fp"]: q for q in F.get("building_views") or []}
     ids = [b["id"] for b in B]
     put("buildings", len(B), "export.json buildings[]")
+    from . import camonly
+    put("camera_only_buildings", camonly.count(bundle["slug"]),
+        "building_positions.json no_footprint: seen only by the camera, no map outline (not analysed; D56)")
     put("buildings_with_box", sum(i in bv for i in ids), "buildings with a row in building_views.json")
     put("buildings_usable", sum(i in bv and bv[i].get("reliable") for i in ids), "building_views.json: reliable")
     put("buildings_no_box", n["buildings"] - n["buildings_with_box"], "buildings with no building box in any view")

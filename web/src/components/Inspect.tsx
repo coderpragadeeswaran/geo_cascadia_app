@@ -1,7 +1,7 @@
 /** Hover card (follows the cursor, plain words) and the low-coverage note. A click opens the evidence panel. */
 import { useAreas, useModelCard } from '@/api/queries'
 import type { AnyProps, GapProps } from '@/api/types'
-import { assetRegLabel, ASSET_REG, floorsText, gapTypeLabel, priorityLabel, matchLabel, onMapSeenIn, shortArea, useLabel } from '@/lib/labels'
+import { assetRegLabel, ASSET_REG, floorsText, gapTypeLabel, priorityLabel, matchLabel, onMapSeenIn, shortArea, useLabel, CAMERA_ONLY_TIP, cameraOnlyText } from '@/lib/labels'
 import { useAreaData } from '@/lib/useAreaData'
 import { fmt, noun, plural } from '@/lib/utils'
 import { useUi } from '@/store/ui'
@@ -14,7 +14,7 @@ function Body({ p }: { p: AnyProps }) {
     case 'area':
       return (<>
         <Title eyebrow="Analysed area" title={shortArea(p.name)} />
-        <Line><N n={p.card.counts.buildings} /> {noun(p.card.counts.buildings, 'building')} checked · <N n={p.card.counts.streetlight_gaps_60m} /> {noun(p.card.counts.streetlight_gaps_60m, 'possible dark stretch')}</Line>
+        <Line><N n={p.card.counts.buildings} /> {noun(p.card.counts.buildings, 'building')} checked{p.card.counts.camera_only_buildings ? <span title={CAMERA_ONLY_TIP}> ({cameraOnlyText(p.card.counts.camera_only_buildings)})</span> : null} · <N n={p.card.counts.streetlight_gaps_60m} /> {noun(p.card.counts.streetlight_gaps_60m, 'possible dark stretch')}</Line>
         <Line><N n={p.card.counts.unmapped_businesses} /> {noun(p.card.counts.unmapped_businesses, 'business')} with no analysed building</Line>
       </>)
     case 'street':
@@ -126,7 +126,7 @@ export function CoverageNotice() {
       style={{ borderLeftColor: 'var(--ns-sodium)', background: 'color-mix(in srgb, var(--ns-bg1) 90%, transparent)' }}>
       <b className="text-ink">Few buildings are on the map here.</b>{' '}
       {pct != null && <>{pct}% of the camera views face frontage with no building outline on the map. </>}
-      Buildings were checked only where an outline exists ({c.buildings}); streetlights, poles and signs were checked everywhere ({plural(c.assets, 'pole or light', 'poles and lights')}, {plural(c.unmapped_businesses, 'business')} with no analysed building).
+      Buildings were checked only where an outline exists ({c.buildings}{c.camera_only_buildings ? `; ${cameraOnlyText(c.camera_only_buildings)}, not checked` : ''}); streetlights, poles and signs were checked everywhere ({plural(c.assets, 'pole or light', 'poles and lights')}, {plural(c.unmapped_businesses, 'business')} with no analysed building).
     </p>
   )
 }

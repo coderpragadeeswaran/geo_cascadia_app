@@ -4,6 +4,7 @@
 import { ChevronDown, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { KPI_DEFS, kpiFilter, kpiLabel, kpis, type KpiDef } from '@/lib/derive'
+import { CAMERA_ONLY_TIP, cameraOnlyText } from '@/lib/labels'
 import { useAreaData } from '@/lib/useAreaData'
 import { cn, fmt } from '@/lib/utils'
 import { useUi } from '@/store/ui'
@@ -13,8 +14,9 @@ const TONE: Record<string, string> = {
 }
 
 export function KpiRibbon() {
-  const { records } = useAreaData()
+  const { records, detail } = useAreaData()
   const street = useUi((s) => s.filter.street)
+  const cam = street ? 0 : detail?.counts?.camera_only_buildings ?? 0       // D56: the camera-only points have no street
   const active = useUi((s) => s.kpi)
   const query = useUi((s) => s.query)
   const selectStreet = useUi((s) => s.selectStreet)
@@ -49,6 +51,7 @@ export function KpiRibbon() {
               {k ? fmt.format(k[d.key]) : <span className="inline-block h-5 w-9 animate-pulse rounded-sm bg-line" />}
             </span>
             <span className={cn('t-micro mt-1.5 max-w-[9.5rem] leading-[1.15] group-hover:text-ink2', on && '!text-sodium')}>{kpiLabel(d, k?.[d.key])}</span>
+            {d.key === 'buildings_analysed' && cam > 0 && <span className="t-small ink3 mt-0.5 text-[13px]" title={CAMERA_ONLY_TIP}>{cameraOnlyText(cam)}</span>}
             {d.sub && <span className="t-small ink3 mt-0.5 hidden text-[13.5px] min-[1500px]:block">{d.sub}</span>}
             {on && <span className="absolute -bottom-1 left-0 right-5 h-[2px]" style={{ background: 'var(--ns-sodium)', left: i ? 20 : 0 }} />}
           </button>

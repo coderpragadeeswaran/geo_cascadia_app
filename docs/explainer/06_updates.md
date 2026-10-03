@@ -96,4 +96,68 @@
 
 ---
 
+## 3 Oct 2026 · D56 — Final polish and a regression pass before the demo
+
+### What it does
+1. **Fairer shop count for the lighting priority.** A building near a possible dark stretch now counts as "a shop or business along it" when its use is a shop or business (or shop + home) **or** a shop name was read clearly from its own sign. The points and the High / Medium / Low cut-offs are unchanged.
+2. **Excel lists every pole and streetlight.** The report's Excel file now has all of them on the Assets sheet (Ward 29: 268), with the register finding in its own column, empty when there is none. The PDF still lists only those with a finding.
+3. **"+ 9 seen only by camera".** Wherever the app shows how many buildings were checked, it now also says how many more the camera saw where the map has no building outline, for example **"381 buildings checked · + 9 seen only by camera"**. The main number stays the same, because those buildings can't be checked against the register.
+4. **Memory re-measured** on the production build: well under the 60 MB target.
+5. **A regression script** that checks the whole app in one go, to run before the demo.
+
+### Why
+- Use is not known for 139 of Ward 29's 381 buildings, so counting shops by use alone missed shops whose use the model couldn't read but whose sign it could.
+- An official filing the Excel file wants the full asset list, not only the problems.
+- "381 buildings" was true but incomplete: 9 more were seen and shown on the map's camera-only layer, and nowhere else said so.
+- The project is frozen after this round; one command that re-checks everything lowers the risk on demo day.
+
+### How it works
+- **Shop count:** the same database query as before (D54), with one more condition: "or the building's sign name was read clearly". A shop point from OpenStreetMap that lies inside such a building is not counted twice.
+- **Camera-only count:** read from the analysis's own list of camera-only buildings (the same list the map's orange diamonds come from). It is not added to the building count anywhere. When a street is selected the line is hidden, because these points are not tied to a street.
+- **Regression script:** `tools/regression.py` runs six sections and writes a log:
+  - **A** the four spec questions and seven extra ones (two in Tamil, "High priority dark stretches", the 50 m question, poles on a street, 100 m, "possible dark stretches") must give the expected filters and counts;
+  - **B** one review decision and its Undo; afterwards every review item, building and pole must be exactly as before (only the item's "last changed" time and two history lines remain, by design);
+  - **C** the Analyse flow up to the cost estimate, for a street inside the app's map data (Sakthi Main Road) and one outside it (a road in Erode); no analysis is created;
+  - **D** PDF + Excel reports for every area and one street; every key number must equal the app's;
+  - **E** every page of every area in both themes, with no console errors, plus the guided tour (`web/scripts/regression.ts`);
+  - **F** the fallback cases: map servers blocked, the analysis computer offline, Google keys missing, the server stopping mid-session (the existing offline check, with the two helper servers it needs started and stopped by the script).
+
+### Files changed
+- New: `backend/app/camonly.py`, `tools/regression.py`, `web/scripts/regression.ts`.
+- Changed: `backend/app/lighting.py` (the shop condition), `backend/app/report.py` (Excel assets, the camera-only note), `backend/app/views.py` and `backend/app/hood.py` (the camera-only count), `backend/app/main.py`, `backend/tests/test_report.py`; in the web app `KpiRibbon.tsx`, `Inspect.tsx`, `Tour.tsx`, `CommandPalette.tsx`, `pages/Hood.tsx`, `pages/Jobs.tsx`, `pages/Trust.tsx`, `lib/labels.ts`, `api/types.ts`, `scripts/audit.ts`.
+- No change to the analysis pipeline or the Colab worker.
+
+### Key numbers
+**Ward 29 shop counts, before → after** (priority unchanged for every stretch; only the order of #2 and #3 swaps, because Ganapathy - Avarampalayam Road rose from 7 to 8 points and is longer than Sakthi Main Road):
+
+| Street | Length | Shops before → after | Points before → after | Priority |
+|---|---|---|---|---|
+| Sathy Main Road | 376 m | 37 → 39 | 9 → 9 | High |
+| Ganapathy - Avarampalayam Road | 193 m | 9 → 13 | 7 → 8 | High |
+| Sakthi Main Road | 142 m | 14 → 14 | 8 → 8 | High |
+| 8th Street, Ganapathy | 313 m | 7 → 7 | 6 → 6 | Medium |
+| Sathy Main Road | 67 m | 5 → 6 | 6 → 6 | Medium |
+| Sri Ganapathy Gardens 3rd Street (approx.) | 254 m | 2 → 3 | 5 → 5 | Medium |
+| 4th Street, Tatabad / Vinobaji Street | 211 m | 2 → 3 | 4 → 4 | Low |
+| 2nd Street, Ganapathy Gardens (approx.) | 203 m | 2 → 4 | 4 → 4 | Low |
+| 2nd Street, Gandhi Nagar | 99 m | 4 → 9 | 3 → 4 | Low |
+| Korathottam Road | 83 m | 1 → 2 | 3 → 3 | Low |
+| Korathottam Road | 78 m | 1 → 1 | 3 → 3 | Low |
+
+- **Seen only by camera:** Ward 29 9, Trichy 79, Tiruppur 12, Vadakku Masi Veethi 4, Sanganur Road 2; the three other app-analysed streets 0.
+- **Memory** (production build, two runs): Ward 29 idle 25.4 / 25.6 MB; a building's evidence open 45.0 / 45.3 MB; after the whole tour 46.2 / 46.4 MB (target ≤ 60 MB).
+- **Regression results:** one complete run on 3 Oct 2026, **all six sections passed** (log `docs/screenshots/regression/run-2026-10-03_1502.log`, 242 checks): A 11 of 11 questions right; B after a decision and its Undo, all 376 review items and 1,057 buildings and poles exactly as before; C Sakthi Main Road found in 0.3 s, estimate 416 photos, $2.94 (above the $2 cap, so it would wait for approval), and a road in Erode (outside the four cities) 97 photos, $0.68, no job created; D reports for all 8 areas and Sathy Main Road, every key number equal to the app; E every page of every area in both themes, no console errors, the 7-step tour; F all four fallback cases.
+- **Fixes made during the pass:** (1) the regression's fallback section now removes any test job left behind if a check stops half way (found when the API server was stopped by a time limit during a first attempt, which left one test job queued; it was removed); (2) the audit script printed an empty Gate 1 status (the badge is in capitals); (3) the first memory measurement hit an older dev server still running on the app's port; it was stopped and the numbers re-measured on the production build.
+
+### Limits
+- A name board read clearly on a home also counts as a "shop sign"; the shop count can still miss shops with no readable sign and no known use.
+- The camera-only buildings are not analysed (no use, floors or register check); their positions come only from where camera lines of sight cross.
+- The regression script needs the server and the web app running, Google's map and OpenStreetMap's public servers reachable for the "outside" street, and takes about half an hour. Its expected answers are Ward 29's current numbers: if the data are reloaded or re-analysed, the expected values in the script must be updated by hand.
+- The review round trip leaves two lines in the review history (the decision and its undo, reviewer "regression check"): the history is append-only by design.
+
+### Lines fixed in 00–05
+- None. The earlier D54 entry above keeps its original table; this entry gives the new counts.
+
+---
+
 [← 05 Explain and defend](05_EXPLAIN_AND_DEFEND.md) · [Start here](00_START_HERE.md) · (this is the last file) →

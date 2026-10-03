@@ -54,6 +54,10 @@ export const GAP_TYPE: Record<string, string> = {
 }
 export const gapTypeLabel = (t: string | null | undefined) => (t ? GAP_TYPE[t] ?? t : '—')
 
+/** D56: buildings seen only by the camera (no map outline) — shown next to the analysed-building count, never added */
+export const cameraOnlyText = (n: number | null | undefined) => (n ? `+ ${n} seen only by camera` : '')
+export const CAMERA_ONLY_TIP = 'Buildings the camera saw where the map has no building outline. They are not checked against the register, so they are not in the main count.'
+
 /** D54 lighting priority of a possible dark stretch, in words; null = not available (offline data mode) */
 export const PRIORITY_ORDER = ['high', 'medium', 'low'] as const
 export const priorityLabel = (p: string | null | undefined) => (p === 'high' ? 'High' : p === 'medium' ? 'Medium' : p === 'low' ? 'Low' : 'Not available')
