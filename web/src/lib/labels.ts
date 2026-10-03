@@ -54,6 +54,13 @@ export const GAP_TYPE: Record<string, string> = {
 }
 export const gapTypeLabel = (t: string | null | undefined) => (t ? GAP_TYPE[t] ?? t : '—')
 
+/** D54 lighting priority of a possible dark stretch, in words; null = not available (offline data mode) */
+export const PRIORITY_ORDER = ['high', 'medium', 'low'] as const
+export const priorityLabel = (p: string | null | undefined) => (p === 'high' ? 'High' : p === 'medium' ? 'Medium' : p === 'low' ? 'Low' : 'Not available')
+/** priority order: level, then points, then longer (the backend's lighting.order) */
+export const byPriority = <T extends { priority?: string | null; priority_score?: number | null; length_m: number; id: string }>(a: T, b: T) =>
+  (b.priority_score ?? -1) - (a.priority_score ?? -1) || b.length_m - a.length_m || a.id.localeCompare(b.id)
+
 export const REVIEW: Record<string, string> = { pending: 'Waiting for review', approved: 'Approved', rejected: 'Rejected', appealed: 'Appealed' }
 export const reviewLabel = (s: string | null | undefined) => (s ? REVIEW[s] ?? pretty(s) : '—')
 

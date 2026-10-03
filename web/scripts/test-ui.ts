@@ -1,7 +1,7 @@
 /** Pure UI helpers (review fixes 10, 11, 13, 14), no browser: `npm run test:ui`. Exits 1 on the first failure. */
 import { strict as assert } from 'node:assert'
 import { placeLabels, placeMapLabels, type Rect } from '../src/lib/labelLayout'
-import { JOB_STAGES, jobStatus, matchLabel, minutesText, planSlowText, planTooSlow, stageLine, stageProgress, stageShort, timeLeft } from '../src/lib/labels'
+import { byPriority, JOB_STAGES, jobStatus, matchLabel, priorityLabel, minutesText, planSlowText, planTooSlow, stageLine, stageProgress, stageShort, timeLeft } from '../src/lib/labels'
 import { kpis, type Records } from '../src/lib/derive'
 import { photoProblem, saveDecision } from '../src/lib/review'
 import { article, costText, noun, plural, usd, withArticle } from '../src/lib/utils'
@@ -186,6 +186,13 @@ t('trim handles: never overlap (short street, loop, far zoom); far apart = left 
   assert.ok(dist(loop[0], loop[1]) >= 28 - 1e-9 && loop[0].y < loop[1].y)          // a loop: each end along its own way out
   const same = separate({ x: 10, y: 10 }, { x: 10, y: 10 }, { x: 0, y: 0 }, { x: 0, y: 0 })
   assert.ok(dist(same[0], same[1]) >= 28 - 1e-9)                                   // no direction known: still apart
+})
+
+t('lighting priority (D54): the list orders by points, then longer, then id; words for each level', () => {
+  const g = (id: string, priority: string | null, priority_score: number | null, length_m: number) => ({ id, priority, priority_score, length_m })
+  const rows = [g('a', 'low', 3, 400), g('b', 'high', 7, 100), g('c', 'high', 9, 50), g('d', 'medium', 6, 300), g('e', 'medium', 6, 310), g('f', null, null, 900)]
+  assert.deepEqual([...rows].sort(byPriority).map((r) => r.id), ['c', 'b', 'e', 'd', 'a', 'f'])
+  assert.deepEqual(['high', 'medium', 'low', null].map(priorityLabel), ['High', 'Medium', 'Low', 'Not available'])
 })
 
 console.log(`${n} UI tests passed`)

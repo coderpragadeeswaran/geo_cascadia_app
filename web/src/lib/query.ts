@@ -44,6 +44,7 @@ export function exampleQuestions(streets: string[]) {
   return [
     'Commercial buildings with more than 2 floors and no record',
     'Streets where no streetlight is detected within 60 m',
+    'High priority dark stretches',
     'Chart of unmatched buildings by street',
     'Low-confidence floor counts for review',
     'Not-in-register buildings within 50 m of a possible dark stretch',

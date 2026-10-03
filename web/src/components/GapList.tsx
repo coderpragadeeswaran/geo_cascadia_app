@@ -1,8 +1,10 @@
-/** Dark stretches: road with no streetlight seen within 60 m, longest (recorded) first. Plain sentences; the recorded
- *  vs along-road length and the "check" note (D13) sit behind "How do we know?". Query 2 rows render here too. */
+/** Dark stretches: road with no streetlight seen within 60 m. D54: in lighting-priority order by default (High / Medium /
+ *  Low with a one-line reason), or longest (recorded) first. Plain sentences; the recorded vs along-road length, the
+ *  "check" note (D13) and the priority's points sit behind "How do we know?". Query 2 rows render here too. */
 import { useMap } from '@vis.gl/react-google-maps'
+import { useState } from 'react'
 import type { GapProps, GapRow } from '@/api/types'
-import { gapTypeLabel } from '@/lib/labels'
+import { byPriority, gapTypeLabel, PRIORITY_ORDER, priorityLabel } from '@/lib/labels'
 import { propsFor, useAreaData } from '@/lib/useAreaData'
 import { cn, fmt, plural } from '@/lib/utils'
 import { flyToBounds } from '@/map/MapView'
@@ -10,7 +12,7 @@ import { useUi } from '@/store/ui'
 import { LampRecall } from './LampRecall'
 import { Fact, HowWeKnow } from './HowWeKnow'
 
-export type Gap = Pick<GapRow, 'id' | 'street' | 'length_m' | 'gap_type' | 'poles_inside' | 'display_mode' | 'along_road_m' | 'length_differs' | 'note'> & Partial<Pick<GapProps, 'lit_cameras_inside' | 'longest_dark_along_road_m' | 'interval_m'>> & { computed?: boolean }
+export type Gap = Pick<GapRow, 'id' | 'street' | 'length_m' | 'gap_type' | 'poles_inside' | 'display_mode' | 'along_road_m' | 'length_differs' | 'note' | 'priority' | 'priority_score' | 'priority_reason' | 'priority_points' | 'priority_road'> & Partial<Pick<GapProps, 'lit_cameras_inside' | 'longest_dark_along_road_m' | 'interval_m'>> & { computed?: boolean }
 
 export function GapHow({ g }: { g: Gap }) {
   return (
@@ -24,6 +26,11 @@ export function GapHow({ g }: { g: Gap }) {
       <Fact k="On the map">{g.display_mode === 'along_road' ? 'Drawn along the street' : g.display_mode === 'check' ? 'Drawn straight, as recorded, and marked to check' : 'Drawn straight, as recorded'}</Fact>
       <Fact k="Poles here" hint={g.gap_type}><span className="t-data">{g.poles_inside}</span>: {gapTypeLabel(g.gap_type)}</Fact>
       {g.display_mode === 'check' && <Fact k="Check">{g.note}</Fact>}
+      {g.priority && g.priority_points && (
+        <Fact k="Priority" hint="fixed points rule (D54), not tuned">
+          {priorityLabel(g.priority)}: length {g.priority_points.length} + road {g.priority_points.road}{g.priority_road ? ` (OpenStreetMap: ${g.priority_road})` : ''} + shops and businesses within 30 m {g.priority_points.activity} = <span className="t-data">{g.priority_score}</span> of 9 points (High 7–9, Medium 5–6, Low 0–4)
+        </Fact>
+      )}
       <Fact k="ID"><span className="t-data">{g.id}</span></Fact>
     </HowWeKnow>
   )
@@ -35,7 +42,11 @@ export function GapList({ rows }: { rows: Gap[] }) {
   const selected = useUi((s) => s.selected)
   const map = useMap('main')
   const paths = new Map(gaps.map((g) => [g.props.id, g.geometry.coordinates as [number, number][]]))
-  const list = [...rows].sort((a, b) => b.length_m - a.length_m)
+  const hasPriority = rows.some((g) => g.priority)
+  const [order, setOrder] = useState<'priority' | 'length'>('priority')
+  const byP = hasPriority && order === 'priority'
+  const list = [...rows].sort(byP ? byPriority : (a, b) => b.length_m - a.length_m)
+  const counts = PRIORITY_ORDER.map((p) => [p, rows.filter((g) => g.priority === p).length] as const)
   const total = list.reduce((n, g) => n + g.length_m, 0)
   const open = (g: Gap) => {
     const p = propsFor(props, 'streetlight_gap', g.id)
@@ -49,8 +60,16 @@ export function GapList({ rows }: { rows: Gap[] }) {
   if (!list.length) return <p className="t-small ink3 px-5 py-6">No possible dark stretches here.</p>
   return (
     <div>
-      <p className="t-small ink2 px-5 pb-2"><span className="t-data text-ink">{fmt.format(Math.round(total))} m</span> in {plural(list.length, 'stretch')}, longest first.</p>
+      <p className="t-small ink2 px-5 pb-2"><span className="t-data text-ink">{fmt.format(Math.round(total))} m</span> in {plural(list.length, 'stretch')}{hasPriority ? <>: {counts.filter(([, n]) => n).map(([p, n], i) => <span key={p}>{i ? ' · ' : ''}{priorityLabel(p)} <span className="t-data text-ink">{n}</span></span>)}</> : ''}.</p>
+      {hasPriority ? (
+        <div className="flex items-center gap-2 px-5 pb-2" role="group" aria-label="Order">
+          <span className="t-small ink3">Order:</span>
+          <button className="btn h-7" aria-pressed={order === 'priority'} onClick={() => setOrder('priority')}>Fix first</button>
+          <button className="btn h-7" aria-pressed={order === 'length'} onClick={() => setOrder('length')}>Longest first</button>
+        </div>
+      ) : rows.length > 0 && <p className="t-small ink3 px-5 pb-2">Longest first. Lighting priority isn’t available right now (it needs the app’s database).</p>}
       <LampRecall className="px-5 pb-2" />
+      {hasPriority && <p className="t-small ink3 px-5 pb-2">Priority ranks these possible stretches by length, road type and shops nearby; it does not confirm them.</p>}
       <ol aria-label="Possible dark stretches">
         {list.map((g) => {
           const on = selected?.kind === 'streetlight_gap' && selected.id === g.id
@@ -59,8 +78,9 @@ export function GapList({ rows }: { rows: Gap[] }) {
               <button onClick={() => open(g)} className="block w-full cursor-pointer text-left">
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="min-w-0"><span className="t-data text-[15.5px]">{fmt.format(Math.round(g.length_m))} m</span> <span>of {g.street}</span></span>
-                  <span className="mt-1 h-2 w-8 shrink-0 rounded-sm" style={{ background: 'var(--ns-dark)', boxShadow: '0 0 0 1px var(--ns-dark-edge)' }} aria-hidden />
+                  {g.priority ? <PriorityTag p={g.priority} /> : <span className="mt-1 h-2 w-8 shrink-0 rounded-sm" style={{ background: 'var(--ns-dark)', boxShadow: '0 0 0 1px var(--ns-dark-edge)' }} aria-hidden />}
                 </div>
+                {g.priority_reason && <div className="t-small ink2 mt-0.5">{g.priority_reason}</div>}
                 <div className="t-small ink3 mt-0.5">{gapTypeLabel(g.gap_type)}</div>
                 {g.display_mode === 'check' && <p className="t-small mt-1 border-l-2 pl-2 ink2" style={{ borderColor: 'var(--ns-sodium)' }}>Needs checking on the ground: the road bends here and some lights were seen part way along.</p>}
               </button>
@@ -70,5 +90,16 @@ export function GapList({ rows }: { rows: Gap[] }) {
         })}
       </ol>
     </div>
+  )
+}
+
+/** D54: the priority as a word plus the map's mark (a dark band with the priority's edge colour; wider = higher) */
+export function PriorityTag({ p, long }: { p: string; long?: boolean }) {
+  const w = p === 'high' ? 3 : p === 'medium' ? 2.5 : 2
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 t-small">
+      <span className="h-2 w-7 rounded-sm" style={{ background: 'var(--ns-dark)', boxShadow: `0 0 0 ${w}px var(--ns-prio-${p})` }} aria-hidden />
+      <span className="font-[560]">{priorityLabel(p)}{long ? ' priority' : ''}</span>
+    </span>
   )
 }

@@ -52,7 +52,11 @@ export interface GapProps {
   /** along_road = drawn along the street; check = drawn as recorded, lit camera stops lie on the road between its ends */
   display_mode: 'along_road' | 'check' | 'straight'; along_road_m: number | null; length_differs: boolean
   lit_cameras_inside: number | null; longest_dark_along_road_m: number | null; note: string | null
+  /** D54 lighting priority (PostGIS; null in offline data mode): level, points 0-9, one plain sentence */
+  priority?: Priority | null; priority_score?: number | null; priority_reason?: string | null
+  priority_points?: { length: number; road: number; activity: number } | null; priority_road?: string | null
 }
+export type Priority = 'high' | 'medium' | 'low'
 export interface UnmappedProps { kind: 'unmapped_business'; id: string; name: string | null; street: string | null; sightings: number | null; approximate: true }
 export interface MissingProps { kind: 'missing_asset_record'; id: string; street: string | null; why: string | null; register: 'SYNTHETIC' }
 
@@ -100,12 +104,16 @@ export interface QueryFilters {
   interval_m?: number; asset_type?: 'pole' | 'streetlight'; reason_has?: string
   /** D53: buildings within this many metres of a possible dark stretch (PostGIS ST_DWithin, applied after QueryEngine) */
   near_dark_m?: number
+  /** D54: only dark stretches of this lighting priority (applied after QueryEngine) */
+  priority?: Priority
 }
 export interface GapRow {
   kind: 'streetlight_gap'; id: string; street: string; length_m: number; interval_m: number; start: [number, number]
   end: [number, number]; poles_inside: number; gap_type: string; display_mode: 'along_road' | 'check' | 'straight'
   along_road_m: number | null; length_differs: boolean; lit_cameras_inside: number | null
   longest_dark_along_road_m: number | null; note: string | null
+  priority?: Priority | null; priority_score?: number | null; priority_reason?: string | null
+  priority_points?: { length: number; road: number; activity: number } | null; priority_road?: string | null
 }
 export interface ReviewItem {
   id: number | null; item_type: 'building' | 'asset'; ref_id: string; building_id: string | null; asset_cls: string | null

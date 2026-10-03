@@ -87,7 +87,7 @@ segments segment sections section stretches stretch parts portions lengths place
 was were been being will would should could had got detect detects found seen spotted observed identified
 generate generated make draw produce bar pie column diagram histogram visualise visualize visualisation
 please kindly provide return listing results result ones some currently still along between across inside
-properties then so when why whose""".split())
+properties then so when why whose possible possibly""".split())   # D54: "possible dark stretches" is the app's own wording
 # command words are filler only at the start of a question ("list all…"); elsewhere ("tax list") they are content
 START = {"list", "lists", "show", "display", "find", "give", "get", "plot", "map", "highlight"}
 PLACE = re.compile(r"^\s+(?:main road|road|street|st|nagar|colony|salai|layout)\b")

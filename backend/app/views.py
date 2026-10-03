@@ -9,7 +9,7 @@ from collections import Counter
 
 from geo_cascadia.workspace import QueryEngine, build_dashboard
 
-from . import queryparse, spatial
+from . import lighting, queryparse, spatial
 from .derived import computed_counts, consistency
 from .streetgeo import gap_consistency
 
@@ -138,8 +138,9 @@ def street_health(bundle):
     return out
 
 
-def features(bundle, layers, keep=None):
-    """GeoJSON features. keep: {layer: set(ids)} from a bbox filter, or None for everything."""
+def features(bundle, layers, keep=None, prio=None):
+    """GeoJSON features. keep: {layer: set(ids)} from a bbox filter, or None for everything. prio: lighting priority rows
+    by gap id (D54), None when not available."""
     ok = lambda layer, key: keep is None or key in keep.get(layer, set())
     F = lambda geom, props: {"type": "Feature", "geometry": geom, "properties": props}
     pt = lambda o: {"type": "Point", "coordinates": [o["lon"], o["lat"]]}
@@ -183,7 +184,8 @@ def features(bundle, layers, keep=None):
                     "interval_m": g.get("interval_m"), "poles_inside": g.get("poles_inside"), "gap_type": g.get("gap_type"),
                     "display_mode": d.get("mode", "straight"), "along_road_m": d.get("along_road_m"),
                     "length_differs": bool(d.get("length_differs")), "lit_cameras_inside": d.get("lit_cameras_inside"),
-                    "longest_dark_along_road_m": d.get("longest_dark_along_road_m"), "note": d.get("note")}))
+                    "longest_dark_along_road_m": d.get("longest_dark_along_road_m"), "note": d.get("note"),
+                    **lighting.attach(g, prio)}))
     if "unmapped" in layers:
         for u in bundle["unmapped_businesses"]:
             if ok("unmapped", u["id"]):
@@ -262,7 +264,8 @@ STORED_GAP_M = 60                   # the only interval the pipeline exported (f
 GOOGLE_FLAG = "sign_not_in_google_within_40m"
 
 
-def run_query(bundle, text, explain=True, gaps_at=None, scope_street=None, near_at=None, near_m=None):
+def run_query(bundle, text, explain=True, gaps_at=None, scope_street=None, near_at=None, near_m=None, prio_at=None,
+              priority=None):
     """QueryEngine.run + a uniform response. why_empty: the engine's funnel for building queries; for other intents
     a funnel built the same way (all → filters → 0). Typed questions go through queryparse first (synonyms + what was
     understood / ignored, docs/QUERY.md); chips built by clicking are canonical text and skip that step.
@@ -273,14 +276,21 @@ def run_query(bundle, text, explain=True, gaps_at=None, scope_street=None, near_
     so with a Street chip (fix 3: one scope, never two). A by-street chart covers every street and ignores it.
 
     near_at(metres) → {"ids", "method"}: D53 spatial rule "within N m of a possible dark stretch" (spatial.py; PostGIS
-    online). The phrase is taken out of a typed question before QueryEngine reads the rest; near_m = from edited chips."""
+    online). The phrase is taken out of a typed question before QueryEngine reads the rest; near_m = from edited chips.
+
+    prio_at(rows, display, key) → lighting.for_area(...) (D54): every dark-stretch row carries its lighting priority;
+    "high / medium / low priority" is taken out of a typed question the same way and keeps only that level
+    (priority = from edited chips)."""
     qe = engine(bundle)
     und = None
     phrase = None
+    p_phrase = None
     if explain:
-        text_q, m, phrase = spatial.extract(text)
+        text_p, lv, p_phrase = lighting.extract(text)
+        priority = lv or priority
+        text_q, m, phrase = spatial.extract(text_p)
         near_m = m or near_m
-        read_as, und = queryparse.understand(qe, text_q if m else text, compose_query)
+        read_as, und = queryparse.understand(qe, text_q if (m or lv) else text, compose_query)
         read_as = _scoped(qe, read_as, und, scope_street)
         parsed, res = qe.run(read_as)
     else:
@@ -306,9 +316,18 @@ def run_query(bundle, text, explain=True, gaps_at=None, scope_street=None, near_
                         f"draws it (the pipeline's stored 60 m stretches)."}
         if und is not None:
             und["understood"] = und["understood"] + [{"phrase": phrase or "", "meaning": f"within {near_m} m of a possible dark stretch"}]
+    if priority and it != "streetlight_gaps":
+        if und is not None:                                  # only dark-stretch questions take a priority level
+            und["ignored"] = und["ignored"] + [p_phrase or f"{priority} priority"]
+            und["status"] = "partial" if und["understood"] else "not_understood"
+        priority = None
+    elif priority:
+        parsed["priority"] = priority
+        if und is not None:
+            und["understood"] = und["understood"] + [{"phrase": p_phrase or "", "meaning": f"lighting priority: {priority}"}]
     out = {"text": text, "parsed_filters": parsed, "intent": it, "rows": None, "groups": None, "why_empty": [], "understanding": und,
            **({"spatial": near} if near else {})}
-    all_gaps = None
+    all_gaps, gdisp = None, None
     if it == "streetlight_gaps" and parsed["interval_m"] != STORED_GAP_M:
         iv = parsed["interval_m"]
         comp = gaps_at(iv) if gaps_at else None
@@ -317,7 +336,7 @@ def run_query(bundle, text, explain=True, gaps_at=None, scope_street=None, near_
                        f"Dark stretches at {iv} m can't be computed for this area: the camera plan (plan.json) is not "
                        f"available. Only the pipeline's stored {STORED_GAP_M} m stretches exist."})
             return out
-        all_gaps, st = comp["rows"], parsed.get("street")
+        all_gaps, gdisp, st = comp["rows"], comp["display"], parsed.get("street")
         rows = sorted([g for g in all_gaps if not st or g["street"] == st], key=lambda g: -g["length_m"])
         out["rows"] = [{**_query_row(it, g, comp["display"]), "computed": True,
                         "path": (comp["display"].get(g["id"]) or {}).get("path")} for g in rows]
@@ -332,9 +351,14 @@ def run_query(bundle, text, explain=True, gaps_at=None, scope_street=None, near_
         out["total"] = len(res)
         if it == "streetlight_gaps":
             out["gaps"] = {"interval_m": STORED_GAP_M, "computed": False, "available": True, "note": "stored by the pipeline"}
+    if it == "streetlight_gaps" and out["rows"] is not None:
+        _with_priority(out, parsed, all_gaps, gdisp, prio_at, priority)
     if it == "buildings" and parsed.get("ref_flag") == GOOGLE_FLAG:
         out["note"] = _google_note(qe, parsed, out["total"])
-    if near:
+    pf = out.pop("priority_funnel", None)
+    if pf is not None:
+        out["why_empty"] = pf if not out["total"] else []
+    elif near:
         steps = [{"step": s, "count": n} for s, n in funnel] if funnel else             [{"step": "buildings matching the rest of the question", "count": near["before"]}]
         out["why_empty"] = steps + [{"step": f"within {near['near_dark_m']} m of a possible dark stretch", "count": near["after"]}]
     elif funnel:
@@ -342,6 +366,31 @@ def run_query(bundle, text, explain=True, gaps_at=None, scope_street=None, near_
     elif out["total"] == 0:
         out["why_empty"] = _other_funnel(bundle, qe, parsed, all_gaps)
     return out
+
+
+def _with_priority(out, parsed, all_gaps, gdisp, prio_at, priority):
+    """D54: every dark-stretch row gets its lighting priority (level, points, plain reason); a priority level keeps only
+    that level. Rows keep QueryEngine's order (longest first); the app sorts by priority."""
+    pr = None
+    if prio_at is not None:
+        res = prio_at(all_gaps, gdisp, parsed["interval_m"])
+        out["lighting"] = {"available": res["available"], "rule": res["rule"], "note": res["note"]}
+        pr = res["rows"] if res["available"] else None
+    for r in out["rows"]:
+        r.update(lighting.attach(r, pr))
+    if priority:
+        before = len(out["rows"])
+        if pr is None:
+            out["rows"], out["total"] = [], None
+            out["priority_funnel"] = [{"step": "possible dark stretches", "count": before},
+                                      {"step": f"{priority} priority (not available: {lighting.OFFLINE_NOTE})", "count": 0}]
+            return
+        out["rows"] = [r for r in out["rows"] if r["priority"] == priority]
+        out["total"] = len(out["rows"])
+        st = parsed.get("street")
+        out["priority_funnel"] = [{"step": f"possible dark stretches ({parsed['interval_m']} m)", "count": len(pr)}] \
+            + ([{"step": f"on {st}", "count": before}] if st else []) \
+            + [{"step": f"{priority} priority", "count": out["total"]}]
 
 
 def _scoped(qe, read_as, und, street):
@@ -481,8 +530,9 @@ def compose_query(f):
     return " ".join(parts)
 
 
-def run_filters(bundle, filters, gaps_at=None, near_at=None):
+def run_filters(bundle, filters, gaps_at=None, near_at=None, prio_at=None):
     near_m = int(filters.get("near_dark_m") or 0) or None        # D53: applied after QueryEngine (spatial.py)
+    priority = filters.get("priority") if filters.get("priority") in lighting.LEVEL_WORDS else None   # D54
     want = normalize_filters(filters)
     if want["intent"] != "buildings":
         want.pop("group_by", None)
@@ -491,4 +541,5 @@ def run_filters(bundle, filters, gaps_at=None, near_at=None):
     if got != want:
         raise FilterError(f"these filters can't be expressed for QueryEngine (read back as {got})")
     return run_query(bundle, text, explain=False, gaps_at=gaps_at, near_at=near_at,
-                     near_m=near_m if want["intent"] == "buildings" else None)
+                     near_m=near_m if want["intent"] == "buildings" else None, prio_at=prio_at,
+                     priority=priority if want["intent"] == "streetlight_gaps" else None)

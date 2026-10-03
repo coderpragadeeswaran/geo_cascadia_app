@@ -25,7 +25,7 @@ from .settings import ROOT, Settings
 
 sys.path.insert(0, os.path.join(ROOT, "pipeline"))   # geo_cascadia (import only — never modified)
 
-from . import drive, evidence, frontwall, gaps, gate1pos, hood, imagery, loader, mapdata, minimap, namepick, registertest, spatial, trust, views  # noqa: E402
+from . import drive, evidence, frontwall, gaps, gate1pos, hood, imagery, lighting, loader, mapdata, minimap, namepick, registertest, spatial, trust, views  # noqa: E402
 from . import streetpick as streetpick_mod  # noqa: E402
 from .storage import StorageError  # noqa: E402
 from .store import Data, OfflineError  # noqa: E402
@@ -128,7 +128,8 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
                                 if settings.local_map_data else None)
     app.add_middleware(ServerErrorsAsJson)          # added first = innermost: its 500 still passes through CORS
     app.add_middleware(GZipMiddleware, minimum_size=2000)
-    app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"])
+    app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"],
+                       expose_headers=["Content-Disposition"])          # D55: the report's file name
 
     @app.exception_handler(OfflineError)
     def _offline(_, exc):
@@ -222,7 +223,8 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         def fn(s):
             b = need(s, slug)
             keep = {x: s.ids_in_bbox(b, x, bb) for x in L} if bb else None
-            return views.features(b, L, keep)
+            pr = lighting.for_area(s, b) if "gaps" in L else None             # D54: lighting priority on each stretch
+            return views.features(b, L, keep, pr["rows"] if pr and pr["available"] else None)
 
         feats, off = D.read(fn)
         return {"type": "FeatureCollection", "features": feats, "offline": off}
@@ -395,6 +397,49 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
                                                     os.path.join(settings.data_dir, "cache", "streetpick")))
         return {"offline": off, "area": slug, **res}
 
+    def _report(slug, street, ext):
+        from fastapi.responses import Response
+        from . import report
+
+        def fn(s):
+            b = need(s, slug)
+            try:
+                return report.content(s, b, app.state.runfiles.get(slug), mc(), settings.areas_dir, street=street or None)
+            except KeyError:
+                raise HTTPException(404, f"street {street!r} is not in area {slug!r}") from None
+        c, _ = app.state.data.read(fn)
+        body = report.pdf(c) if ext == "pdf" else report.xlsx(c)
+        media = "application/pdf" if ext == "pdf" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        return Response(body, media_type=media, headers={
+            "Content-Disposition": f'attachment; filename="{report.filename(c, ext)}"', "Cache-Control": "no-store"})
+
+    @app.get("/areas/{slug}/report.pdf", tags=["report"])
+    def area_report_pdf(slug: str, street: Optional[str] = Query(None, description="one street of the area (display name)")):
+        """D55: the area report for officials (PDF): sources with dates, the key numbers as the app shows them, a map drawn
+        from our own data (no Google tiles or photos), findings, possible dark stretches by priority, review queue,
+        routing and cost, Gate 1 as on Trust, limits. Registers are SYNTHETIC."""
+        return _report(slug, street, "pdf")
+
+    @app.get("/areas/{slug}/report.xlsx", tags=["report"])
+    def area_report_xlsx(slug: str, street: Optional[str] = Query(None, description="one street of the area (display name)")):
+        """D55: the same tables as the PDF, one sheet each (buildings with findings, assets, possible dark stretches,
+        review items) plus an About sheet."""
+        return _report(slug, street, "xlsx")
+
+    @app.get("/areas/{slug}/lighting", tags=["areas"])
+    def area_lighting(slug: str, D: Data = Depends(get_data)):
+        """D54: lighting priority of every possible dark stretch (stored 60 m), in priority order: High / Medium / Low,
+        the points per factor (length, road type, activity within 30 m), a plain reason, and the rule. PostGIS; not
+        available in offline data mode."""
+        def fn(s):
+            b = need(s, slug)
+            pr = lighting.for_area(s, b)
+            gap = {g["id"]: g for g in b["streetlight_gaps"]}
+            rows = [{**r, "street": gap[r["id"]].get("street")} for r in lighting.order(list(pr["rows"].values()))]
+            return {"available": pr["available"], "rule": pr["rule"], "note": pr["note"], "rows": rows}
+        res, off = D.read(fn)
+        return {"offline": off, "area": slug, **res}
+
     # ------------------------------------------------------------ under the hood / trust (P5)
     @app.get("/areas/{slug}/hood", tags=["hood"])
     def area_hood(slug: str, D: Data = Depends(get_data)):
@@ -474,8 +519,10 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
                 b = need(s, body.area)
                 gaps_at = lambda iv: app.state.gapcalc.get(b, iv)
                 near_at = lambda m: spatial.near_dark(s, b, m)          # D53: "within N m of a possible dark stretch"
-                return views.run_filters(b, body.filters, gaps_at, near_at) if body.filters \
-                    else views.run_query(b, body.text, gaps_at=gaps_at, scope_street=body.scope_street, near_at=near_at)
+                prio_at = lambda rows, disp, iv: lighting.for_area(s, b, rows, disp, key=iv)   # D54: lighting priority
+                return views.run_filters(b, body.filters, gaps_at, near_at, prio_at) if body.filters \
+                    else views.run_query(b, body.text, gaps_at=gaps_at, scope_street=body.scope_street, near_at=near_at,
+                                         prio_at=prio_at)
             res, off = D.read(fn)
         except views.FilterError as e:
             raise HTTPException(422, str(e)) from None

@@ -27,6 +27,8 @@ export function Key() {
   const night = mode === 'night'
   const near = band === 'street' || band === 'object'
   const hasCheck = !!geo?.features.some((f) => f.properties.kind === 'streetlight_gap' && f.properties.display_mode === 'check')
+  const prios = new Set(geo?.features.map((f) => (f.properties.kind === 'streetlight_gap' ? f.properties.priority : null)).filter(Boolean))
+  const prioSw = (p: 'high' | 'medium' | 'low') => <span className="h-2 w-5 rounded-sm" style={{ background: c.dark, boxShadow: `0 0 0 ${p === 'high' ? 3 : p === 'medium' ? 2.5 : 2}px ${p === 'high' ? c.prioHigh : p === 'medium' ? c.prioMedium : c.prioLow}` }} />
   const lamp = <span className="dot" style={night ? { background: '#fff4e0', boxShadow: `0 0 8px 3px ${c.sodiumGlow}` } : { background: c.sodium, boxShadow: `0 0 0 1.5px ${c.bg1}` }} />
   return (
     <div className="pointer-events-auto absolute bottom-8 left-4 z-10">
@@ -41,7 +43,10 @@ export function Key() {
           ) : (
             <>
               <Item sw={<span className="h-1 w-5 rounded" style={{ background: c.sodiumGlow, boxShadow: night ? `0 0 8px ${c.sodium}` : undefined }} />}>Analysed road, lit</Item>
-              {layers.gaps && <Item sw={<span className="h-2 w-5 rounded-sm" style={{ background: c.dark, boxShadow: `0 0 0 1px ${c.darkEdge}` }} />}>Dark: no streetlight seen in 60 m</Item>}
+              {layers.gaps && !prios.size && <Item sw={<span className="h-2 w-5 rounded-sm" style={{ background: c.dark, boxShadow: `0 0 0 1px ${c.darkEdge}` }} />}>Dark: no streetlight seen in 60 m</Item>}
+              {layers.gaps && (['high', 'medium', 'low'] as const).filter((p) => prios.has(p)).map((p) => (
+                <Item key={p} sw={prioSw(p)}>Possible dark stretch, {p} priority</Item>
+              ))}
               {layers.gaps && hasCheck && <Item sw={<span className="h-2 w-5 rounded-sm" style={{ background: c.dark, outline: `1.5px dotted ${c.ink2}` }} />}>Possible dark stretch to check (road bends)</Item>}
               {layers.assets && <Item sw={lamp}>Streetlight</Item>}
               {layers.assets && near && <Item sw={<span className="size-[6px] rounded-full" style={{ background: night ? c.ink2 : c.ink3 }} />}>Pole, no lamp seen</Item>}
