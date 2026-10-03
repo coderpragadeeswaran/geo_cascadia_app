@@ -1907,3 +1907,92 @@ not-in-register buildings.**
   request is `local` inside (0.3 s), `none` outside; the Madurai mini-map shows 71 roads.
 
 **Colab:** upload `geo_cascadia_pkg_p7c.zip` (package 0.2.1) and re-paste the worker cell.
+
+## 2026-10-03 — lighting priority and the area report (branch report-lighting)
+
+### D54. Lighting priority for possible dark stretches: a fixed points rule
+**Why.** All possible dark stretches were shown as equal. An official needs to know which to look at first.
+
+**Rule** (`backend/app/lighting.py`; written down before the first result was computed; not tuned afterwards):
+- **Length** (the recorded length the app shows, D13): under 120 m = 1 point, 120–239 m = 2, 240 m or more = 3 (one
+  missing 60 m interval, two or more, four or more).
+- **Road type** (the app's OpenStreetMap copy, D53): the class with the most road length within 15 m of the stretch.
+  Main road (trunk / primary / secondary and their links) = 3; connecting road (tertiary / unclassified) = 2;
+  residential / living street / service / other = 1; no road found = 0 ("unknown").
+- **Activity** within 30 m: analysed buildings whose use is commercial or mixed + OpenStreetMap shop / amenity / office
+  points not inside one of those buildings + businesses read from signs with no analysed building (not inside one of
+  those buildings, and not within 10 m of a counted OpenStreetMap point = the same place). 0 = 0 points, 1–4 = 1,
+  5–9 = 2, 10 or more = 3.
+- Total 0–9: **High 7–9, Medium 5–6, Low 0–4**. Order: points, then longer, then id. The three factors weigh the same.
+- Distances: PostGIS `ST_DWithin` on geography to the stretch **as the map draws it** (along-road path, else the
+  recorded segment), the same line as D53's "within N m". One query per area (Ward 29: 0.6 s), cached per area version.
+- Reason in plain words, e.g. "376 m on a main road, 37 shops and businesses along it".
+
+**Ward 29** (3 High, 3 Medium, 5 Low):
+
+| # | stretch | street | length | road (OSM) | activity (bldg + OSM + signs) | points L+R+A | priority |
+|---|---|---|---|---|---|---|---|
+| 1 | gap60-001 | Sathy Main Road | 376 m | trunk | 37 (17 + 5 + 15) | 3+3+3 = 9 | High |
+| 2 | gap60-010 | Sakthi Main Road | 142 m | trunk | 14 (5 + 8 + 1) | 2+3+3 = 8 | High |
+| 3 | gap60-004 | Ganapathy - Avarampalayam Road | 193 m | secondary | 9 (8 + 1 + 0) | 2+3+2 = 7 | High |
+| 4 | gap60-003 | 8th Street, Ganapathy | 313 m | residential | 7 (7 + 0 + 0) | 3+1+2 = 6 | Medium |
+| 5 | gap60-002 | Sathy Main Road | 67 m | trunk | 5 (1 + 1 + 3) | 1+3+2 = 6 | Medium |
+| 6 | gap60-006 | Sri Ganapathy Gardens 3rd Street (approx.) | 254 m | residential | 2 (2 + 0 + 0) | 3+1+1 = 5 | Medium |
+| 7 | gap60-000 | 4th Street, Tatabad / Vinobaji Street | 211 m | residential | 2 (2 + 0 + 0) | 2+1+1 = 4 | Low |
+| 8 | gap60-005 | 2nd Street, Ganapathy Gardens (approx.) | 203 m | residential | 2 (1 + 0 + 1) | 2+1+1 = 4 | Low |
+| 9 | gap60-009 | 2nd Street, Gandhi Nagar | 99 m | residential | 4 (4 + 0 + 0) | 1+1+1 = 3 | Low |
+| 10 | gap60-007 | Korathottam Road | 83 m | residential | 1 (1 + 0 + 0) | 1+1+1 = 3 | Low |
+| 11 | gap60-008 | Korathottam Road | 78 m | residential | 1 (1 + 0 + 0) | 1+1+1 = 3 | Low |
+
+Other areas: Trichy 5 High / 3 Medium (all on a primary road), Tiruppur 2 High / 1 Medium, Vadakku Masi Veethi 2 High,
+Bharathiar Road 1 Medium, the 4th Street and Kattabomman areas 1 Low each. Levels are absolute points, not a ranking
+within an area, so an area on one main road can be all High / Medium.
+
+**Where it shows.** Every gap feature and gap question row carries `priority`, `priority_score`, `priority_reason`,
+`priority_points`, `priority_road`; `GET /areas/{slug}/lighting` lists the table with the rule. The dark-stretch list
+opens in priority order ("Fix first"; "Longest first" keeps the §10 test-2 order, and QueryEngine's rows are still longest
+first); each row and the stretch card show High / Medium / Low with the reason; the hover card too; "How do we know?"
+shows the points. **Map:** the stretch's edge carries the priority in one indigo hue (Night `#3a4680 / #7a86d6 / #c5cbff`,
+Daylight `#c3c8e8 / #8691d2 / #3f4bb0`, low → high; lightness monotonic, adjacent ΔE ≥ 17 with the dataviz validator),
+wider for higher; Low is close to the old edge, so colour is never the only cue (width, list, card, key).
+**Questions:** "high / medium / low priority" is taken out before QueryEngine (like D53's distance) and keeps that level;
+a Priority chip; example question "High priority dark stretches"; on a building question it is reported as ignored.
+"possible" is now a filler word ("Show possible dark stretches" was read as "partial" before).
+
+**Honesty.** The lamp detector finds 43% of lamp heads (model card, n = 49): the list, card and report keep saying
+"possible"; the priority ranks candidates, it does not confirm them. Activity counts only buildings whose use is known
+(Ward 29: 139 of 381 are not), and OpenStreetMap amenity points include some non-business places (no tags are stored).
+**Offline data mode:** priority is not available (it needs PostGIS); the list falls back to longest first and says so.
+
+### D55. Downloadable area report (PDF + Excel), for an area or one street
+`GET /areas/{slug}/report.pdf|.xlsx?street=` (`backend/app/report.py`). Buttons "Download report: PDF · Excel" on the
+area's "What stands out" panel and "Report for this street" on a street's panel (fetched as a file; a failure is said in
+words). CORS now exposes `Content-Disposition` so the browser keeps the file name.
+- **One content builder** for both files: the key numbers with the app's KPI formulas and labels (`derive.ts`), the app's
+  plain labels (`labels.ts`, ported), D54's priority, Under the Hood's routing / cost and photo dates, Trust's Gate 1
+  wording and model-card row, D53's snapshot dates. The PDF and the workbook render the same rows.
+- **PDF (A4):** title, scope, date, the SYNTHETIC banner; key numbers (five + the rest); priority counts with the 43%
+  sentence; data sources with dates (photo range and how many camera positions are over 3 years old, which OpenStreetMap
+  the run used and the app's snapshot date, Microsoft release, register SYNTHETIC, model card). **Map** drawn from our own
+  data: OpenStreetMap roads from the app's copy, the area outline, building outlines coloured by finding, possible dark
+  stretches by priority with their list number, scale, north, "© OpenStreetMap contributors"; no Google tiles or photos.
+  Landscape tables: possible dark stretches in priority order (with the rule), buildings with findings (id, street,
+  location, use, floors, sign text, confidence, finding, register record SYNTHETIC, review status), poles and streetlights
+  with a register finding, the review queue; each row links to a normal Google Maps URL. Then routing and cost (Hood's
+  sentence and table), Gate 1 as on Trust, limits. Ward 29: 27 pages, about 9 s; Sathy Main Road: 8 pages.
+- **Excel:** About (numbers, sources, limits) + Buildings with findings, Assets, Possible dark stretches, Review items,
+  the same columns and values, links as hyperlinks.
+- **Assets** = the ones with a register finding (not in the register / differs; Ward 29: 45 of 268), in both files.
+- **Street report:** everything filtered to the street (the KPI formulas with the street); cost and Gate 1 are the area's
+  run and say so.
+- **Fonts:** the app's Anek Tamil, instanced to static TTFs by `tools/build_report_fonts.py` (OFL licence copied); Tamil
+  sign text is shaped with uharfbuzz; ≤ ↑ → come from Windows' Arial when present, else are written as <=, ^, ->.
+- **Libraries:** fpdf2, openpyxl, uharfbuzz (pip wheels, no system install); pypdfium2 for tests and page renders.
+- **Test** (`backend/tests/test_report.py`), Ward 29 and Vadakku Masi Veethi: every key number = the API's dashboard / the
+  map's stretch count; table sizes = the API's counts; stretch order, level and reason = `/lighting`; the cost sentence =
+  Hood's routing numbers; photo dates = Hood's imagery; Gate 1 = the model card; Sathy Main Road's street numbers =
+  `/query` with that street; the Excel sheets read back equal the tables, links included; the PDF's text contains every
+  number, stretch and building id. Live: the UI's KPI ribbon for Sathy Main Road (44 / 2 / 10 / 2 / 10) = the street PDF;
+  the audit's Ward 29 UI numbers = the area PDF.
+- Offline data mode: the report still builds from the JSON copy, with priority "not available" and roads from the
+  analysed streets only (said on the map).

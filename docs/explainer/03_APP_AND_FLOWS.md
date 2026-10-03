@@ -234,7 +234,7 @@ Each sentence is clickable (KPI filter or Review).
 | Example question | Parsed chips | Answer |
 |---|---|---|
 | Commercial buildings with more than 2 floors and no record | use commercial · floors > 2 · no record | **0 rows**, with the why-empty funnel: 381 buildings → 27 no record → 5 commercial/mixed → 2 floor count measured → 0 with > 2 floors |
-| Streets where no streetlight is detected within 60 m | dark stretches · 60 m | 11 stretches, longest first: Sathy Main Road 376 m, 8th Street, Ganapathy 313 m, Sri Ganapathy Gardens 3rd Street (approx.) 254 m, … |
+| Streets where no streetlight is detected within 60 m | dark stretches · 60 m | 11 stretches, shown in lighting-priority order ("Fix first"; "Longest first" switches to Sathy Main Road 376 m, 8th Street, Ganapathy 313 m, Sri Ganapathy Gardens 3rd Street (approx.) 254 m, …; see [06](06_updates.md)) |
 | Chart of unmatched buildings by street | no record · by street | bar chart: 2nd Street, Gandhi Nagar 6, 4th Street, Tatabad / Vinobaji Street 4, 2nd Street, Ganapathy Gardens (approx.) 4, Korathottam Road 4, Ganapathy - Avarampalayam Road 3, and 2 each on 3 more; a bar click zooms the map to that street |
 | Low-confidence floor counts for review | review · low-confidence floors | 4 buildings (e.g. w1252504103, w1252504515); "Send 4 to Review" opens Review with just those |
 | Not-in-register buildings within 50 m of a possible dark stretch | not in the register · dark stretch within 50 m | **15** of the 27 not-in-register buildings (D53) |

@@ -5,7 +5,7 @@
 - Limitations ([§15](#15-limitations-and-known-issues)) and the P7 to-do list ([§18](#18-still-to-do-p7)).
 - [Appendix A](#appendix-a-every-decision-d1--d49) (decisions D1–D49), [Appendix B](#appendix-b-conflicts-found) (conflicts found, stale docs) and [Appendix C](#appendix-c-open-questions) (open questions).
 
-[← 04 Backend, database and worker](04_BACKEND_DB_WORKER.md) · [Start here](00_START_HERE.md) · (this is the last file) →
+[← 04 Backend, database and worker](04_BACKEND_DB_WORKER.md) · [Start here](00_START_HERE.md) · [06 Updates →](06_updates.md)
 
 ---
 
@@ -264,4 +264,4 @@ Still **not confirmed**:
 
 ---
 
-[← 04 Backend, database and worker](04_BACKEND_DB_WORKER.md) · [Start here](00_START_HERE.md) · (this is the last file) →
+[← 04 Backend, database and worker](04_BACKEND_DB_WORKER.md) · [Start here](00_START_HERE.md) · [06 Updates →](06_updates.md)

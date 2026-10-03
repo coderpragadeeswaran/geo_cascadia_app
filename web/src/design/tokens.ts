@@ -30,6 +30,11 @@ const palette = {
     unclassified: '#4a5270',
     dark: '#02040a',       // an unlit stretch of road
     darkEdge: '#34407a',
+    // D54 lighting priority of a possible dark stretch: one hue (the dark edge's indigo), light->bright = low->high.
+    // Sequential, lightness monotonic, adjacent ΔE ≥ 21 (dataviz validator); low = the old edge. Width + label too.
+    prioLow: '#3a4680',
+    prioMedium: '#7a86d6',
+    prioHigh: '#c5cbff',
   },
   daylight: {
     // paper & ink for projectors
@@ -53,6 +58,10 @@ const palette = {
     unclassified: '#b9b2a2',
     dark: '#1b1f2a',       // unlit stretch = heavy ink
     darkEdge: '#1b1f2a',
+    // D54 priority on paper: pale -> deep indigo = low -> high (adjacent ΔE ≥ 17); the PDF report uses the same ramp
+    prioLow: '#c3c8e8',
+    prioMedium: '#8691d2',
+    prioHigh: '#3f4bb0',
   },
 } as const
 export type Palette = { [K in keyof (typeof palette)['night']]: string }

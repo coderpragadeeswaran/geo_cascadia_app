@@ -117,6 +117,7 @@ npx tsx scripts/offline.ts         # fallbacks; needs extra APIs on :8001 (outgo
 npx tsx scripts/gate1-shots.ts     # Gate 1 per building in the drawer (dev server): the three cases, a corner, Trust › Gate 1; MODE=daylight
 npx tsx scripts/p8-shots.ts        # P8 screens (dev server): Routing and cost, photo dates, front wall, dark stretches, Tamil; MODE=daylight for Daylight
 npx tsx scripts/d53-shots.ts       # D53 (dev server): Hood map-data line, map attribution, the 50 m dark-stretch question; MODE=daylight
+npx tsx scripts/lighting-shots.ts  # D54/D55 (dev server): priority list, stretch card, map colours, priority question, report buttons + real downloads; MODE=daylight
 backend\.venv\Scripts\python tools\audit_numbers.py    # (repo root) Ward 29 numbers straight from the database
 ```
 
@@ -140,6 +141,26 @@ each answer 30 days on disk (`data/cache/streetpick/`), so a second click or run
 servers are down, a street there can't be picked ("Map server is busy — try again in a minute."), and the worker asks
 OpenStreetMap / Microsoft itself. `LOCAL_MAP_DATA=0` in `backend/.env` switches the database copy off (everything goes
 to OpenStreetMap's servers, as before D53).
+
+## Lighting priority and the area report (D54, D55)
+
+**Which possible dark stretch first?** Each possible dark stretch gets High / Medium / Low and one plain reason
+("376 m on a main road, 37 shops and businesses along it"). A fixed points rule, 0–3 each, written down before any result
+was seen: **length** (under 120 m = 1, 120–239 m = 2, 240 m+ = 3), **road type** from the OpenStreetMap copy (main road = 3,
+connecting road = 2, residential / service = 1, unknown = 0), **shops and businesses within 30 m** (none = 0, 1–4 = 1,
+5–9 = 2, 10+ = 3; commercial or mixed-use buildings, OpenStreetMap shop / amenity / office points, businesses read from
+signs). High = 7–9, Medium = 5–6, Low = 0–4. The list opens in this order ("Fix first"; "Longest first" switches), the map's
+dark bands get a brighter / wider edge for higher priority, and you can ask "High priority dark stretches". These are
+*possible* dark stretches (the lamp detector finds about 43% of lamp heads), so the priority ranks candidates. It needs
+the database (not available in offline data mode). Ward 29's table: DECISIONS D54.
+
+**Download report.** "Download report: PDF · Excel" on the area's *What stands out* panel, "Report for this street" on a
+street's panel (or `GET /areas/{slug}/report.pdf|.xlsx?street=`). The PDF is a summary for officials (sources with dates,
+the key numbers as the app shows them, a map drawn from our own data with © OpenStreetMap contributors, findings,
+possible dark stretches by priority, review queue, cost, Gate 1, limits); the Excel file has the same tables. No Google
+map or photo is in it: each row links to Google Maps instead. Registers are marked SYNTHETIC throughout. Ward 29 takes
+about 9 s (27 pages). Libraries: fpdf2, openpyxl, uharfbuzz (pip only). `toolsuild_report_fonts.py` rebuilds the
+report's fonts from the app's typeface (only needed if the font changes).
 
 ## Field check: the review queue as a walking route
 

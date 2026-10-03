@@ -11,7 +11,7 @@
 
 ## How to read these files
 
-**Reading order: 00 → 01 → 02 → 03 → 04 → 05.** Short on time? Read this file, then [05](05_EXPLAIN_AND_DEFEND.md) (demo script and FAQ).
+**Reading order: 00 → 01 → 02 → 03 → 04 → 05, then 06 for later changes.** Short on time? Read this file, then [05](05_EXPLAIN_AND_DEFEND.md) (demo script and FAQ).
 
 | File | What it holds | Sections |
 |---|---|---|
@@ -21,6 +21,7 @@
 | [03_APP_AND_FLOWS](03_APP_AND_FLOWS.md) | the app page by page, click flows, legend, review, sources and error owners, traced examples | [§10](03_APP_AND_FLOWS.md#10-the-app-page-by-page), [§9.7](03_APP_AND_FLOWS.md#97-where-every-ui-item-comes-from-and-who-owns-an-error), [§9.8](03_APP_AND_FLOWS.md#98-traced-examples-real-ids) |
 | [04_BACKEND_DB_WORKER](04_BACKEND_DB_WORKER.md) | the technical file: server requests, database, analyse-a-street end to end, worker and Colab, costs | [§11](04_BACKEND_DB_WORKER.md#11-backend), [§6](04_BACKEND_DB_WORKER.md#6-the-database), [§12](04_BACKEND_DB_WORKER.md#12-live-analysis-and-the-worker), [§13](04_BACKEND_DB_WORKER.md#13-costs-and-performance) |
 | [05_EXPLAIN_AND_DEFEND](05_EXPLAIN_AND_DEFEND.md) | demo script, FAQ, limitations, to-do, decisions D1–D53, conflicts, open questions | [§14](05_EXPLAIN_AND_DEFEND.md#14-demo-script-for-judges), [§17](05_EXPLAIN_AND_DEFEND.md#17-faq), [§15](05_EXPLAIN_AND_DEFEND.md#15-limitations-and-known-issues), [§18](05_EXPLAIN_AND_DEFEND.md#18-still-to-do-p7), Appendices A–C |
+| [06_updates](06_updates.md) | the running log of changes made after 00–05 (from D53 on), one dated entry each | — |
 
 Section numbers ([§1](#1-one-page-summary)…[§18](05_EXPLAIN_AND_DEFEND.md#18-still-to-do-p7)) are kept from the original single document, so every "[§7.11](02_PIPELINE_AND_ACCURACY.md#711-asset-positions-and-pole-merging)" style reference is a stable link.
 

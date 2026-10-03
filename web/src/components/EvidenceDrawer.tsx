@@ -20,7 +20,7 @@ import { GeoMini } from './GeoMini'
 import { ObjectMini, type MiniObject } from './ObjectMini'
 import { PositionMini } from './PositionMini'
 import { StatusDot } from './FindingsTable'
-import { GapHow } from './GapList'
+import { GapHow, PriorityTag } from './GapList'
 import { LampRecall } from './LampRecall'
 import { Fact, HowWeKnow } from './HowWeKnow'
 import { PanelHead } from './Panel'
@@ -282,6 +282,13 @@ function GapBody({ p }: { p: GapProps }) {
       <PanelHead eyebrow="Possible dark stretch" title={`${fmt.format(Math.round(p.length_m))} m of ${p.street} has no visible streetlight`} />
       <Body>
         <OldImagery k={`gap:${p.id}`} />
+        {p.priority && (
+          <div className="mb-3 rounded-[var(--ns-r-control)] px-3 py-2" style={{ boxShadow: 'inset 0 0 0 1px var(--ns-line-strong)' }} aria-label="Lighting priority">
+            <PriorityTag p={p.priority} long />
+            <p className="t-body mt-1">{p.priority_reason}.</p>
+            <p className="t-small ink3 mt-0.5">A fixed rule ranks the possible dark stretches by length, road type and shops nearby, so you can see which to check first. It does not confirm a stretch is dark.</p>
+          </div>
+        )}
         <LampRecall />
         <p className="t-body mt-2">{p.poles_inside ? `${plural(p.poles_inside, 'pole')} ${p.poles_inside === 1 ? 'stands' : 'stand'} here, but no lamp was seen on ${p.poles_inside === 1 ? 'it' : 'them'}.` : 'No pole or lamp was seen here.'}</p>
         {p.display_mode === 'check' && <p className="t-small mt-2 border-l-2 pl-2 ink2" style={{ borderColor: 'var(--ns-sodium)' }}>Needs checking on the ground: the road bends here and some lights were seen part way along.</p>}

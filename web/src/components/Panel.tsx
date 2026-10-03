@@ -18,6 +18,7 @@ import { EvidenceDrawer } from './EvidenceDrawer'
 import { FindingsTable } from './FindingsTable'
 import { GapList } from './GapList'
 import { QueryPanel } from './QueryPanel'
+import { ReportButton } from './ReportButton'
 
 export function Panel() {
   const kind = usePanel()
@@ -100,6 +101,7 @@ function OverviewPanel() {
   return (
     <>
       <PanelHead eyebrow="What stands out" title={areaName} />
+      <ReportButton area={area} className="px-5 pb-3" />
       <div className="min-h-0 flex-1 overflow-y-auto pb-4">
         {areaSentences(records, k, gp).map((s) => <SentenceRow key={s.key} s={s} onClick={() => act(s)} />)}
         <div className="t-micro px-5 pb-1 pt-5">By street</div>
@@ -202,7 +204,7 @@ function KpiPanel() {
 
 /** A selected street: what stands out on it, in sentences, then its buildings / lights / businesses */
 function StreetPanel() {
-  const { records, gaps, streets } = useAreaData()
+  const { records, gaps, streets, area } = useAreaData()
   const street = useUi((s) => s.filter.street)!
   const [tab, setTab] = useState<'building' | 'asset' | 'unmapped'>('building')
   const act = useSentenceAction()
@@ -222,6 +224,7 @@ function StreetPanel() {
         <DriveButton street={street} />
         <span className="t-small ink3 flex items-center gap-1"><Route className="size-3.5" /> through the real camera stops</span>
       </div>
+      <ReportButton area={area} street={street} className="px-5 pb-3" />
       <div className="flex gap-1 px-5 pb-2" role="tablist" aria-label="Show">
         {([['building', `Buildings ${B.length}`], ['asset', `Lights & poles ${A.length}`], ['unmapped', `Businesses ${U.length}`]] as const).map(([k, l]) => (
           <button key={k} role="tab" aria-selected={tab === k} aria-pressed={tab === k} onClick={() => setTab(k)} className="btn h-7">{l}</button>

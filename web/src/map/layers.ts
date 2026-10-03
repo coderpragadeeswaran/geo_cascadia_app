@@ -152,6 +152,12 @@ const mark = (mode: Mode, s: string | null | undefined, a = 255): RGBA => {
 
 const assetStatus = (s: string | null | undefined) => (s === 'unrecorded_asset' ? 'no_record' : s === 'discrepancy' ? 'discrepancy' : null)
 
+/** D54: extra edge width (px) and colour per lighting priority */
+const PRIO_EXTRA: Record<string, number> = { high: 5, medium: 3, low: 1, '': 0 }
+export function prioColor(c: { prioHigh: string; prioMedium: string; prioLow: string }, p: string | null | undefined) {
+  return p === 'high' ? c.prioHigh : p === 'medium' ? c.prioMedium : p === 'low' ? c.prioLow : null
+}
+
 export function buildLayers(ctx: LayerCtx): Layer[] {
   const { band, flat, layers: on, split, focus: F, mode } = ctx
   const c = colors[mode]
@@ -255,8 +261,14 @@ export function buildLayers(ctx: LayerCtx): Layer[] {
       // a question about gaps: the answered stretches get a chalk outline (a dark band can't get brighter)
       new PathLayer({ id: 'dark-focus', visible: v && focused.length > 0, data: focused, getPath: (d) => d.path, widthUnits: 'pixels',
         getWidth: near ? 22 : 15, getColor: rgba(c.ink, night ? 150 : 210), capRounded: true, jointRounded: true, updateTriggers: { getWidth: near, getColor: mode } }),
-      new PathLayer({ id: 'dark-edge', visible: v, data: split.gaps, getPath: (d) => d.path, widthUnits: 'pixels', getWidth: near ? 18 : 11,
-        getColor: (d) => (night ? rgba(c.darkEdge, dimG(d.p.id) ? 80 : 200) : rgba(c.dark, dimG(d.p.id) ? 15 : 40)), capRounded: true, jointRounded: true,
+      // D54: the edge carries the lighting priority (one indigo hue, brighter / wider = higher); no priority = the old edge
+      new PathLayer({ id: 'dark-edge', visible: v, data: split.gaps, getPath: (d) => d.path, widthUnits: 'pixels',
+        getWidth: (d) => (near ? 18 : 11) + PRIO_EXTRA[d.p.priority ?? ''] * (near ? 1.5 : 1),
+        getColor: (d) => {
+          const pc = prioColor(c, d.p.priority)
+          if (pc) return rgba(pc, dimG(d.p.id) ? 70 : 235)
+          return night ? rgba(c.darkEdge, dimG(d.p.id) ? 80 : 200) : rgba(c.dark, dimG(d.p.id) ? 15 : 40)
+        }, capRounded: true, jointRounded: true,
         updateTriggers: { getWidth: near, getColor: [fk, mode] } }),
       new PathLayer({ id: 'dark', visible: v, data: split.gaps, getPath: (d) => d.path, widthUnits: 'pixels', getWidth: near ? 15 : 8,
         getColor: (d) => rgba(c.dark, dimG(d.p.id) ? 110 : night ? 250 : 235), capRounded: true, jointRounded: true, pickable: true,

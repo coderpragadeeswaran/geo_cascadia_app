@@ -38,11 +38,13 @@ LIVE_KPI = ("waiting_for_review",)          # P5: counts live decisions (DB only
 
 def _strip(x, parent=None):
     """Drop values that legitimately differ between modes: DB review ids/timestamps, polygons (compared separately),
-    and live review decisions (D4: people's approvals live only in the DB; the JSON copy is the export's queue)."""
+    and live review decisions (D4: people's approvals live only in the DB; the JSON copy is the export's queue).
+    D54: the lighting priority needs PostGIS (the OpenStreetMap copy), so it exists online only (null offline)."""
     if isinstance(x, dict):
         live = parent == "review" or "reviewer" in x
         return {k: _strip(v, k) for k, v in x.items()
                 if (k not in ("offline", "id", "updated_at", "polygon", "bbox", "review_status") or (k == "id" and isinstance(v, str)))
+                and not (k.startswith("priority_") or k == "lighting" or (k == "priority" and x.get("kind") == "streetlight_gap"))
                 and not (live and k in LIVE_REVIEW) and not (parent == "kpi" and k in LIVE_KPI)}
     if isinstance(x, list):
         return [_strip(v, parent) for v in x]

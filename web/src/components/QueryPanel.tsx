@@ -5,7 +5,7 @@ import { ChevronDown, Inbox, Loader2, Plus, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { GapRow, QueryFilters, QueryResponse } from '@/api/types'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { diffLabel } from '@/lib/labels'
+import { diffLabel, priorityLabel } from '@/lib/labels'
 import { queryApplies, runQuery, useQueryError } from '@/lib/query'
 import { useAreaData } from '@/lib/useAreaData'
 import { cn, fmt, noun, plural } from '@/lib/utils'
@@ -16,7 +16,7 @@ import { GapList, type Gap } from './GapList'
 import { PanelHead } from './Panel'
 import { WhyEmpty } from './WhyEmpty'
 
-type Key = 'show' | 'street' | 'use' | 'floors' | 'match_status' | 'discrepancy' | 'ref_flag' | 'group_by' | 'interval_m' | 'reason_has' | 'near_dark_m'
+type Key = 'show' | 'street' | 'use' | 'floors' | 'match_status' | 'discrepancy' | 'ref_flag' | 'group_by' | 'interval_m' | 'reason_has' | 'near_dark_m' | 'priority'
 const SHOW: { v: string; label: string; f: QueryFilters }[] = [
   { v: 'buildings', label: 'Buildings', f: { intent: 'buildings' } },
   { v: 'gaps', label: 'Possible dark stretches', f: { intent: 'streetlight_gaps', interval_m: 60 } },
@@ -27,10 +27,10 @@ const SHOW: { v: string; label: string; f: QueryFilters }[] = [
 const showOf = (f: QueryFilters) => (f.intent === 'streetlight_gaps' ? 'gaps' : f.intent === 'assets' ? (f.asset_type === 'streetlight' ? 'streetlights' : 'poles') : f.intent)
 const ALLOWED: Record<QueryFilters['intent'], Key[]> = {
   buildings: ['street', 'use', 'floors', 'match_status', 'discrepancy', 'ref_flag', 'near_dark_m', 'group_by'],
-  streetlight_gaps: ['street', 'interval_m'], assets: ['street'], review: ['street', 'reason_has'],
+  streetlight_gaps: ['street', 'interval_m', 'priority'], assets: ['street'], review: ['street', 'reason_has'],
 }
 const LABEL: Record<Key, string> = { show: 'Show', street: 'Street', use: 'Use', floors: 'Floors', match_status: 'Register', discrepancy: 'Difference',
-  ref_flag: 'Google', group_by: 'Chart', interval_m: 'Within', reason_has: 'Reason', near_dark_m: 'Dark stretch' }
+  ref_flag: 'Google', group_by: 'Chart', interval_m: 'Within', reason_has: 'Reason', near_dark_m: 'Dark stretch', priority: 'Priority' }
 const OPS: { op: NonNullable<QueryFilters['floors_op']>; label: string }[] = [
   { op: '>', label: 'more than' }, { op: '>=', label: 'at least' }, { op: '<', label: 'less than' }, { op: '==', label: 'exactly' }]
 const DISC = ['extra_floor', 'use_change', 'location_shift', 'area_understated']
@@ -47,6 +47,7 @@ function value(k: Key, f: QueryFilters) {
     case 'interval_m': return `${f.interval_m} m`
     case 'reason_has': return 'low-confidence floor count'
     case 'near_dark_m': return `within ${f.near_dark_m} m`
+    case 'priority': return priorityLabel(f.priority)
     default: return String((f as unknown as Record<string, unknown>)[k] ?? '')
   }
 }
@@ -60,6 +61,7 @@ const DEFAULTS: Partial<Record<Key, Partial<QueryFilters>>> = {
   use: { use: 'commercial' }, floors: { floors_op: '>', floors_n: 2 }, match_status: { match_status: 'no_record' },
   discrepancy: { discrepancy: 'use_change' }, ref_flag: { ref_flag: 'sign_not_in_google_within_40m' }, group_by: { group_by: 'street' },
   interval_m: { interval_m: 60 }, reason_has: { reason_has: 'floor count low confidence' }, near_dark_m: { near_dark_m: 50 },
+  priority: { priority: 'high' },
 }
 
 /** "dark stretch" / "dark stretches", "building(s)", "pole(s)", "review item(s)" for a result count */
@@ -90,6 +92,7 @@ function Chip({ k, f, streets, typed }: { k: Key; f: QueryFilters; streets: stri
       case 'interval_m': return [40, 60, 100, 150].map((v) => <Opt key={v} on={f.interval_m === v} onClick={() => apply({ ...f, interval_m: v })} note={v !== 60 ? 'computed by the app' : 'stored by the pipeline'}>{v} m</Opt>)
       case 'floors': return <FloorsEditor f={f} onApply={apply} />
       case 'near_dark_m': return [25, 50, 100].map((v) => <Opt key={v} on={f.near_dark_m === v} onClick={() => apply({ ...f, near_dark_m: v })} note="PostGIS distance">within {v} m</Opt>)
+      case 'priority': return (['high', 'medium', 'low'] as const).map((v) => <Opt key={v} on={f.priority === v} onClick={() => apply({ ...f, priority: v })} note="lighting priority">{priorityLabel(v)}</Opt>)
       default: return <p className="t-small ink3 px-2 py-1">Remove this filter with ×.</p>
     }
   })()
@@ -138,7 +141,7 @@ function AddFilter({ f, streets }: { f: QueryFilters; streets: string[] }) {
         {opts.map((k) => (
           <button key={k} onClick={() => runQuery({ filters: { ...f, ...(k === 'street' ? { street: streets[0] } : DEFAULTS[k]) } as QueryFilters })}
             className="w-full cursor-pointer rounded-[var(--ns-r-control)] px-2 py-1.5 text-left text-[15.5px] hover:bg-accent-soft">
-            {LABEL[k] === 'Chart' ? 'Chart by street' : LABEL[k] === 'Google' ? 'Sign not on Google' : LABEL[k] === 'Within' ? 'Gap interval' : LABEL[k] === 'Dark stretch' ? 'Near a possible dark stretch' : LABEL[k]}
+            {LABEL[k] === 'Chart' ? 'Chart by street' : LABEL[k] === 'Google' ? 'Sign not on Google' : LABEL[k] === 'Within' ? 'Gap interval' : LABEL[k] === 'Dark stretch' ? 'Near a possible dark stretch' : LABEL[k] === 'Priority' ? 'Lighting priority' : LABEL[k]}
           </button>
         ))}
         {!opts.length && <p className="t-small ink3 px-2 py-1">Nothing more to add for this kind of question. Change “Show” for other filters.</p>}
