@@ -25,7 +25,7 @@ from .settings import ROOT, Settings
 
 sys.path.insert(0, os.path.join(ROOT, "pipeline"))   # geo_cascadia (import only — never modified)
 
-from . import drive, evidence, frontwall, gaps, gate1pos, hood, imagery, loader, minimap, namepick, registertest, trust, views  # noqa: E402
+from . import drive, evidence, frontwall, gaps, gate1pos, hood, imagery, loader, mapdata, minimap, namepick, registertest, spatial, trust, views  # noqa: E402
 from . import streetpick as streetpick_mod  # noqa: E402
 from .storage import StorageError  # noqa: E402
 from .store import Data, OfflineError  # noqa: E402
@@ -121,6 +121,11 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     app.state.runfiles = hood.RunFiles(settings.areas_dir)
     app.state.gate1rows = gate1pos.EvalRows(settings.areas_dir)
     app.state.workers = {}
+    # D53: local OpenStreetMap + Microsoft footprints for the covered cities (street click, mini-maps, cost planner)
+    mapdata.configure(app.state.data.pool if settings.local_map_data else None)
+    import geo_cascadia.area as pipeline_area
+    pipeline_area.MAP_SOURCE = (mapdata.pipeline_source(os.path.join(settings.data_dir, "cache", "streetpick"))
+                                if settings.local_map_data else None)
     app.add_middleware(ServerErrorsAsJson)          # added first = innermost: its 500 still passes through CORS
     app.add_middleware(GZipMiddleware, minimum_size=2000)
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"])
@@ -158,6 +163,12 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     def config_public(D: Data = Depends(get_data)):
         """Browser-safe config: the referrer-restricted Maps JS key + Map ID. Never a server key."""
         return {"maps_js_key": settings.maps_browser_key, "map_id": settings.map_id, "offline": not D.db_online}
+
+    @app.get("/mapdata", tags=["meta"])
+    def map_data_status():
+        """D53: the cities whose OpenStreetMap roads / buildings and Microsoft footprints are held locally (PostGIS), with
+        their snapshot dates and the attribution to show. Outside them the app asks OpenStreetMap's servers (30-day cache)."""
+        return {"offline": False, **mapdata.status()}
 
     @app.get("/model-card", tags=["meta"])
     def model_card(D: Data = Depends(get_data)):
@@ -390,7 +401,8 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         """Under the Hood: every number of the pipeline story, computed from the records and the run's own files (`n`, with
         its source in `src`); Sankey, sign funnel, route splits, per-street table, the story with its corrections, and
         timings/cost flagged as resumed-run values (D1)."""
-        res, off = D.read(lambda s: hood.hood(need(s, slug), app.state.runfiles.get(slug), mc()))
+        res, off = D.read(lambda s: {**hood.hood(need(s, slug), app.state.runfiles.get(slug), mc()),
+                                     "map_data": mapdata.area_map_data(need(s, slug), settings.areas_dir)})
         return {"offline": off, **res}
 
     @app.get("/areas/{slug}/hood/examples", tags=["hood"])
@@ -461,8 +473,9 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             def fn(s):
                 b = need(s, body.area)
                 gaps_at = lambda iv: app.state.gapcalc.get(b, iv)
-                return views.run_filters(b, body.filters, gaps_at) if body.filters \
-                    else views.run_query(b, body.text, gaps_at=gaps_at, scope_street=body.scope_street)
+                near_at = lambda m: spatial.near_dark(s, b, m)          # D53: "within N m of a possible dark stretch"
+                return views.run_filters(b, body.filters, gaps_at, near_at) if body.filters \
+                    else views.run_query(b, body.text, gaps_at=gaps_at, scope_street=body.scope_street, near_at=near_at)
             res, off = D.read(fn)
         except views.FilterError as e:
             raise HTTPException(422, str(e)) from None

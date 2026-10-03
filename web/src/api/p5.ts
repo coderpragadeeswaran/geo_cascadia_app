@@ -39,6 +39,8 @@ export interface Hood {
   }
   routing: Routing | null
   imagery: import('./types').ImagerySummary
+  /** D53: where the roads and building outlines come from: the covered city's snapshot, and what this area's run used */
+  map_data?: MapDataInfo
 }
 /** P8: routing and cost, computed from the run's cloud-call files (backend/app/routing.py) */
 export interface RouteRow { route: 'local' | 'cloud'; model: string; label: string; n: number; unit: string; usd: number | null
@@ -123,3 +125,12 @@ export const useJobs = () =>
 export const useJob = (id: string | null) =>
   useQuery({ queryKey: ['job', id], queryFn: () => api<{ job: JobP5; worker_online: boolean; estimate: JobEstimate | null }>(`/jobs/${id}`),
     enabled: !!id, refetchInterval: (q) => (q.state.data?.job.status === 'running' ? 5_000 : 15_000) })
+
+/** D53: a covered city (OpenStreetMap + Microsoft footprints held in the app's database) */
+export interface MapCity { city: string; name: string; osm_snapshot: string | null; ms_release: string | null; counts: Record<string, number> | null }
+export interface MapDataInfo {
+  city: MapCity | null
+  /** snapshot = the run's map questions were answered from the app's copy; live = OpenStreetMap's servers at run time */
+  run: { kind: 'snapshot' | 'live'; date?: string | null; osm_snapshot?: string | null; ms_release?: string | null; answers?: Record<string, Record<string, number>> }
+  attribution: { osm: string; microsoft: string }
+}

@@ -98,6 +98,8 @@ export interface QueryFilters {
   street?: string; use?: 'commercial' | 'residential'; floors_op?: '>' | '>=' | '<' | '=='; floors_n?: number
   match_status?: 'no_record' | 'discrepancy'; discrepancy?: string; ref_flag?: string; group_by?: 'street'
   interval_m?: number; asset_type?: 'pole' | 'streetlight'; reason_has?: string
+  /** D53: buildings within this many metres of a possible dark stretch (PostGIS ST_DWithin, applied after QueryEngine) */
+  near_dark_m?: number
 }
 export interface GapRow {
   kind: 'streetlight_gap'; id: string; street: string; length_m: number; interval_m: number; start: [number, number]
@@ -134,6 +136,8 @@ export interface QueryResponse {
   gaps?: { interval_m: number; computed: boolean; available: boolean; note: string }
   /** a sentence that puts the count in context (e.g. businesses vs all named buildings not on Google) */
   note?: string | null
+  /** D53: the distance rule's numbers (buildings matching the rest of the question → within N m) and how it was computed */
+  spatial?: { near_dark_m: number; method: string; before: number; after: number; note: string }
   /** client-side: the person accepted a partly understood question (or built it by clicking) */
   accepted?: boolean
 }

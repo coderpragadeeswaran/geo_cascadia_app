@@ -24,7 +24,7 @@ from shapely.geometry import mapping, shape
 from shapely.ops import transform
 from shapely.validation import explain_validity
 
-from . import loader, minimap, planest, streetpick, views
+from . import loader, mapdata, minimap, planest, streetpick, views
 from .store import Data, OfflineError
 
 router = APIRouter()
@@ -585,6 +585,41 @@ def worker_next(body: NextIn, request: Request, D: Data = Depends(get_data)):
     job = D.write(fn)
     _seen(request, body.worker_id, job=_job_brief(job) or "")
     return {"offline": False, "job": job}
+
+
+class MapDataIn(BaseModel):
+    kind: str = Field(pattern="^(overpass|microsoft)$")
+    query: Optional[str] = Field(None, max_length=8000, description="overpass: the pipeline's query text")
+    bbox: Optional[List[float]] = Field(None, min_length=4, max_length=4, description="microsoft: min_lon, min_lat, max_lon, max_lat")
+
+
+@router.post("/worker/mapdata", tags=["worker"], dependencies=[Depends(worker_auth)])
+def worker_mapdata(body: MapDataIn, request: Request):
+    """D53: map data for the worker's area stage (geo_cascadia.area.MAP_SOURCE in the Colab cell). Covered cities: from
+    PostGIS (source "local", with the snapshot dates). Elsewhere, Overpass through this API's raced mirrors and 30-day
+    cache (source "overpass" / "cache"); "pending" = still asking (the worker asks again), "none" = not available here
+    (the worker then asks Overpass / Microsoft itself, as before)."""
+    if body.kind == "microsoft":
+        if not body.bbox:
+            raise HTTPException(422, "bbox is required for microsoft")
+        minx, miny, maxx, maxy = body.bbox
+        rings = mapdata.ms_rings(miny, minx, maxy, maxx)
+        if rings is None:
+            return {"source": "none"}
+        return {**mapdata.source_line(mapdata.city_for_box(miny, minx, maxy, maxx)), "rings": rings}
+    if not body.query:
+        raise HTTPException(422, "query is required for overpass")
+    loc = mapdata.answer(body.query)
+    if loc is not None:
+        return {**loc[1], "elements": loc[0]}
+    cache = os.path.join(request.app.state.settings.data_dir, "cache", "streetpick")
+    try:
+        els, cached = streetpick.overpass(body.query, cache, time.monotonic() + 20)   # < the tunnel's 100 s limit
+    except streetpick.OverpassSlow:
+        return {"source": "pending", "retry_after_s": 5}
+    except streetpick.OverpassBusy:
+        return {"source": "none"}
+    return {"source": "cache" if cached else "overpass", "elements": els}
 
 
 @router.post("/worker/known", tags=["worker"], dependencies=[Depends(worker_auth)])

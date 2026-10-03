@@ -22,6 +22,16 @@ from app import streetpick
 from app.settings import ROOT
 from geo_cascadia.geo import Frame
 
+
+@pytest.fixture(autouse=True)
+def no_local_map_data(monkeypatch):
+    """these tests fake Overpass: D53's local copy of the covered cities must not answer in its place"""
+    import geo_cascadia.area as pipeline_area
+    from app import mapdata
+    monkeypatch.setattr(mapdata, "answer", lambda q: None)
+    monkeypatch.setattr(mapdata, "ms_rings", lambda *a: None)
+    monkeypatch.setattr(pipeline_area, "MAP_SOURCE", None)
+
 LAT0, LON0 = 13.4321, 79.1234                  # nowhere near an analysed area or a cached click
 SEGMENTS = [(0, 200), (350, 550), (700, 900)]  # metres east; 150 m gaps (> 2 × the 45 m buffer)
 NAME = "Gap Test Road"

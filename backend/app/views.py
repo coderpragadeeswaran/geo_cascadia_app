@@ -9,7 +9,7 @@ from collections import Counter
 
 from geo_cascadia.workspace import QueryEngine, build_dashboard
 
-from . import queryparse
+from . import queryparse, spatial
 from .derived import computed_counts, consistency
 from .streetgeo import gap_consistency
 
@@ -262,7 +262,7 @@ STORED_GAP_M = 60                   # the only interval the pipeline exported (f
 GOOGLE_FLAG = "sign_not_in_google_within_40m"
 
 
-def run_query(bundle, text, explain=True, gaps_at=None, scope_street=None):
+def run_query(bundle, text, explain=True, gaps_at=None, scope_street=None, near_at=None, near_m=None):
     """QueryEngine.run + a uniform response. why_empty: the engine's funnel for building queries; for other intents
     a funnel built the same way (all → filters → 0). Typed questions go through queryparse first (synonyms + what was
     understood / ignored, docs/QUERY.md); chips built by clicking are canonical text and skip that step.
@@ -270,11 +270,17 @@ def run_query(bundle, text, explain=True, gaps_at=None, scope_street=None):
     gaps_at(interval) → {"rows", "display"} | None: dark stretches at intervals other than the stored 60 m, computed
     with the pipeline's method (gaps.GapCalc); None = can't be computed → said plainly, never reported as 0 (fix 2).
     scope_street: the street the person had selected; a typed question that names no street is answered on it and says
-    so with a Street chip (fix 3: one scope, never two). A by-street chart covers every street and ignores it."""
+    so with a Street chip (fix 3: one scope, never two). A by-street chart covers every street and ignores it.
+
+    near_at(metres) → {"ids", "method"}: D53 spatial rule "within N m of a possible dark stretch" (spatial.py; PostGIS
+    online). The phrase is taken out of a typed question before QueryEngine reads the rest; near_m = from edited chips."""
     qe = engine(bundle)
     und = None
+    phrase = None
     if explain:
-        read_as, und = queryparse.understand(qe, text, compose_query)
+        text_q, m, phrase = spatial.extract(text)
+        near_m = m or near_m
+        read_as, und = queryparse.understand(qe, text_q if m else text, compose_query)
         read_as = _scoped(qe, read_as, und, scope_street)
         parsed, res = qe.run(read_as)
     else:
@@ -282,7 +288,26 @@ def run_query(bundle, text, explain=True, gaps_at=None, scope_street=None):
     parsed = copy.deepcopy(parsed)
     funnel = parsed.pop("why_empty", None)
     it = parsed["intent"]
-    out = {"text": text, "parsed_filters": parsed, "intent": it, "rows": None, "groups": None, "why_empty": [], "understanding": und}
+    near = None
+    if near_m and (it != "buildings" or near_at is None):
+        if und is not None:                                  # only building questions take the distance rule
+            und["ignored"] = und["ignored"] + [phrase or f"within {near_m} m of a possible dark stretch"]
+            und["status"] = "partial" if und["understood"] else "not_understood"
+    elif near_m:
+        nd = near_at(near_m)
+        base = res
+        if isinstance(res, dict):                            # by street: count the kept buildings per street
+            base = qe.run(compose_query({k: v for k, v in parsed.items() if k != "group_by"}))[1]
+        kept = [r for r in base if r["building_id"] in nd["ids"]]
+        res = dict(Counter(r["street"] for r in kept).most_common()) if isinstance(res, dict) else kept
+        parsed["near_dark_m"] = near_m
+        near = {"near_dark_m": near_m, "method": nd["method"], "before": len(base), "after": len(kept),
+                "note": f"Kept the buildings whose outline lies within {near_m} m of a possible dark stretch as the map "
+                        f"draws it (the pipeline's stored 60 m stretches)."}
+        if und is not None:
+            und["understood"] = und["understood"] + [{"phrase": phrase or "", "meaning": f"within {near_m} m of a possible dark stretch"}]
+    out = {"text": text, "parsed_filters": parsed, "intent": it, "rows": None, "groups": None, "why_empty": [], "understanding": und,
+           **({"spatial": near} if near else {})}
     all_gaps = None
     if it == "streetlight_gaps" and parsed["interval_m"] != STORED_GAP_M:
         iv = parsed["interval_m"]
@@ -309,7 +334,10 @@ def run_query(bundle, text, explain=True, gaps_at=None, scope_street=None):
             out["gaps"] = {"interval_m": STORED_GAP_M, "computed": False, "available": True, "note": "stored by the pipeline"}
     if it == "buildings" and parsed.get("ref_flag") == GOOGLE_FLAG:
         out["note"] = _google_note(qe, parsed, out["total"])
-    if funnel:
+    if near:
+        steps = [{"step": s, "count": n} for s, n in funnel] if funnel else             [{"step": "buildings matching the rest of the question", "count": near["before"]}]
+        out["why_empty"] = steps + [{"step": f"within {near['near_dark_m']} m of a possible dark stretch", "count": near["after"]}]
+    elif funnel:
         out["why_empty"] = [{"step": s, "count": n} for s, n in funnel]
     elif out["total"] == 0:
         out["why_empty"] = _other_funnel(bundle, qe, parsed, all_gaps)
@@ -453,7 +481,8 @@ def compose_query(f):
     return " ".join(parts)
 
 
-def run_filters(bundle, filters, gaps_at=None):
+def run_filters(bundle, filters, gaps_at=None, near_at=None):
+    near_m = int(filters.get("near_dark_m") or 0) or None        # D53: applied after QueryEngine (spatial.py)
     want = normalize_filters(filters)
     if want["intent"] != "buildings":
         want.pop("group_by", None)
@@ -461,4 +490,5 @@ def run_filters(bundle, filters, gaps_at=None):
     got = {k: v for k, v in engine(bundle).parse(text).items() if k != "why_empty"}
     if got != want:
         raise FilterError(f"these filters can't be expressed for QueryEngine (read back as {got})")
-    return run_query(bundle, text, explain=False, gaps_at=gaps_at)
+    return run_query(bundle, text, explain=False, gaps_at=gaps_at, near_at=near_at,
+                     near_m=near_m if want["intent"] == "buildings" else None)

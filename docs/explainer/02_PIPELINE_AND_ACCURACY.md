@@ -39,7 +39,7 @@ One pipeline function runs all the steps. Each stage saves its results, so a sto
 
 ### 7.1 Area and streets
 - **Input:** a polygon: the Ward 29 study area, or a 45 m buffer around a clicked street.
-- **What happens:** the pipeline downloads every road in the polygon from OpenStreetMap, plus shop/amenity/office points. Roads with the same name are joined. Each street gets:
+- **What happens:** the pipeline reads every road in the polygon from OpenStreetMap, plus shop/amenity/office points and the building outlines (Microsoft's outlines too where OpenStreetMap has few, [§5.3](01_WHAT_AND_WHY.md#53-microsoft-global-ml-building-footprints)). In Coimbatore, Trichy, Tiruppur and Madurai these come from the app's monthly copy, through the app's server (D53); elsewhere from OpenStreetMap's public servers and Microsoft's download site, as before. Roads with the same name are joined. Each street gets:
   - a length;
   - its number of panoramas within 15 m;
   - "coverage" = panoramas × 20 m / length;
@@ -51,7 +51,8 @@ One pipeline function runs all the steps. Each stage saves its results, so a sto
 - **Output:** the street list and the street names.
 - **Ward 29:** 10 streets, 4,829 m. Sathy Main Road is the longest (951 m) and is stored as separate one-way carriageways. 7 unnamed OSM streets got Google names, e.g. "(unnamed residential #134792895)" → "8th Street, Ganapathy"; "2nd Street, Ganapathy Gardens (approx.)"; "4th Street, Tatabad / Vinobaji Street".
 - **Can fail:**
-  - OpenStreetMap's map server busy → the pipeline tries 4 copies of it up to 6 times; the worker then retries after 30, 60 and 120 s (D39).
+  - Outside the four cities, OpenStreetMap's map server busy → the pipeline tries 4 copies of it up to 6 times; the worker then retries after 30, 60 and 120 s (D39). Inside them the public servers are not asked at all.
+  - **Time:** for one 276 m street in Coimbatore this step took 487.9 s on Colab (2 Oct). Measured again on the laptop with nothing cached: 466 s, of which 441 s was downloading Microsoft's tile and index, 19 s the three OpenStreetMap questions and 5 s the work itself (D53). From the app's copy: see [§13.2](04_BACKEND_DB_WORKER.md#132-speed).
   - No road in the polygon → the job ends as "No Street View" (reason: no streets).
 - **Error owner:** OSM (roads, names), GOOGLE (geocoded names), OUR RULES (selection, naming votes).
 

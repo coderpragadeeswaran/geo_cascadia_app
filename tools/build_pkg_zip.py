@@ -30,7 +30,7 @@ def build(out):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=os.path.join(ROOT, "geo_cascadia_pkg_p7b.zip"))
+    ap.add_argument("--out", default=os.path.join(ROOT, "geo_cascadia_pkg_p7c.zip"))
     a = ap.parse_args()
     names = build(a.out)
     sys.stdout.reconfigure(encoding="utf-8")

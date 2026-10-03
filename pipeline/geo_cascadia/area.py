@@ -12,12 +12,24 @@ MIRRORS = ["https://overpass-api.de/api/interpreter",
            "https://overpass.kumi.systems/api/interpreter",
            "https://overpass.private.coffee/api/interpreter",
            "https://overpass.openstreetmap.ru/api/interpreter"]
+# Map-source hook (D53; plumbing only, None = unchanged behaviour). When set, it is asked first:
+#   MAP_SOURCE("overpass", query_text) -> the Overpass elements, or None (then Overpass + this module's cache, as before)
+#   MAP_SOURCE("microsoft", (min_lon, min_lat, max_lon, max_lat)) -> footprint rings [[lon, lat], ...], or None (then the
+#     tile download / cache, as before)
+# The app sets it to its PostGIS copy of OpenStreetMap + Microsoft footprints for the covered cities (backend: in-process
+# for the cost planner; the Colab worker: through the app's API).
+MAP_SOURCE = None
+
 ROAD_TYPES = {"residential", "primary", "secondary", "tertiary", "unclassified", "living_street", "trunk",
               "road", "primary_link", "secondary_link", "tertiary_link"}
 
 
 def overpass(query, cache_dir, tries=6):
     """Cached Overpass call (same md5 key as the notebook, so Ward 29 reuses the notebook's cache)."""
+    if MAP_SOURCE is not None:
+        els = MAP_SOURCE("overpass", query)
+        if els is not None:
+            return els
     os.makedirs(cache_dir, exist_ok=True)
     path = f"{cache_dir}/{hashlib.md5(query.encode()).hexdigest()}.pkl"
     if os.path.exists(path):
@@ -110,9 +122,10 @@ class Area:
         mnx, mny, mxx, mxy = self.poly_ll.bounds
         cdir = f"{os.path.dirname(self.cache_dir)}/ms_cache"; os.makedirs(cdir, exist_ok=True)
         cpath = f"{cdir}/{hashlib.md5(f'{mnx:.5f},{mny:.5f},{mxx:.5f},{mxy:.5f}'.encode()).hexdigest()}.json"
-        if os.path.exists(cpath):
+        rings = MAP_SOURCE("microsoft", (mnx, mny, mxx, mxy)) if MAP_SOURCE is not None else None
+        if rings is None and os.path.exists(cpath):
             rings = json.load(open(cpath))
-        else:
+        elif rings is None:
             def quadkey(lat, lon, z=9):
                 sn = math.sin(math.radians(lat)); x = int(((lon + 180) / 360) * (1 << z))
                 y = int((0.5 - math.log((1 + sn) / (1 - sn)) / (4 * math.pi)) * (1 << z)); q = ""

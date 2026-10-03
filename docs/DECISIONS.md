@@ -1812,3 +1812,98 @@ buildings don't block a wall's line; without the cached roads only the analysed 
 **Tests / checks:** `backend/tests/test_gate1_drawer.py` (Trust set and numbers for all three Trust areas, the computed
 distance vs the stored rows, no distance for case 2, corners, a synthetic corner block, the endpoint);
 `web/scripts/gate1-shots.ts` (both themes); `docs/P7_MANUAL_CHECKS.md` item 36.
+
+## 2026-10-03 — local map data (branch local-osm)
+
+### D53. OpenStreetMap + Microsoft footprints for four cities in PostGIS; Overpass only elsewhere; the 50 m question
+**Why (measured, Phase A).** The Bharathiar Road run's area stage took 487.9 s of a 10.9 min job. Re-run alone on the
+laptop with empty caches: **466.3 s = Microsoft dataset index 111.2 s (7.2 MB) + Microsoft tile 330.5 s (35.6 MB) +
+Overpass 19.3 s (buildings 12.8, roads 3.5, shops 3.0) + processing 5.3 s**. The run's log line "footprints osm 12 +
+microsoft 16" is a count of outlines, not seconds. So the slow part was Microsoft's download, not Overpass; street clicks
+still waited on Overpass (10–65 s, or "busy").
+
+**Owner decisions (3 Oct):** all four cities; Microsoft footprints too; the 50 m question as a backend `ST_DWithin` rule;
+a pipeline hook (new zip p7c, re-paste the worker cell); Tiruppur 16 × 16 km box; the refresh cost is fine. Loading rule:
+one city at a time, size checked after each, stop above 65 % of 500 MB.
+
+**Cities and sizes.** Boxes = the OSM city boundary + 550 m: Coimbatore (the 5 Corporation zone relations), Trichy
+(relation 10318360), Madurai (11268397); Tiruppur has no city boundary in OSM → 16 × 16 km on its city node. Every
+analysed area and demo street lies inside one. Sources: Geofabrik `southern-zone` extract (snapshot 2026-10-02T20:21:34Z),
+Microsoft Global ML Building Footprints India release 2026-02-23 (5 level-9 tiles). **Microsoft has no outlines around
+Tiruppur** (its India coverage stops near longitude 77.15). Phase A measured the sizes in a throwaway local PostGIS
+(PG 17 / PostGIS 3.6, same on-disk format); the real load into Supabase (PG 17.6 / PostGIS 3.3.7):
+
+| city | km² | roads | OSM outlines | shop points | Microsoft | database after |
+|---|---|---|---|---|---|---|
+| (before) | | | | | | 29.7 MB |
+| Coimbatore | 502 | 37,778 | 160,390 | 2,666 | 280,995 | 155.4 MB (31.1 %) |
+| Trichy | 167 | 10,865 | 92,545 | 1,005 | 97,038 | 207.8 MB (41.6 %) |
+| Tiruppur | 256 | 11,273 | 551 | 303 | 0 | 211.2 MB (42.2 %) |
+| Madurai | 431 | 19,630 | 36,077 | 1,469 | 183,610 | 270.5 MB (54.1 %) |
+
+Supabase Storage: 0 files (unchanged). Loading took 17.8 min (Coimbatore 369 s); the extract took 164 s to read.
+
+**Tables** (migration 008): `map_cities` (box, box source, OSM snapshot, Microsoft release, counts), `osm_roads` (way id,
+highway, name, bridge, tunnel, line), `osm_buildings` (the pipeline's own ids `w<way>` / `r<relation>_<member index>`),
+`osm_pois` (shop / amenity / office nodes; shop / amenity ways as the centre of their bounding box, Overpass's
+`out center`), `ms_buildings`; GiST on every geometry, a b-tree on road names; RLS on, no policies. A feature that touches
+a box is kept whole.
+
+**Import / refresh** (`tools/import_osm_local.py`; `--refresh` monthly): reads the extract with pyosmium, one
+transaction per city, and **writes only what changed**: each row's WKB md5 is compared with PostGIS's
+`md5(ST_AsBinary(geom, 'NDR'))` (roads also hash name / class / bridge / tunnel; Microsoft rows are keyed by geometry).
+A delete-and-reload refresh would have peaked at ~382 MB (both copies of a city exist until commit), above the 65 % rule.
+Checked: a refresh with the same snapshot changed only the shop-way centres (moved from node mean to bounding-box centre,
+the Overpass rule: Coimbatore 678, Trichy 143, Tiruppur 73, Madurai 466 rows) and left all ~900,000 other rows unchanged;
+270.5 → 270.8 MB. Prints the database size before / after each city and stops above `--max-db-mb` (325). The extract is read in a child process: pyosmium keeps its 2.5 GB node-location file memory-mapped until the process ends, so on Windows it could not be deleted (found after the first load; deleted by hand, now automatic, tested).
+
+**Where it is used** (`backend/app/mapdata.py`): the same Overpass query texts are answered from PostGIS when their box
+(or every point + radius) lies inside a covered city, in Overpass's own element format, so callers did not change:
+- street click (`streetpick`): the ~330 m road tile, the named street within 1.5 km, the roads at an unnamed road's ends;
+  the clicked road's candidates come from a **PostGIS nearest-neighbour** query (`<->` on the index, k = 8) and the old
+  rule picks among them (local-metre distance, ties to the lowest way id as in Overpass's id-ordered answer). First
+  version took PostGIS's nearest directly: the Dr Alagesan Road demo point lies on a junction (two roads at 0 m) and
+  resolved to the unnamed side road (64 m) instead of Dr Alagesan Road (1,201 m); fixed and tested;
+- mini-maps (roads around an area, the outline under a dropped camera);
+- the cost planner and the worker's area stage, through a **pipeline hook** `geo_cascadia.area.MAP_SOURCE` (plumbing
+  only; unset = unchanged). In the API it answers from PostGIS; in Colab the worker cell's `MapSource` asks
+  `POST /worker/mapdata` (worker token, over the tunnel; no database access and no new secret in Colab) and records what
+  answered in `worker_run.json` `map_data`. Microsoft rings come from `ms_buildings` the same way; the pipeline's own
+  "< 8 % OSM cover" rule still decides whether they are used. `check_pipeline` refuses a package without the hook.
+- Outside the cities: Overpass as before (raced mirrors), answers and resolved streets kept **30 days** on disk; the
+  worker's request falls back to its own Overpass / Microsoft call when the API answers `none`. `LOCAL_MAP_DATA=0`
+  switches the copy off. A database failure sends map questions to Overpass for 30 s (logged).
+
+**Display.** Under the Hood's coverage card: "Map data: OpenStreetMap snapshot 2 Oct 2026 · Microsoft footprints 23 Feb
+2026, held in the app's database for Coimbatore", what this area's run used (all existing areas: OpenStreetMap's servers
+on their run day, before the copy existed), and both attributions (ODbL). The map footer adds "Map data © OpenStreetMap
+contributors · building footprints © Microsoft" on a second line (one line covered Google's logo at 1366 px).
+`GET /mapdata` lists the cities.
+
+**The 50 m question** (`backend/app/spatial.py`): "… within N m of a possible dark stretch" (also "near a dark stretch" =
+50 m) is taken out of the question before QueryEngine reads the rest; QueryEngine's building rows are then kept when the
+outline (point if none) is within N m of a stored 60 m stretch **as the map draws it** (along-road path, else the
+recorded segment), PostGIS `ST_DWithin` on geography; offline mode the same rule with shapely (pytest: identical ids).
+New chip "Dark stretch · within 25 / 50 / 100 m", why-empty step, example question. "not-in-register" (hyphenated) is now
+a register synonym. **Ward 29: "Show not-in-register buildings within 50 m of a possible dark stretch" → 15 of the 27
+not-in-register buildings.**
+
+**Verification (3 Oct).**
+- V1 (`tools/verify_local_map.py`): the pipeline's own area-stage code, local copy vs live Overpass (fresh caches), for
+  the 8 analysed areas and 6 demo streets: roads, names, total length, outline counts (OSM / Microsoft) and outline id
+  sets **identical in all 14** (e.g. Ward 29 145 roads, 21,210 m, 2,183 outlines; Vadakku Masi Veethi 1 + 110;
+  Bharathiar 11 + 15). Re-run after the junction fix, also comparing shop points and street kind (commercial /
+  residential): identical again in all 14 (Dr Alagesan Road now resolved as before: 16 roads, 2,301 m, 120 outlines).
+  No difference to explain. Output: `data/exports/local_map_check.json` (git-ignored).
+- V2 (real API, empty caches, one API at a time): street click 42.9 / 64.5 / 16.3 / 5.0 / 2.9 s → 2.8 / 1.0 / 0.9 / 3.4 /
+  3.0 s; estimate 83 / 120 / 126 / 243 / 27 s → 37 / 38 / 31 / 15 / 7 s (Sakthi Main Road, Ganapathy - Avarampalayam
+  Road, Dr Alagesan Road, Pioneer Mills Cross Street, Unnamed road near 5th Street; the last two "before" reused tiles
+  fetched for the first three). Same street and length in all five. What remains of the estimate time is Google's
+  Street View search. Area stage, Bharathiar Road: 466 s → 1.0–1.2 s through the API (as the worker asks, without the
+  tunnel), 2.5–2.7 s in-process with a fresh database connection; same 12 + 16 outlines. Laptop → Supabase round trip
+  0.44 s, a new connection 7.9 s.
+- V3 (an API whose outgoing requests go through a dead proxy, Google exempted): the 5 demo clicks and estimates work
+  (source local); Salem and Erode clicks → 503 "Map server is busy — try again in a minute." after 12–13 s; the worker
+  request is `local` inside (0.3 s), `none` outside; the Madurai mini-map shows 71 roads.
+
+**Colab:** upload `geo_cascadia_pkg_p7c.zip` (package 0.2.1) and re-paste the worker cell.

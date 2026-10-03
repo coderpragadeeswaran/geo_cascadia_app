@@ -12,7 +12,7 @@ pre-computed showcase; any other street can be analysed on demand by a Colab GPU
 
 ```
 web (React, :5173) ──> API (FastAPI, :8000) ──> Supabase Postgres + PostGIS
-                         ▲  jobs table
+                         ▲  jobs table          (+ OpenStreetMap / Microsoft map data of 4 cities, D53)
                          │  cloudflared quick tunnel
                     Colab worker (GPU) — claims a job, runs the pipeline, uploads the results
 ```
@@ -23,7 +23,9 @@ web (React, :5173) ──> API (FastAPI, :8000) ──> Supabase Postgres + Post
 
 ### The day before
 1. **Warm the map caches** (street lookups, roads for the mini-maps, cost estimates for the demo streets), so clicks
-   work even if OpenStreetMap is slow or down on the day. Edit the list in [tools/demo_streets.json](tools/demo_streets.json)
+   work even if OpenStreetMap is slow or down on the day. Inside Coimbatore, Trichy, Tiruppur and Madurai the street
+   lookups and map data come from the database (D53, see "Map data" below) and never wait for OpenStreetMap; the warm-up
+   still matters for the cost estimates (they also ask Google Street View) and for streets outside those cities. Edit the list in [tools/demo_streets.json](tools/demo_streets.json)
    first (one point on each street you may click), then:
    ```powershell
    backend\.venv\Scripts\python tools\warm_osm_cache.py            # retries slow map servers until done; prints the time
@@ -34,8 +36,8 @@ web (React, :5173) ──> API (FastAPI, :8000) ──> Supabase Postgres + Post
 2. Run the checks below (Tests) once.
 
 ### On the day, in this order
-0. **Worker files changed in P8:** re-paste the worker cell, and upload `geo_cascadia_pkg_p7b.zip`
-   (`tools\build_pkg_zip.py`) to `/MyDrive/alldataset` once.
+0. **Worker files changed in D53 (local map data):** re-paste the worker cell, and upload `geo_cascadia_pkg_p7c.zip`
+   (`tools\build_pkg_zip.py`) to `/MyDrive/alldataset` once. The worker refuses an older package.
 1. **Fresh AWS keys.** Open the AWS access portal and copy new SSO credentials (access key id, secret, session token).
    They expire after a few hours, so take them just before the demo and put them in the Colab secrets.
 2. **T1 — API** (repo root):
@@ -70,7 +72,7 @@ web (React, :5173) ──> API (FastAPI, :8000) ──> Supabase Postgres + Post
 
 | What happened | What the app shows | What to do |
 |---|---|---|
-| OpenStreetMap slow / down | Warmed demo streets answer at once; any other street shows "Finding street…", then "Map server is busy — try again in a minute." | Click a warmed demo street, or open a saved area |
+| OpenStreetMap slow / down | Nothing changes inside Coimbatore, Trichy, Tiruppur and Madurai (map data from the database). Elsewhere: warmed streets answer at once; any other street shows "Finding street…", then "Map server is busy — try again in a minute." | Click a street inside one of the four cities, or open a saved area |
 | Colab / worker not running | Top bar "Analysis off"; a new street waits as "Queued. The analysis computer is not connected yet" | Show the saved areas; start the worker cell — it picks the queued street up |
 | Tunnel down or restarted | Same as worker offline; a running street shows "Interrupted" after ~2 min | Restart T3, paste the new URL when the worker cell asks ("Paste the new tunnel URL"); it continues from the saved progress |
 | AWS keys expired | The job shows "Paused: key expired" | New keys from the portal; the worker cell asks for them and continues the same street |
@@ -93,6 +95,8 @@ Not tested: the laptop with no internet at all (Google's map script and Supabase
   (any long random string), optional `JOB_COST_CAP_USD` (default 2).
 - Database: `backend\.venv\Scripts\python backend\migrate.py`, then load each area:
   `backend\.venv\Scripts\python backend\load_area.py data\areas\<slug>`.
+- Map data for the four cities (D53; measured 3 Oct: ~20 min to download ~630 MB here, 18 min to load; adds 241 MB to the database):
+  `backend\.venv\Scripts\python tools\import_osm_local.py`.
 - Colab package: `backend\.venv\Scripts\python tools\build_pkg_zip.py`, upload the zip to `/MyDrive/alldataset`.
 
 ## Tests
@@ -112,8 +116,30 @@ npx tsx scripts/heap.ts            # production build only: JS heap after GC (ta
 npx tsx scripts/offline.ts         # fallbacks; needs extra APIs on :8001 (outgoing requests blocked) and :8002 (no Google keys)
 npx tsx scripts/gate1-shots.ts     # Gate 1 per building in the drawer (dev server): the three cases, a corner, Trust › Gate 1; MODE=daylight
 npx tsx scripts/p8-shots.ts        # P8 screens (dev server): Routing and cost, photo dates, front wall, dark stretches, Tamil; MODE=daylight for Daylight
+npx tsx scripts/d53-shots.ts       # D53 (dev server): Hood map-data line, map attribution, the 50 m dark-stretch question; MODE=daylight
 backend\.venv\Scripts\python tools\audit_numbers.py    # (repo root) Ward 29 numbers straight from the database
 ```
+
+## Map data (OpenStreetMap + Microsoft footprints, D53)
+
+Roads, building outlines and shop points from OpenStreetMap, and Microsoft's building footprints, are held in the
+database for **Coimbatore, Trichy (Tiruchirappalli), Tiruppur and Madurai** (city boundary + 550 m; Tiruppur, which has
+no city boundary on OpenStreetMap, a 16 × 16 km box). The street click, the mini-maps, the cost estimate and the
+worker's "Reading the map" stage read them from there. Under the Hood shows the snapshot dates; the map footer carries
+the attribution (© OpenStreetMap contributors, building footprints © Microsoft, both ODbL).
+
+**Monthly refresh** (one command; ~30 min on this connection, of which ~20 min is the download: it downloads the latest extract and tiles, rewrites only what changed, prints
+the database size before and after, and stops if it passes 325 MB = 65 % of Supabase's free 500 MB):
+```powershell
+backend\.venv\Scripts\python tools\import_osm_local.py --refresh
+backend\.venv\Scripts\python tools\verify_local_map.py      # optional: compare with OpenStreetMap's live servers
+```
+
+**Outside the four cities** nothing is stored: the app asks OpenStreetMap's public servers (Overpass) as before and keeps
+each answer 30 days on disk (`data/cache/streetpick/`), so a second click or run in the same place is fast. When those
+servers are down, a street there can't be picked ("Map server is busy — try again in a minute."), and the worker asks
+OpenStreetMap / Microsoft itself. `LOCAL_MAP_DATA=0` in `backend/.env` switches the database copy off (everything goes
+to OpenStreetMap's servers, as before D53).
 
 ## Field check: the review queue as a walking route
 
@@ -129,4 +155,5 @@ No Street View photo is stored by the API or in `data/`. The worker keeps photo 
 deletes them once the result is delivered (it prints how many). Local screenshots in `docs/screenshots/` (git-ignored)
 can show Street View photos: delete them when no longer needed. Details: explainer 04 §6.9.
 
-Registers are synthetic demo data. Prototype — imagery © Google.
+Registers are synthetic demo data. Prototype — imagery © Google. Map data © OpenStreetMap contributors (ODbL);
+building footprints © Microsoft (Global ML Building Footprints, ODbL).

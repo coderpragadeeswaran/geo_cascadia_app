@@ -79,6 +79,7 @@ Before the demo: the server and the web app running, the database awake (or the 
 - **Use not known for 139 of 381** (Ward 29). Floors not known for 160.
 - **Positions:** Gate 1 not verified; camera-derived median 2.8 m vs OSM (60% ≤ 3.5 m). 121 buildings use the map's front-wall centre (no camera measurement). Single-camera poles: see item 4 above ([key finding 4](00_START_HERE.md#improvements-the-four-key-findings-fixed-in-p7a)).
 - **OSM outline problems:** merged compounds (Tiruppur w344655428), missing outlines, cameras "inside" outlines (13).
+- **Map data is a monthly snapshot in the four cities (D53).** Coimbatore, Trichy, Tiruppur and Madurai are answered from the app's copy (OpenStreetMap 2 Oct 2026, Microsoft 23 Feb 2026); a road or outline added on OpenStreetMap later is not seen until the next refresh (one command, by hand). Outside the four cities the app still depends on OpenStreetMap's public servers (answers kept 30 days): when they are down, a new street there can't be picked. Microsoft has no outlines around Tiruppur at all. The areas analysed before 3 Oct were made from OpenStreetMap's live servers on their run day, not from the snapshot (Under the Hood says which).
 - **Sign names:** fragments (44 in Ward 29), Tamil not checked (5), OCR garble that looks like a word can still pass ("DEXENTERARSSES" was accepted as a good name before D44), posters ("COACHING"). Sign linking: see item 3 above ([key finding 3](00_START_HERE.md#improvements-the-four-key-findings-fixed-in-p7a)).
 - **Detector misses:** lamp heads 43% recall, poles 58%, buildings 71%. 43 Ward 29 buildings never got a box.
 - **Pole merging:** poles closer than about 5 m become one. 369 of 822 pole boxes placed nothing.
@@ -89,7 +90,7 @@ Before the demo: the server and the web app running, the database awake (or the 
 - **Job estimate** from the real camera plan: photos a few per cent high, time high on a large area (Ward 29 16.0 min vs 11.5 real; D47).
 - **No authentication:** anyone who can reach the server can review, delete a live area or open appeal photos.
 - **Manual browser checks** for P7 are listed in docs/P7_MANUAL_CHECKS.md; the exact Colab setup-cell text is still to be pasted into worker/colab_setup_cells.md.
-- **The README is a one-line placeholder.**
+- **Map data, database size:** the four cities' copy takes 241 MB; the database is 270.8 MB of Supabase's free 500 MB (3 Oct). Adding a city means checking the size first (the import stops above 325 MB).
 
 ---
 
@@ -104,6 +105,12 @@ keys missing, API down); the sign-move spot-check on Trust (AI first pass + a pe
 seen in N photos"; the Hood photo cost from the run files (1,420); street-name consistency (picker and records); the
 stale docs; `worker/colab_setup_cells.md`; the worker's result upload retried with back-off.
 
+**Done after P7 (P8, D50–D53):** the cost recount and Routing and cost; photo dates; "possible dark stretch"; frontage =
+the road-facing wall; Gate 1 per building in the drawer; **local map data for the four cities** (D53: OpenStreetMap +
+Microsoft footprints in the database, the street click by PostGIS nearest-neighbour, the worker's map data through the
+server, a 30-day cache elsewhere, the snapshot line on Under the Hood, the "within 50 m of a possible dark stretch"
+question).
+
 **Still open:**
 - [ ] **Paste the exact S0 / S1a / S1ba / S1bb cell text** into `worker/colab_setup_cells.md` (marked "PASTE CELL HERE").
 - [ ] **A person redoes the sign spot-check** on Trust (today: an AI first pass).
@@ -112,6 +119,9 @@ stale docs; `worker/colab_setup_cells.md`; the worker's result upload retried wi
   medians beyond 8 m).
 - [ ] **The manual browser checks** in `docs/P7_MANUAL_CHECKS.md` (rounds 1–3).
 - [ ] A **real-run test of the tunnel** on demo day with `127.0.0.1` (the IPv6 note in the README).
+- [ ] **One live Colab run with the new package (p7c)** to confirm the worker reads its map data from the app (D53: the
+  cell prints "map data: the app's OpenStreetMap snapshot 2026-10-02" and `worker_run.json` records it).
+- [ ] **Refresh the map data once a month** (`tools/import_osm_local.py --refresh`); nothing reminds anyone automatically.
 
 **Intentionally not planned:**
 - Hosting the app (it runs on the laptop plus a tunnel).
@@ -121,7 +131,7 @@ stale docs; `worker/colab_setup_cells.md`; the worker's result upload retried wi
 
 ---
 
-## Appendix A: every decision, D1 → D49
+## Appendix A: every decision, D1 → D53
 
 | # | One line |
 |---|---|
@@ -173,6 +183,10 @@ stale docs; `worker/colab_setup_cells.md`; the worker's result upload retried wi
 | D47 | Time = start-up + photos × 0.49 s; Google's own name for an unnamed road; camera-only buildings layer; linked sign boxes; the street-name picker; the sign rule and its AI spot-check on Trust. |
 | D48 | Street lookup answers "pending" instead of 503 and keeps looking in the background; mirrors raced with health; plain words on user screens; no city badges. |
 | D49 | Guided tour; demo-day map cache (warm-up tool); the planner never caches a failed Street View search; worker upload retries; the app opens without a map key; API-lost banner; no pooled Gate 1 row; heap re-measured; README and docs. |
+| D50 | Cloud-AI cost recount ($0.0702 like for like with the router); Routing and cost; photo dates and "imagery may be outdated"; "possible dark stretch"; front wall; Tamil questions; imagery-storage inventory; review route. |
+| D51 | Frontage = the road-facing wall (the old value is the outline's longest side); the run's cost split, photos vs cloud AI. |
+| D52 | Each building's own Gate 1 position error in the drawer, from Trust's own rows; camera-only buildings clickable; corner fronts. |
+| D53 | Map data for Coimbatore, Trichy, Tiruppur and Madurai kept in the database (OpenStreetMap + Microsoft, monthly refresh, 241 MB); the street click, mini-maps, estimate and the worker's "Reading the map" read it; OpenStreetMap's servers elsewhere with a 30-day cache; the snapshot dates on Under the Hood; the "within N m of a possible dark stretch" question. |
 | D41 | Owner facts (30 Sep): the fresh full Ward 29 run (28 Sep: 11.5 min T4, 1,420 photos, cloud AI $0.0887, router on) is the real full-run time/cost; FarmwiseAI doubt session (27 Sep): OSM accepted, position = centre of the front, register data may come later; one Google server key for the server, Colab and the worker, browser key for the map only, D40 was that key refused. |
 
 ---

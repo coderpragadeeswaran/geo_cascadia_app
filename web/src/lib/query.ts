@@ -46,6 +46,7 @@ export function exampleQuestions(streets: string[]) {
     'Streets where no streetlight is detected within 60 m',
     'Chart of unmatched buildings by street',
     'Low-confidence floor counts for review',
+    'Not-in-register buildings within 50 m of a possible dark stretch',
     ...(a ? [`Buildings that differ from the register on ${a}`] : []),
     ...(b ?? a ? [`Poles on ${b ?? a}`] : []),
   ].slice(0, 6)

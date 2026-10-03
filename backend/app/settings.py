@@ -33,6 +33,9 @@ class Settings:
     # P7.2: default cost cap per job (US$). Stored on each new job; the worker pauses a job whose planned cost is above it
     # ("needs approval") before buying any photo. Jobs created earlier keep the worker cell's own cap.
     job_cost_cap_usd: float = field(default_factory=lambda: float(_env("JOB_COST_CAP_USD", "2") or 2))
+    # D53: answer map questions for the covered cities from the local PostGIS copy (tools/import_osm_local.py).
+    # LOCAL_MAP_DATA=0 switches it off: every map question goes to OpenStreetMap's servers, as before D53.
+    local_map_data: bool = field(default_factory=lambda: _env("LOCAL_MAP_DATA", "1") != "0")
 
     @property
     def areas_dir(self):
