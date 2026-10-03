@@ -237,11 +237,12 @@ Each sentence is clickable (KPI filter or Review).
 | Streets where no streetlight is detected within 60 m | dark stretches · 60 m | 11 stretches, longest first: Sathy Main Road 376 m, 8th Street, Ganapathy 313 m, Sri Ganapathy Gardens 3rd Street (approx.) 254 m, … |
 | Chart of unmatched buildings by street | no record · by street | bar chart: 2nd Street, Gandhi Nagar 6, 4th Street, Tatabad / Vinobaji Street 4, 2nd Street, Ganapathy Gardens (approx.) 4, Korathottam Road 4, Ganapathy - Avarampalayam Road 3, and 2 each on 3 more; a bar click zooms the map to that street |
 | Low-confidence floor counts for review | review · low-confidence floors | 4 buildings (e.g. w1252504103, w1252504515); "Send 4 to Review" opens Review with just those |
+| Not-in-register buildings within 50 m of a possible dark stretch | not in the register · dark stretch within 50 m | **15** of the 27 not-in-register buildings (D53) |
 | Buildings that differ from the register on 2nd Street, Gandhi Nagar | street · differs | 8 buildings |
-| Poles on Sathy Main Road | poles · street | 40 poles |
 
 - The spec wording ("Show commercial buildings with more than two visible floors that do not have a matching property record") parses to the same chips.
 - Other intervals work: "…within 100 m" gives 7 stretches, labelled "computed by the app with the pipeline's method".
+- **Distance to a dark stretch (D53):** "… within N m of a possible dark stretch" (or "near a dark stretch" = 50 m) keeps the buildings whose outline lies within N metres, on the ground, of a possible dark stretch as the map draws it. The database measures it; the chip "Dark stretch · within 25 / 50 / 100 m" changes N; the answer says "15 of 27 matching buildings are that close". "Poles on Sathy Main Road" still works; it is no longer one of the six examples.
 - **Tamil works for the main words (P8):** shop, building, house, pole, light, street, floors, register, review, chart, "not in the register", "more than two floors", "within 60 m", "by street" (e.g. "பதிவேட்டில் இல்லாத கடைகள்" = shops not in the register). The four spec questions and "poles on Sathy Main Road" asked in Tamil give exactly the same answer as in English.
 - If a word is not understood (e.g. Tamil "மரங்கள்", trees), the panel says "partly understood", lists the ignored word, offers close questions, and **applies nothing** until you accept or edit the chips.
 - Loose street names work: "sathy road" → Sathy Main Road.

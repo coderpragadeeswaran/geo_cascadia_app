@@ -265,7 +265,11 @@ def check_pipeline(run_area):
         p7a = all(importlib.util.find_spec(f"{mod.__name__}.{m}") for m in ("register", "signlink", "poleunc"))
     except Exception:
         p7a = False
-    if not {"plan_check", "on_stage", "ocr_runner"} <= set(params) or not p7a:
+    try:                                   # D53: the area stage's map-source hook (local map data from the app)
+        hook = hasattr(importlib.import_module(f"{mod.__name__}.area"), "MAP_SOURCE")
+    except Exception:
+        hook = False
+    if not {"plan_check", "on_stage", "ocr_runner"} <= set(params) or not p7a or not hook:
         raise SystemExit("The pipeline package is older than this worker. Copy pipeline/geo_cascadia from the repo to your "
                          "Drive folder (worker/README.md, 'Shared Drive folder'), re-run the setup cells, then this cell.")
 
@@ -379,6 +383,66 @@ class Backend:
                 if new:
                     self.url = new.rstrip("/")
                 fails = 0
+
+
+class MapSource:
+    """D53: geo_cascadia.area.MAP_SOURCE for a job. The area stage's OpenStreetMap queries and Microsoft footprints come
+    from the app (POST /worker/mapdata): its PostGIS copy for the covered cities, else the app's Overpass call with a
+    30-day cache. When the app can't answer (outside the cities for Microsoft, Overpass busy, tunnel trouble) it returns
+    None and the pipeline asks Overpass / Microsoft itself, exactly as before. Counts what answered, for worker_run.json."""
+    WAIT_S = 180                         # how long to keep asking while the app is still waiting for Overpass
+
+    def __init__(self, api):
+        self.api, self.used, self.dates = api, {}, {}
+
+    def _count(self, kind, src):
+        self.used.setdefault(kind, {}).setdefault(src, 0)
+        self.used[kind][src] += 1
+
+    def __call__(self, kind, arg):
+        body = {"kind": kind, **({"query": arg} if kind == "overpass" else {"bbox": list(arg)})}
+        t_end = time.time() + self.WAIT_S
+        try:
+            while True:
+                r = self.api.call("/worker/mapdata", body, timeout=90)
+                if r.get("source") != "pending" or time.time() > t_end:
+                    break
+                time.sleep(r.get("retry_after_s") or 5)
+        except SystemExit:
+            raise
+        except Exception as e:                                         # tunnel / API trouble: the pipeline's own call
+            print(f"  map data from the app unavailable ({type(e).__name__}); asking OpenStreetMap / Microsoft directly")
+            self._count(kind, "worker_direct")
+            return None
+        src = r.get("source")
+        if src == "local":
+            self.dates.update({k: r.get(k) for k in ("city", "osm_snapshot", "ms_release")})
+        if src in ("local", "overpass", "cache"):
+            self._count(kind, "app_" + src)
+            return r.get("elements") if kind == "overpass" else r.get("rings")
+        self._count(kind, "worker_direct")
+        return None
+
+    def summary(self):
+        """{"local": True when every answer came from the app's snapshot, "answers": counts, + snapshot dates}"""
+        if not self.used:
+            return None
+        srcs = {k for d in self.used.values() for k in d}
+        return {"local": srcs == {"app_local"}, "answers": self.used, **self.dates}
+
+
+def install_map_source(run_area, src):
+    """set geo_cascadia.area.MAP_SOURCE for this run; returns the undo function"""
+    import importlib
+    try:
+        mod = importlib.import_module(run_area.__module__.rsplit(".", 1)[0] + ".area")
+    except ImportError:                    # not the pipeline package (a test's stand-in run_area): nothing to install
+        return lambda: None
+    old = getattr(mod, "MAP_SOURCE", None)
+    mod.MAP_SOURCE = src
+    def undo():
+        mod.MAP_SOURCE = old
+    return undo
 
 
 # ----------------------------------------------------------------------------------------------- 3. memory + sign reading
@@ -789,6 +853,8 @@ def run_job(api, job, base_cfg, run_area, state):
     waits = list(OVERPASS_RETRY_S)
     trace = StreetViewTrace(getattr(cfg, "maps_key", None))       # D40: every Street View answer, to tell why
     undo_trace = trace.install(run_area)
+    maps = MapSource(api)                                          # D53: map data from the app (PostGIS / cached Overpass)
+    undo_maps = install_map_source(run_area, maps)
     try:
         while True:
             try:
@@ -815,6 +881,13 @@ def run_job(api, job, base_cfg, run_area, state):
                 tell(f"Map server was busy (OpenStreetMap); continuing after {n} {'retry' if n == 1 else 'retries'}.")
     finally:
         undo_trace()
+        undo_maps()
+        md = maps.summary()
+        if md:
+            note["map_data"] = md
+            print("  map data: " + ("the app's OpenStreetMap snapshot " + str(md.get("osm_snapshot") or "")[:10]
+                                    if md["local"] else f"{md['answers']}"))
+            json.dump(note, open(note_p, "w"))
         warns = trace.warnings()                                   # look-ups / photos that failed in a run that went on
         for w in warns:
             print(f"  ⚠ {w}")

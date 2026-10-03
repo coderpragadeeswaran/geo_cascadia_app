@@ -46,6 +46,7 @@ geo-cascadia-app/
     study_area/Study_area.geojson
   pipeline/geo_cascadia/    (the finished Python package — import only)
   tools/build_run_report.py (given; builds run_report.json from a run folder)
+  tools/import_osm_local.py (D53: OSM + Microsoft footprints of the covered cities -> PostGIS; --refresh monthly)
   backend/                  (FastAPI + SQLAlchemy/psycopg + PostGIS)
   worker/colab_worker.py    (cell code the owner pastes into Colab)
   web/                      (React + Vite + TypeScript app)
@@ -115,6 +116,12 @@ web (React, laptop :5173) ──HTTP──> backend (FastAPI, laptop :8000) ─�
                                        │  exposed by `cloudflared tunnel --url http://127.0.0.1:8000` (127.0.0.1: Windows may resolve localhost to IPv6)
                                   Colab worker (GPU or CPU) polls /worker/next → run_area() → posts progress + export
 ```
+- **Map data (D53):** OpenStreetMap roads / buildings / shop points and Microsoft building footprints for Coimbatore,
+  Trichy, Tiruppur and Madurai live in PostGIS (`tools/import_osm_local.py`, refreshed monthly). Inside those boxes the
+  street click (PostGIS nearest-neighbour), the mini-maps, the cost planner and the worker's area stage read them
+  (`backend/app/mapdata.py`; the pipeline's `area.MAP_SOURCE` hook; the worker asks `POST /worker/mapdata` over the
+  tunnel, never the database directly). Outside them: Overpass as before, answers cached 30 days. `LOCAL_MAP_DATA=0`
+  switches the copy off.
 - Pre-loaded areas work with no worker online. A new street becomes a **job**; if no worker is online the UI
   says "queued — analysis worker offline" (honest, not an error).
 - The pipeline is resumable per stage; the worker can die and resume.
@@ -132,6 +139,10 @@ reviewer, note, appeal_photo_url, updated_at)` — the appeal photo is stored as
 `jobs(id uuid, kind('street_click'|'polygon'), input jsonb, status('queued'|'running'|'done'|'failed'|'expired_token'|'no_street_view'|'needs_approval'),
 stage, done, total, message, area_id, created_at, started_at, finished_at, worker_id)`
 Loader: `backend/load_area.py <area folder>` — idempotent upsert of export.json + run_report.json.
+Map data (D53, migration 008): `map_cities(city, name, box, box_source, osm_snapshot, ms_release, counts)`,
+`osm_roads(way_id, city, highway, name, bridge, tunnel, geom line)`, `osm_buildings(id 'w…'|'r…_k', city, geom polygon)`,
+`osm_pois(osm_type, osm_id, city, geom point)`, `ms_buildings(id, city, geom polygon)`; GiST on every geometry. Database
+270.8 MB of the free 500 MB after loading the four cities (3 Oct 2026); the import stops above 325 MB.
 
 ## 7. API (FastAPI)
 - `GET /areas` · `GET /areas/{slug}` (meta + dashboard + run_report) · `GET /areas/{slug}/geojson?layers=buildings,assets,gaps,unmapped&bbox=`
@@ -146,12 +157,17 @@ Loader: `backend/load_area.py <area folder>` — idempotent upsert of export.jso
 - Worker (header `X-Worker-Token`): `POST /worker/next` (claims oldest queued job), `POST /worker/progress {job, stage, done, total}`,
   `POST /worker/result` (multipart: export.json + run JSONs → saved to `data/areas/<slug>/`, run_report built, loaded), `POST /worker/fail {job, code, message}`
 - `GET /model-card` → data/model_card.json
+- `GET /mapdata` → the covered cities, snapshot dates, attribution (D53); `GET /areas/{slug}/hood` carries `map_data`
+- `POST /query` also takes the spatial rule "… within N m of a possible dark stretch" (`near_dark_m`, PostGIS
+  `ST_DWithin`; `backend/app/spatial.py`), applied after QueryEngine
+- Worker: `POST /worker/mapdata {kind: overpass, query} | {kind: microsoft, bbox}` → local / overpass / cache / pending / none
 - `GET /config/public` → `{maps_js_key, map_id}` (browser key only)
 
 ## 8. Worker (`worker/colab_worker.py`)
 A single Colab cell to paste **after** the owner's existing setup cells (S0 install package, S1a deps, S1b keys → gives `cfg`, `run_area`, `D`).
 Loop: claim job → `click_to_street`/polygon → `run_area(poly, out_dir, cfg, name, way_ids=…, progress=post)` → upload export + JSONs.
-Map pipeline errors to job statuses: `NO_STREET_VIEW`, `NO_STREETS`, `NO_CAMERAS` → `no_street_view` with the message;
+The cell sets `geo_cascadia.area.MAP_SOURCE` so the area stage's map data comes from the app (D53) and records what
+answered in `worker_run.json` `map_data`. Map pipeline errors to job statuses: `NO_STREET_VIEW`, `NO_STREETS`, `NO_CAMERAS` → `no_street_view` with the message;
 `AWS token expired` → `expired_token` then stop (owner refreshes keys, re-runs; `run_area` resumes). Heartbeat every 15 s; a running job silent for 2 min is "interrupted" and claimable again (D34). Display statuses
 add cancelled / cancelling / interrupted (D29, D35). A failed result upload is retried with back-off (P7 R3).
 

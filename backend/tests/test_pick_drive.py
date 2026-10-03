@@ -5,6 +5,16 @@ from app import drive, streetpick
 from app.settings import Settings
 from app.store import JsonStore
 
+
+@pytest.fixture(autouse=True)
+def no_local_map_data(monkeypatch):
+    """these tests fake Overpass: D53's local copy of the covered cities must not answer in its place"""
+    import geo_cascadia.area as pipeline_area
+    from app import mapdata
+    monkeypatch.setattr(mapdata, "answer", lambda q: None)
+    monkeypatch.setattr(mapdata, "ms_rings", lambda *a: None)
+    monkeypatch.setattr(pipeline_area, "MAP_SOURCE", None)
+
 S = Settings()
 JS = JsonStore(S.areas_dir)
 BUNDLES = [JS.bundle(x) for x in JS.slugs()]

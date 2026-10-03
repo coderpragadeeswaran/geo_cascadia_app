@@ -29,7 +29,7 @@ A fresh Google account needs nothing except a link to this folder. Share it as "
                                          the cloud model, which costs more)
 ```
 
-**Important: update the package after every pipeline change (now: P7a, package 0.2.0).** With an older copy the worker
+**Important: update the package after every pipeline change (now: D53, package 0.2.1 — the area stage asks the app for map data).** With an older copy the worker
 stops at once and says so.
 
 - **Colab with your setup cells (S0):** S0 takes the newest zip in `/MyDrive/alldataset`, deletes
@@ -37,7 +37,7 @@ stops at once and says so.
   `geo_cascadia_pkg/geo_cascadia/<file>.py`. Build it from the repo root and upload the file to `/MyDrive/alldataset`
   (S0 picks the newest zip):
   ```powershell
-  backend\.venv\Scripts\python tools\build_pkg_zip.py     # writes geo_cascadia_pkg_p7b.zip and checks every entry name
+  backend\.venv\Scripts\python tools\build_pkg_zip.py     # writes geo_cascadia_pkg_p7c.zip and checks every entry name
   ```
   It contains every `.py` file of `pipeline/geo_cascadia` (no `__pycache__`), and the tool fails if any entry is not
   under `geo_cascadia_pkg/geo_cascadia/`. Then restart the runtime and run S0, S1a, S1ba and S1bb again.

@@ -16,7 +16,7 @@ import { GapList, type Gap } from './GapList'
 import { PanelHead } from './Panel'
 import { WhyEmpty } from './WhyEmpty'
 
-type Key = 'show' | 'street' | 'use' | 'floors' | 'match_status' | 'discrepancy' | 'ref_flag' | 'group_by' | 'interval_m' | 'reason_has'
+type Key = 'show' | 'street' | 'use' | 'floors' | 'match_status' | 'discrepancy' | 'ref_flag' | 'group_by' | 'interval_m' | 'reason_has' | 'near_dark_m'
 const SHOW: { v: string; label: string; f: QueryFilters }[] = [
   { v: 'buildings', label: 'Buildings', f: { intent: 'buildings' } },
   { v: 'gaps', label: 'Possible dark stretches', f: { intent: 'streetlight_gaps', interval_m: 60 } },
@@ -26,11 +26,11 @@ const SHOW: { v: string; label: string; f: QueryFilters }[] = [
 ]
 const showOf = (f: QueryFilters) => (f.intent === 'streetlight_gaps' ? 'gaps' : f.intent === 'assets' ? (f.asset_type === 'streetlight' ? 'streetlights' : 'poles') : f.intent)
 const ALLOWED: Record<QueryFilters['intent'], Key[]> = {
-  buildings: ['street', 'use', 'floors', 'match_status', 'discrepancy', 'ref_flag', 'group_by'],
+  buildings: ['street', 'use', 'floors', 'match_status', 'discrepancy', 'ref_flag', 'near_dark_m', 'group_by'],
   streetlight_gaps: ['street', 'interval_m'], assets: ['street'], review: ['street', 'reason_has'],
 }
 const LABEL: Record<Key, string> = { show: 'Show', street: 'Street', use: 'Use', floors: 'Floors', match_status: 'Register', discrepancy: 'Difference',
-  ref_flag: 'Google', group_by: 'Chart', interval_m: 'Within', reason_has: 'Reason' }
+  ref_flag: 'Google', group_by: 'Chart', interval_m: 'Within', reason_has: 'Reason', near_dark_m: 'Dark stretch' }
 const OPS: { op: NonNullable<QueryFilters['floors_op']>; label: string }[] = [
   { op: '>', label: 'more than' }, { op: '>=', label: 'at least' }, { op: '<', label: 'less than' }, { op: '==', label: 'exactly' }]
 const DISC = ['extra_floor', 'use_change', 'location_shift', 'area_understated']
@@ -46,6 +46,7 @@ function value(k: Key, f: QueryFilters) {
     case 'group_by': return 'by street'
     case 'interval_m': return `${f.interval_m} m`
     case 'reason_has': return 'low-confidence floor count'
+    case 'near_dark_m': return `within ${f.near_dark_m} m`
     default: return String((f as unknown as Record<string, unknown>)[k] ?? '')
   }
 }
@@ -58,7 +59,7 @@ function without(f: QueryFilters, k: Key): QueryFilters {
 const DEFAULTS: Partial<Record<Key, Partial<QueryFilters>>> = {
   use: { use: 'commercial' }, floors: { floors_op: '>', floors_n: 2 }, match_status: { match_status: 'no_record' },
   discrepancy: { discrepancy: 'use_change' }, ref_flag: { ref_flag: 'sign_not_in_google_within_40m' }, group_by: { group_by: 'street' },
-  interval_m: { interval_m: 60 }, reason_has: { reason_has: 'floor count low confidence' },
+  interval_m: { interval_m: 60 }, reason_has: { reason_has: 'floor count low confidence' }, near_dark_m: { near_dark_m: 50 },
 }
 
 /** "dark stretch" / "dark stretches", "building(s)", "pole(s)", "review item(s)" for a result count */
@@ -88,6 +89,7 @@ function Chip({ k, f, streets, typed }: { k: Key; f: QueryFilters; streets: stri
       case 'discrepancy': return DISC.map((d) => <Opt key={d} on={f.discrepancy === d} onClick={() => apply({ ...f, discrepancy: d })}>{diffLabel(d)}</Opt>)
       case 'interval_m': return [40, 60, 100, 150].map((v) => <Opt key={v} on={f.interval_m === v} onClick={() => apply({ ...f, interval_m: v })} note={v !== 60 ? 'computed by the app' : 'stored by the pipeline'}>{v} m</Opt>)
       case 'floors': return <FloorsEditor f={f} onApply={apply} />
+      case 'near_dark_m': return [25, 50, 100].map((v) => <Opt key={v} on={f.near_dark_m === v} onClick={() => apply({ ...f, near_dark_m: v })} note="PostGIS distance">within {v} m</Opt>)
       default: return <p className="t-small ink3 px-2 py-1">Remove this filter with ×.</p>
     }
   })()
@@ -136,7 +138,7 @@ function AddFilter({ f, streets }: { f: QueryFilters; streets: string[] }) {
         {opts.map((k) => (
           <button key={k} onClick={() => runQuery({ filters: { ...f, ...(k === 'street' ? { street: streets[0] } : DEFAULTS[k]) } as QueryFilters })}
             className="w-full cursor-pointer rounded-[var(--ns-r-control)] px-2 py-1.5 text-left text-[15.5px] hover:bg-accent-soft">
-            {LABEL[k] === 'Chart' ? 'Chart by street' : LABEL[k] === 'Google' ? 'Sign not on Google' : LABEL[k] === 'Within' ? 'Gap interval' : LABEL[k]}
+            {LABEL[k] === 'Chart' ? 'Chart by street' : LABEL[k] === 'Google' ? 'Sign not on Google' : LABEL[k] === 'Within' ? 'Gap interval' : LABEL[k] === 'Dark stretch' ? 'Near a possible dark stretch' : LABEL[k]}
           </button>
         ))}
         {!opts.length && <p className="t-small ink3 px-2 py-1">Nothing more to add for this kind of question. Change “Show” for other filters.</p>}
@@ -229,6 +231,7 @@ export function QueryPanel() {
             </div>
             {q.gaps?.computed && <p className="t-small px-5 pb-2" style={{ color: 'var(--ns-sodium)' }}>{q.gaps.interval_m} m: {q.gaps.note}. The map and list show these computed stretches.</p>}
             {q.note && <p className="t-small ink2 px-5 pb-2">{q.note}</p>}
+            {q.spatial && <p className="t-small ink2 px-5 pb-2" title={q.spatial.method}>{q.spatial.note} {fmt.format(q.spatial.after)} of {fmt.format(q.spatial.before)} matching buildings are that close.</p>}
             {q.total == null ? (
               <p className="t-small px-5 pb-4" role="status">{q.gaps?.note ?? 'This could not be computed for this area.'}</p>
             ) : q.total === 0 ? (

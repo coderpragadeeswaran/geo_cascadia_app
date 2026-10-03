@@ -56,7 +56,7 @@ SYNONYMS = [
     (r"\b(?:stores?|retail|offices?)\b", "commercial"),
     (r"\b(?:residences?|dwellings?|flats?|apartments?)\b", "residential"),
     # register
-    (r"\b(?:not|isn'?t|aren'?t) in (?:the )?(?:property |tax )?regist(?:er|ry)\b", "no record"),
+    (r"\b(?:not|isn'?t|aren'?t)[\s-]in[\s-](?:the[\s-])?(?:property[\s-]|tax[\s-])?regist(?:er|ry)\b", "no record"),   # also "not-in-register"
     (r"\bmissing (?:from (?:the )?regist(?:er|ry)|(?:register |property )?records?)\b", "no record"),
     (r"\b(?:no|without(?: a)?|lacking(?: a)?) (?:regist(?:er|ry)) (?:records?|entry|entries)\b", "no record"),
     (r"\bunregistered\b", "no record"),

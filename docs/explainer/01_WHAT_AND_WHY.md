@@ -65,7 +65,7 @@ flowchart LR
     CF["Cloudflare tunnel<br/>(a temporary public address)"]
   end
   subgraph Supa["Supabase (cloud, Mumbai)"]
-    PG[("Database with map support<br/>areas, buildings, poles, review decisions, jobs")]
+    PG[("Database with map support<br/>areas, buildings, poles, review decisions, jobs<br/>+ a monthly copy of OpenStreetMap and<br/>Microsoft outlines for 4 cities")]
     BK[["Private photo storage<br/>(appeal photos, short-lived links)"]]
   end
   subgraph Colab["Google Colab T4 (or Kaggle / laptop CPU)"]
@@ -84,12 +84,12 @@ flowchart LR
   API -- "reads and writes" --> PG
   API -- "stores appeal photos" --> BK
   API -- "database down: read-only fallback" --> FILES
-  API -- "street picker, mini-map roads" --> OSM
+  API -- "street picker, mini-map roads<br/>(outside the 4 cities, kept 30 days)" --> OSM
   CF --> API
   W -- "asks for work, sends progress and results<br/>(with the worker password)" --> CF
   W -- "photos, panorama info, places<br/>(server key)" --> GSV
-  W --> OSM
-  W --> MS
+  W -- "outside the 4 cities only" --> OSM
+  W -- "outside the 4 cities only" --> MS
   W -- "uncertain cases only" --> AWS
   W <--> DRV
 ```
@@ -132,7 +132,7 @@ You click a pink point on Korathottam Road in Explore.
 | Sign reading (OCR) | PaddleOCR 3.x, English + Tamil models | Reads shop signs, in its own process on the worker | Reads Tamil; 3.4× more reads than EasyOCR on the same crops (history chat 1) | EasyOCR (Tamil model broken upstream) |
 | Local AI router | CLIP ViT-B/32 picture summary + logistic regression | Decides building use without the cloud when confident | Same accuracy with fewer cloud calls ([§8.3](02_PIPELINE_AND_ACCURACY.md#83-building-use)) | Sending every building to the cloud model |
 | Cloud AI (VLM) | Amazon Nova Lite on AWS Bedrock (Mumbai region) | Unclear signs, building use when the router is unsure, floor counts | Available on the team's AWS role; cheap | Claude / Nova Pro were visible on the account but unused (history chat 2) |
-| Map references | OpenStreetMap via Overpass; Microsoft Global ML Building Footprints where OSM is sparse | Roads, building outlines | OSM outlines have stable IDs; Microsoft fills gaps | Google Open Buildings: tile crashed Colab RAM twice (history chat 1) |
+| Map references | OpenStreetMap + Microsoft Global ML Building Footprints (where OSM is sparse): a monthly copy in the database for Coimbatore, Trichy, Tiruppur and Madurai (D53); OpenStreetMap's public servers elsewhere (answers kept 30 days) | Roads, building outlines, shop points | OSM outlines have stable IDs; Microsoft fills gaps. The copy removes the wait on public servers: downloading Microsoft's tile was 441 of the 466 s of "Reading the map" for one street | Google Open Buildings: tile crashed Colab RAM twice (history chat 1); asking the public servers every time (slow, often busy) |
 | Google cross-check | Places API (New) Nearby Search; Geocoding API | "Also on Google Maps"; names for unnamed roads | Independent check of sign names | Google Places type as the building use: 66%, rejected ([§8.3](02_PIPELINE_AND_ACCURACY.md#83-building-use)) |
 | Tests | pytest (about 360 server and pipeline cases), plus data and screen checks for the web app | Recount every number, offline parity, review, jobs, worker | — | — |
 
@@ -154,6 +154,9 @@ You click a pink point on Korathottam Road in Explore.
 - **Building outlines:** every OSM building outline, simple or multi-part. The OSM ID becomes the building ID (w… for a simple outline, r…_k for one part of a multi-part one).
 - **Ward 29 today:** 3,715 outlines are saved around the cameras. **2,044** of them have their centre inside the Ward 29 study-area polygon (1.12 km²). The notebook era counted 2,183 "in the ward" with a different fetch ([Appendix B](05_EXPLAIN_AND_DEFEND.md#appendix-b-conflicts-found)).
 - **Names:** OSM names come first. Unnamed roads get a Google Geocoding name in the pipeline or a rule-based "Unnamed road between A and B" in the app's picker (D36).
+- **How the app gets it (D53):** for **Coimbatore, Trichy, Tiruppur and Madurai** a copy is kept in the app's database: every road (name, type, bridge / tunnel), every building outline and every shop / amenity / office point inside each city box (the city boundary + 550 m; Tiruppur, which has no city boundary on OpenStreetMap, a 16 × 16 km box). It comes from Geofabrik's daily extract of southern India and is refreshed by hand once a month (snapshot used now: **2 Oct 2026**, shown on Under the Hood). Clicking a street, the small plans, the cost estimate and the analysis computer's "Reading the map" step all read this copy. Anywhere else the app asks OpenStreetMap's public servers (Overpass) as before and keeps each answer 30 days.
+  - Size: 37,778 + 10,865 + 11,273 + 19,630 roads and 160,390 + 92,545 + 551 + 36,077 outlines (Coimbatore, Trichy, Tiruppur, Madurai).
+  - A street edited on OpenStreetMap after the snapshot is seen only after the next refresh.
 - **Errors OSM owns:** missing outlines, outlines that merge a whole compound, and missing street names.
   - Example: the one Tiruppur building w344655428 is a single 4,866.8 m² outline with a 123.4 m "front".
   - Example: Tiruppur has 1 OSM outline on 662 m of road, which is why 14 of its businesses had to become "businesses with no analysed building" (no outline) (model card, generalisation).
@@ -164,6 +167,8 @@ You click a pink point on Korathottam Road in Explore.
 - IDs look like ms_9.923249_78.117358: the outline's centre. These IDs are **not stable** across Microsoft releases (history chat 1).
 - **Real example:** the live run of **Vadakku Masi Veethi, Madurai** found 1 OSM outline and 105 Microsoft outlines. 48 of its 49 analysed buildings are Microsoft outlines (the run's coverage summary).
 - Ward 29, Trichy and Tiruppur used OSM only (no Microsoft outlines).
+- **The app's copy (D53):** Microsoft's India release dated **23 Feb 2026**, kept in the database for the four cities like the OpenStreetMap copy (Coimbatore 280,995 outlines, Trichy 97,038, Madurai 183,610). The analysis still uses them only where OpenStreetMap is sparse (the same 8% rule). Before the copy, one street in Coimbatore spent 441 s downloading Microsoft's 35.6 MB tile and its 7.2 MB index.
+- **Microsoft has no outlines around Tiruppur:** its India release stops near longitude 77.15, east of Coimbatore. Tiruppur (77.3) therefore stays OpenStreetMap-only, whichever way the data is fetched.
 - Notebook comparison (history chat 1): OSM 2,183 vs Microsoft 1,942 outlines in Ward 29, ray-hit coverage 79.0% vs 79.5%. OSM was chosen for its stable IDs.
 
 ### 5.4 Google Places (GOOGLE)

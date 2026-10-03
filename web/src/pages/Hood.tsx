@@ -298,6 +298,7 @@ function Coverage({ h }: { h: HoodData }) {
             tech={<>Verdict (meta.run.coverage): “{c.verdict ?? '—'}”. plan.json views with footprint == null: {fmt.format(c.views_unmapped)} of {fmt.format(c.views)}.</>} />
         </p>
         <ImageryLine h={h} />
+        <MapDataLine h={h} />
       </div>
     </div>
   )
@@ -432,6 +433,25 @@ function LiveCost({ h }: { h: HoodData }) {
       {sv && <p className="t-small ink2 mt-1">{SV_LIST_PRICE} The cloud-AI cost is as measured.</p>}
       <div className="mt-4"><StageTimeline stages={t.stage_seconds} badge={t.badge} total={t.total_minutes} live /></div>
     </Section>
+  )
+}
+
+/** D53: where the roads and building outlines come from, with the snapshot dates and the attribution */
+function MapDataLine({ h }: { h: HoodData }) {
+  const m = h.map_data
+  if (!m) return null
+  const day = (d?: string | null) => (d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : 'date not recorded')
+  const c = m.city
+  const run = m.run.kind === 'snapshot'
+    ? <>This analysis read them from that copy (OpenStreetMap snapshot {day(m.run.osm_snapshot)}).</>
+    : <>This analysis asked OpenStreetMap’s servers{m.run.date ? <> on {day(m.run.date)}</> : <> at the time it ran</>}, before the copy existed.</>
+  return (
+    <p className="t-small ink2 mt-2" aria-label="Map data source">
+      {c
+        ? <>Map data: <b className="text-ink">OpenStreetMap snapshot {day(c.osm_snapshot)}</b> · <b className="text-ink">Microsoft footprints {day(c.ms_release)}</b>, held in the app’s database for {c.name}. {run}</>
+        : <>Map data: OpenStreetMap’s servers at the time of the analysis (this area is outside the cities held in the app’s database).</>}
+      <span className="ink3"> {m.attribution.osm}. {m.attribution.microsoft}.</span>
+    </p>
   )
 }
 

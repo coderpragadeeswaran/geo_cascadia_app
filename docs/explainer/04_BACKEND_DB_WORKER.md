@@ -20,6 +20,7 @@ FastAPI app `backend/app/main.py` (start: `backend\.venv\Scripts\python -m uvico
 | GET `/health` | is the DB reachable, which settings are present (never values), worker online? | checks, tools |
 | GET `/config/public` | the browser Maps key (referrer-restricted) and Map ID, never the server key | web app at start |
 | GET `/model-card` | `data/model_card.json` | Trust, cost panel, estimates |
+| GET `/mapdata` | D53: the cities whose OpenStreetMap roads / buildings and Microsoft footprints are held in the database, with snapshot dates and the attribution text | checks, tools |
 | GET `/areas` | one card per area: name, outline, box, counts, coverage | area switcher, map (city zoom), Jobs |
 | GET `/areas/{slug}` | meta, dashboard recomputed from records, run report, summary, stored-vs-computed list, cost block | Explore, Hood |
 | DELETE `/areas/{slug}?confirm={slug}` | delete an area made by a job (rows, job, folder); originals → 403 | Jobs |
@@ -31,21 +32,21 @@ FastAPI app `backend/app/main.py` (start: `backend\.venv\Scripts\python -m uvico
 | GET `/areas/{slug}/unmapped` | businesses with no outline | Explore |
 | GET `/areas/{slug}/evidence/{kind}/{id}` | the evidence photos of one object with every detector box and the object's box marked; camera position | drawer, Review |
 | GET `/areas/{slug}/drive?street=` | the street's real camera stops in driving order with everything placed along it | Drive the street |
-| GET `/areas/{slug}/minimap` | OSM roads around the area (one cached Overpass query) + camera stops | mini-maps |
-| GET `/areas/{slug}/hood` | every Under the Hood number with its source | Under the Hood |
+| GET `/areas/{slug}/minimap` | OSM roads around the area (from the local copy in a covered city, else one cached Overpass query) + camera stops | mini-maps |
+| GET `/areas/{slug}/hood` | every Under the Hood number with its source; `map_data` (D53): the covered city's snapshot dates and what this area's run used | Under the Hood |
 | GET `/areas/{slug}/hood/examples?key=` | up to 3 real examples for one story branch | Hood example sheet |
 | GET `/trust` | Trust cards and "tried and dropped", each number with its model_card path | Trust |
 | GET `/trust/consistency` | stored vs computed rows for all areas | Trust |
 | GET `/trust/register` | D42/D43 per area: planted-mistake recovery (caught / missed / false alarms) and register pairing by location, computed from the records and the run's files | Trust › Register tests |
-| POST `/query` | a question (text) or edited chips (filters) → chips, rows or groups, why-empty funnel, what was understood | ask bar, palette |
+| POST `/query` | a question (text) or edited chips (filters) → chips, rows or groups, why-empty funnel, what was understood; `near_dark_m` (D53) keeps buildings within N m of a possible dark stretch (PostGIS `ST_DWithin`) | ask bar, palette |
 | GET `/review?area&status&item_type&street&priority&reason` | the review queue, most urgent first | Review, rail badge, Explore |
 | GET `/review/{id}` | one item | Review |
 | PATCH `/review/{id}` (form: action, reviewer, note, photo) | approve / reject / appeal; returns `event_id` | Review, drawer |
 | POST `/review/{id}/undo` `{item_id, event_id, reviewer}` | undo exactly one decision | Review, drawer |
 | GET `/review/{id}/events` | the item's history | Review › History |
 | GET `/review/{id}/events/{event_id}/photo`, GET `/review/{id}/photo` | 10-minute signed URL for an appeal photo | Review › History |
-| POST `/jobs/preview` `{lat, lon}` | resolve a click to a street (no job): name, lines, polygon, length, "already analysed in", estimate | Analyse |
-| POST `/jobs/estimate` `{length_m}` | estimate for a trimmed stretch | Analyse (dragging end dots) |
+| POST `/jobs/preview` `{lat, lon}` | resolve a click to a street (no job): name, lines, polygon, length, "already analysed in"; starts the planner estimate. 202 `pending` while the map lookup runs | Analyse |
+| POST `/jobs/plan-estimate` `{lat, lon, lines?}`, GET `/jobs/plan-estimate/{key}` | start / follow the planner estimate (whole street or a trimmed stretch) | Analyse (dragging end dots) |
 | POST `/jobs` `{lat, lon, lines?}` or `{polygon}` | queue an analysis (409 if another real one is active; drawn areas ≤ 1.5 km²) | Analyse |
 | GET `/jobs?active=1` | job list + worker status | Jobs, top bar, map |
 | GET `/jobs/{id}`, GET `/jobs/{id}/minimap` | one job + its estimate; its mini-map | Jobs, job card |
@@ -55,6 +56,7 @@ FastAPI app `backend/app/main.py` (start: `backend\.venv\Scripts\python -m uvico
 | GET `/worker/status` | connected?, device, current job | top bar |
 | POST `/worker/next` 🔑 | claim the oldest claimable job (or a named one) | worker |
 | POST `/worker/known` 🔑 | which saved Drive folders are still needed | worker at start |
+| POST `/worker/mapdata` 🔑 `{kind: overpass, query}` / `{kind: microsoft, bbox}` | D53: the area stage's map data: `local` (PostGIS, covered city, with snapshot dates), `overpass` / `cache` (this API's Overpass call, 30-day cache), `pending` (ask again), `none` (the worker asks itself) | worker's area stage |
 | POST `/worker/heartbeat` 🔑 | "I'm alive"; answers "cancelling" to stop | worker every 15 s |
 | POST `/worker/progress` 🔑 | stage, done, total, note | worker |
 | POST `/worker/fail` 🔑 | end or pause a job with a code | worker |
@@ -75,7 +77,7 @@ views carry `date`. `tools/review_route.py <slug>` writes the waiting review ite
 - **Validation:** 422 with a plain message ("an appeal needs a note", "a reviewer name is needed", "give {lat, lon} or {polygon}").
 - **State conflicts:** 409 ("“Sanganur Road” is still being analysed. One street at a time…", "this decision was already undone…").
 - **Storage:** 502 with a plain message; photo type 415, size 413.
-- **OpenStreetMap busy** on preview: 503 "OpenStreetMap is busy — try again". The browser gives up at 18 s.
+- **Map lookup** on preview (D48, D53): inside a covered city the click is answered from the database and never waits for OpenStreetMap. Elsewhere a lookup still running after 4 s answers **202** `pending` (the browser asks again every 0.8 s for up to 30 s, "Finding street…"); **503** "Map server is busy — try again in a minute." only when every Overpass mirror failed for 60 s.
 - **A server bug (D40):**
   - Before D40, Starlette answered an unhandled error *outside* the CORS layer. The browser saw no CORS header, `fetch` failed, and the app wrongly said "The API is not reachable".
   - Now the innermost middleware `ServerErrorsAsJson` returns `{"detail": "server error (<ErrorClass>)", "server_error": true}` **with** CORS headers. Only the error class is sent, because a message can hold a URL with a key; the traceback goes to the API console.
@@ -88,6 +90,7 @@ views carry `date`. `tools/review_route.py <slug>` writes the waiting review ite
 
 ### 6.1 Why Supabase + PostGIS
 - **Free, hosted Postgres** with the **PostGIS** extension: points, lines and polygons in real coordinates (EPSG:4326), with spatial indexes (GiST) for "what is inside this box" questions (`GET /areas/{slug}/geojson?bbox=`).
+- **Spatial SQL in use (D53):** box / radius look-ups of the local map data (`&&`, `ST_Intersects`, `ST_DWithin` on geography), the street click's nearest road (`<->` nearest-neighbour on the GiST index, `backend/app/mapdata.py`), and the question rule "within N m of a possible dark stretch" (`ST_DWithin`, `backend/app/spatial.py`). Everything else spatial (gaps, mini-maps, Gate 1, corners) is still shapely in Python.
 - It comes with **Storage** (the private `appeal-photos` bucket) under the same account.
 - Nothing heavy runs on the 8 GB laptop: no Docker, no local database (CLAUDE.md §2).
 - PostGIS lives in the `extensions` schema, so every connection sets `search_path = public, extensions`. Connections use the **session pooler** (IPv4) (D6).
@@ -286,7 +289,19 @@ A trigger `review_events_no_change` refuses every UPDATE and DELETE.
 
 **`schema_migrations`**: name + applied_at (written by `backend/migrate.py`).
 
-**Indexes:** GiST on every geometry column; `buildings (area_id, street, match_status, use)`; `assets (area_id, street, type, register_status)`; `review_items (area_id, status, priority)`; `jobs (status, created_at)`; `review_events (item_id, id desc)`.
+**Map data (D53, migration 008)**: written only by `tools/import_osm_local.py`; read by `backend/app/mapdata.py`.
+
+| Table | Columns | Rows (3 Oct 2026) |
+|---|---|---|
+| `map_cities` | city, name, box (polygon), box_source, osm_snapshot, ms_release, counts, loaded_at | 4 |
+| `osm_roads` | way_id (PK), city, highway, name, bridge, tunnel, geom (LineString) | 79,546 |
+| `osm_buildings` | id (PK, `w<way>` or `r<relation>_<member index>`, the pipeline's ids), city, geom (Polygon) | 289,563 |
+| `osm_pois` | osm_type (`n`/`w`), osm_id, city, geom (Point; a way = its bounding-box centre) | 5,443 |
+| `ms_buildings` | id (serial), city, geom (Polygon) | 561,643 |
+
+Together 241 MB with indexes; the database is 270.8 MB of the free 500 MB.
+
+**Indexes:** GiST on every geometry column (including the five map-data tables), a b-tree on `osm_roads.name`; `buildings (area_id, street, match_status, use)`; `assets (area_id, street, type, register_status)`; `review_items (area_id, status, priority)`; `jobs (status, created_at)`; `review_events (item_id, id desc)`.
 
 ### 6.4 Who writes, who reads
 
@@ -297,6 +312,7 @@ A trigger `review_events_no_change` refuses every UPDATE and DELETE.
 | review_events | the same SQL statement as each decision or undo | Review › History, `GET /review/{id}/events` |
 | buildings/assets.review_status | the same SQL statement + loader | map "Review" layer, findings table |
 | jobs | `POST /jobs`, cancel/approve/retry/delete, `/worker/*` | Jobs page, job card, top bar |
+| map_cities, osm_roads, osm_buildings, osm_pois, ms_buildings | `tools/import_osm_local.py` (first load and monthly `--refresh`; only changed rows are rewritten) | street click, mini-maps, cost planner, `/worker/mapdata`, `GET /mapdata`, Hood |
 
 ### 6.5 How Undo works in the database
 - A decision runs **one** SQL statement (`review.DECIDE_SQL`): it locks the item, updates it, inserts the event with the previous values, updates the building's or asset's `review_status`, and returns the new version.
@@ -314,11 +330,14 @@ A trigger `review_events_no_change` refuses every UPDATE and DELETE.
 | `005_p5_review_jobs.sql` | 26 Sep | `review_events.photo`; `jobs.is_test` (D29) |
 | `006_p6_worker.sql` | 27 Sep | `needs_approval` status; `jobs.approved/estimate/device` (D34) |
 | `007_p6_cancel_note.sql` | 27 Sep | `jobs.cancel_requested/note` (D35) |
+| `008_local_map_data.sql` | 3 Oct | OpenStreetMap + Microsoft map data for the four cities (D53) |
 
 ### 6.7 What is in the database today (read-only check, 30 Sep)
 - 6 areas: the 3 originals plus 3 live runs (Sanganur Road, Unnamed road off 4th Street, Vadakku Masi Veethi).
 - After the P7a reload (1 Oct): 574 buildings, 454 assets, 70 businesses with no analysed building, 25 dark stretches, 15 missing asset records, 15 streets, 367 review items, 3 jobs (all done, GPU).
 - Every review item is `pending`. Of the 1,038 history rows, 2 are by "PRAGA" and the rest by automated tests on throw-away areas (reviewer `test`). The one-time reset of 27 Sep (D30) removed all earlier history.
+
+**3 Oct (D53):** the map data for Coimbatore, Trichy, Tiruppur and Madurai was loaded one city at a time: 29.7 → 155.4 → 207.8 → 211.2 → 270.5 MB (54.1 % of 500 MB), then 270.8 MB after a test refresh. Storage: 0 files.
 
 ### 6.8 The offline JSON fallback (D4, D11)
 - The API builds the same **area bundle** from either store:
@@ -328,17 +347,18 @@ A trigger `review_events_no_change` refuses every UPDATE and DELETE.
 - Every JSON response carries `"offline": true|false`. The UI shows "Offline — read-only".
 - **Writes never fall back:** decisions, jobs and worker calls return **503 "offline data mode — read only"**.
 - **Offline differences:** review items have no ids (so no decisions), the jobs list is empty, and review statuses are the export's (all pending). pytest compares all three original areas in both modes (`test_offline.py`).
+- **Map data offline (D53):** the local copy lives in the database, so in offline mode the street click and the worker fall back to Overpass (as before D53). The 50 m question uses the same rule in Python (same ids as PostGIS, pytest).
 
 ### 6.9 What is stored where
 
 | Place | What | Example |
 |---|---|---|
-| **Supabase Postgres** | the findings (one row per object, with the full record), review queue, review history, jobs | `buildings.record` for `w1252504945` |
+| **Supabase Postgres** | the findings (one row per object, with the full record), review queue, review history, jobs; the four cities' OpenStreetMap + Microsoft map data (D53) | `buildings.record` for `w1252504945`; `osm_roads` way 593359198 "Dr Alagesan road" |
 | **Supabase Storage** | appeal photos, private, read by 10-minute signed URLs | `ward29/review-<id>-<hex>.jpg` |
 | **`data/areas/<slug>/`** | every run file (P7a adds `sign_links.json`, `planted_register_mistakes.json`, `register_synthetic.json`; an imported register adds `register_imported.json`): `export.json`, `export.geojson`, `run_report.json`, `panos.json`, `plan.json`, `plan_anomalies.json`, `_views_done.json`, `detections.json`, `ocr.json`, `building_views.json`, `building_positions.json`, `buildings.json`, `assets.json`, `final_attributes.json`, `vlm_names.json`, `vlm_buildings.json`, `vlm_unmapped.json`, `places_cache.json`, `street_names.json`, `streets.json`, `coverage.json`, `dashboard.json`, `unmapped_businesses.json`; Gate 1 files (`gate1_eval.json`, `gate1_places.json`, `rule_variants.json`); for live runs `live_run.json` and `worker_run.json` | Ward 29 `detections.json` is 2.5 MB |
 | `data/model_card.json` | measured accuracy, benchmarks, costs, Gate 1 tables | `floors.ward29.exact = 0.61` |
 | `data/study_area/Study_area.geojson` | Ward 29 outline | — |
-| `data/cache/` | Overpass answers (`overpass_cache/`, `p45_overpass/`), Microsoft tiles (`ms_cache/`), picker answers (`streetpick/overpass`, `picks2/`, `google_route/`), the pre-P7a files (`p7a_before/<slug>/`) | — |
+| `data/cache/` | Overpass answers (`overpass_cache/`, `p45_overpass/`), Microsoft tiles (`ms_cache/`), picker answers (`streetpick/overpass`, `picks2/`, `byway/`, `google_route/`; Overpass-based ones expire after 30 days, D53), the import's downloads (`osm_import/`: Microsoft tiles kept, the 560 MB OpenStreetMap extract deleted after loading), the pre-P7a files (`p7a_before/<slug>/`) | — |
 | `data/registers/` | imported real registers, normalised (`tools/import_register.py`) | — |
 | **Google Drive** (worker account) | the pipeline package, weights, floor examples, router; per-job progress `MyDrive/gc_worker_jobs/<job id>/` while a job is unfinished | `training_runs/v8s_640_s2/weights/best.pt` |
 | **Colab session** | the working folder `gc_jobs/<slug>`, sign crops, building crops; keys in memory only. `forget()` deletes the folder (and its Drive copy) once the result is delivered, prints "deleted N Street View photo crops (X MB)" and checks none is left (P8). Kept only for a retryable failure or expired keys (Retry / resume reuse them) | — |
@@ -359,7 +379,7 @@ A trigger `review_events_no_change` refuses every UPDATE and DELETE.
 - **Colab (T4 GPU):**
   - **S0** installs the pipeline package from the newest zip in `/MyDrive/alldataset` (it deletes `geo_cascadia_pkg/` there
     first, then extracts). The zip's entries must be `geo_cascadia_pkg/geo_cascadia/<file>.py`. Build it with
-    `backend\.venv\Scripts\python tools\build_pkg_zip.py` (writes `geo_cascadia_pkg_p7b.zip` at the repo root: every `.py` of
+    `backend\.venv\Scripts\python tools\build_pkg_zip.py` (writes `geo_cascadia_pkg_p7c.zip` at the repo root: every `.py` of
     `pipeline/geo_cascadia`, no `__pycache__`, entry names checked), then upload it to `/MyDrive/alldataset`. The worker
     refuses an older package copy.
   - **S1a** installs dependencies, with these fixes:
@@ -399,9 +419,10 @@ sequenceDiagram
   participant D as Drive
   U->>W: Analyse, move the flashlight, click a road
   W->>A: POST /jobs/preview {lat, lon}
-  A->>O: roads near the click (or answer from an analysed street / disk cache)
+  A->>DB: roads near the click (covered city: PostGIS copy, nearest-neighbour)
+  A->>O: elsewhere: roads near the click (or an analysed street / disk cache, 30 days)
   A-->>W: street name, lines, 45 m polygon (Polygon or MultiPolygon), length, already analysed?, estimate
-  U->>W: drag end dots (POST /jobs/estimate), then Start
+  U->>W: drag end dots (POST /jobs/plan-estimate), then Start
   W->>A: POST /jobs {lat, lon, lines}
   A->>DB: insert job queued (409 if another real job is active)
   A-->>W: job + "queued, waiting for a worker" if none online
@@ -409,7 +430,8 @@ sequenceDiagram
   A->>DB: queued to running, started_at, heartbeat
   K->>D: restore saved progress if any
   loop ten stages
-    K->>G: Street View metadata + photos, Overpass, YOLO, OCR child process, CLIP, Nova Lite, Places
+    K->>A: POST /worker/mapdata (area stage: roads, outlines, shop points, Microsoft outlines; local copy or the API's Overpass call)
+    K->>G: Street View metadata + photos, YOLO, OCR child process, CLIP, Nova Lite, Places
     K->>A: POST /worker/progress (stage, done, total, note)
     K->>D: sync the job folder after each stage and once a minute
   end
@@ -429,11 +451,12 @@ sequenceDiagram
 1. **Pick the street.** Analyse mode shows Google's blue coverage lines in a 150 px circle around the pointer. Click a road.
 2. **Preview** (`POST /jobs/preview`, `backend/app/streetpick.py`, a port of the pipeline's picker):
    - a click within 15 m of an already analysed street answers from that area's `streets.json` (no Overpass);
-   - otherwise the disk cache (`data/cache/streetpick/picks2/`) or Overpass: two mirrors, 6.5 s per call, 14 s in total. The browser shows elapsed seconds and gives up at 18 s;
-   - if Overpass is busy, the nearest analysed street within 60 m is offered with a note;
+   - **inside Coimbatore, Trichy, Tiruppur or Madurai (D53):** the same queries answered from PostGIS: the ~330 m road tile, the clicked road's candidates by nearest-neighbour (`<->`), the named street within 1.5 km, the roads at an unnamed road's ends. Measured from an empty cache: 0.9–3.4 s per click (Google's naming look-ups make up most of it);
+   - otherwise the disk cache (`data/cache/streetpick/picks2/`, 30 days) or Overpass: every mirror raced, the request waits ≤ 4 s and answers 202 `pending`; the browser asks again every 0.8 s for up to 30 s ("Finding street…") (D48);
+   - if Overpass is busy, the nearest analysed street within 60 m is offered with a note; with no such street, 503 "Map server is busy — try again in a minute.";
    - OSM pieces with the same name are merged into the street; the job polygon is the street buffered by **45 m**;
    - **Gaps (D40):** a street whose pieces are more than 90 m apart becomes a **MultiPolygon** (before the fix, `/jobs/preview` crashed with "'MultiPolygon' object has no attribute 'exterior'");
-   - **Naming (D36):** OSM name; else "Unnamed road between A and B" / "off A" / "near A" from real roads at its ends (Google's name for an unnamed end road via Geocoding, if the key allows it); never invented;
+   - **Naming (D36, D46, D47):** OSM name; else Google's own name for the road (checked at up to 3 points along it); else "Unnamed road between A and B" / "near A" from real roads at its ends; never invented;
    - "Already analysed in <area>" when OSM way ids are shared or ≥ 30% lies within 15 m of an analysed street;
    - the **estimate** ([§13](#13-costs-and-performance)).
 3. **Confirm sheet:** the exact street drawn as a white line with orange end dots (the flashlight turns off). Drag the dots or use arrow keys (±10 m, Shift ±50 m) to trim; the estimate updates. Minimum 20 m; the stretch must lie on the street (≤ 8 m).
@@ -441,10 +464,11 @@ sequenceDiagram
 5. **Worker claims** (`POST /worker/next`): the oldest queued job, a job waiting for fresh AWS keys, or a running job whose worker has been silent 2 minutes ("interrupted"). Never a test job without its id. `resumed_claim` says whether an earlier attempt started it.
 6. **Progress:** 10 stages, "Stage 3 of 10 · Planning camera stops". On the map the street sweeps with overall progress. The top bar shows "3/10".
    - The stages: Finding Street View, Reading the map, Planning camera stops, Looking at photos, Placing objects, Reading signs, Cloud model, Google check, Register check, Saving results.
-7. **Cost cap** (`plan_check`, before any photo is bought): photos = planned views + one building crop per faced outline; cost = photos × $0.007 + buildings × ($0.056 / 381). Over **300 photos or $1.00** → **Needs approval** with the estimate. Approve → queued with the cap lifted.
-8. **Drive progress:** after every stage (and once a minute) the job folder is copied to `MyDrive/gc_worker_jobs/<job id>/`. A new session on the same account continues from it ("Continuing from the progress saved on Drive"). Another account starts again and says so.
-9. **Heartbeat** every 15 s. A cancel sets **cancelling**: the heartbeat thread interrupts the running step, the worker deletes the job's files and reports CANCELLED (about 4 s with the fake worker). A silent worker's cancel completes after 2 min.
-10. **Result** (`POST /worker/result`):
+7. **Map data** (stage "Reading the map", D53): the worker cell sets the pipeline's `area.MAP_SOURCE` to its `MapSource`, which asks `POST /worker/mapdata` for each of the stage's four questions (outlines, Microsoft outlines, roads, shop points). Covered city → `local` (from PostGIS, with the snapshot dates); elsewhere the API's own Overpass call with its 30-day cache (`pending` = ask again, up to 3 min); `none` or a tunnel failure → the pipeline asks Overpass / Microsoft itself, as before. `worker_run.json` `map_data` records what answered; Under the Hood shows it.
+8. **Cost cap** (`plan_check`, before any photo is bought): photos = planned views + one building crop per faced outline; the job carries its rates and cap (default **$2**, D46). Over the cap → **Needs approval** with the estimate. Approve → queued with the cap lifted.
+9. **Drive progress:** after every stage (and once a minute) the job folder is copied to `MyDrive/gc_worker_jobs/<job id>/`. A new session on the same account continues from it ("Continuing from the progress saved on Drive"). Another account starts again and says so.
+10. **Heartbeat** every 15 s. A cancel sets **cancelling**: the heartbeat thread interrupts the running step, the worker deletes the job's files and reports CANCELLED (about 4 s with the fake worker). A silent worker's cancel completes after 2 min.
+11. **Result** (`POST /worker/result`):
     - files are checked (names, ≤ 40 MB, valid JSON, `export.json` shape);
     - they are written to a temporary folder;
     - `fill_street_names` gives any unnamed street a plain name;
@@ -452,7 +476,7 @@ sequenceDiagram
     - `build_run_report.py` runs; the folder is swapped in;
     - **`loader.load_area`** writes every table exactly like the originals;
     - the job becomes `done` with its `area_id`.
-11. **In the app:** the job card turns Done and the map flies to the new area. The area appears in the dropdown with "new", Under the Hood shows its real timings and costs **without** the "resumed run" badge, its review items join Review, and Jobs shows **Open** and **Delete this analysed area…**.
+12. **In the app:** the job card turns Done and the map flies to the new area. The area appears in the dropdown with "new", Under the Hood shows its real timings and costs **without** the "resumed run" badge, its review items join Review, and Jobs shows **Open** and **Delete this analysed area…**.
 
 ### 12.3 The job lifecycle
 
@@ -499,7 +523,8 @@ stateDiagram-v2
 | OCR crash | whole Colab session restarted while loading Paddle models | likely RAM, or Paddle and torch/CUDA in one process (not proven) | OCR in its **own process**; YOLO freed first; retry once, then CPU quick mode; self-test; `[mem]` lines; `ocr.json` saved every 25 crops | D38 |
 | TensorFlow | Paddle segfault, even on CPU | transformers 4.x imports TensorFlow when installed (Colab has it) | uninstall TF, `USE_TF=0`, `TRANSFORMERS_NO_TF=1`; worker warns with the exact fix | D39 |
 | Browser key in the worker | Places 403 "Requests from referer <empty> are blocked" | website-restricted key used server-side | start-up key test; ask again; plain sentence on the job card; Retry | D39 |
-| Overpass outages | area stage fails | public OSM server busy | worker retries after 30, 60, 120 s ("Map server busy (OpenStreetMap), retrying…"), then fails retryable | D39 |
+| Overpass outages | area stage fails | public OSM server busy | worker retries after 30, 60, 120 s ("Map server busy (OpenStreetMap), retrying…"), then fails retryable. Since D53 the four cities never ask Overpass | D39, D53 |
+| Slow "Reading the map" | Bharathiar Road: 487.9 s of a 10.9 min job | not Overpass: Microsoft's 35.6 MB tile + 7.2 MB index downloaded for a street where OSM covers < 8 % (466 s re-measured: 441 s Microsoft, 19 s Overpass, 5 s work) | the four cities' map data in PostGIS, served to the worker through the API: 1.0–1.2 s | D53 |
 | Streets with gaps | `/jobs/preview` 500 | 45 m buffer of distant pieces is a MultiPolygon | keep every piece; the pipeline already accepts MultiPolygon | D40 |
 | "API not reachable" for a 500 | misleading message | 500 without CORS headers | `ServerErrorsAsJson` | D40 |
 | **Refused Street View key** | "no outdoor imagery" on 4 jobs (28 Sep) | server key not allowed the Street View Static API → REQUEST_DENIED; the pipeline treated it as "no panorama" | `StreetViewTrace` counts every answer; only real "ZERO_RESULTS" = No Street View; refused → failed + retryable with Google's message; keys scrubbed from messages; empty `panos.json` dropped so Retry searches again | D40 |
@@ -551,6 +576,21 @@ stateDiagram-v2
 | OCR per crop | full mode on GPU | full 6.30 s, fast 0.34 s | model_card |
 | Minutes per average Ward 29 street (483 m) on CPU | — | 18 (full OCR), 3–5 (fast) | model_card |
 | Vadakku Masi Veethi stage times (GPU) | panoramas 0.0 s (reported), area 0.9, plan 1.5, detect 10.8, geometry 8.0, **OCR 118.1**, **cloud 74.5**, Google 11.4, match 7.2 s | — | run file |
+| "Reading the map" (area stage), Bharathiar Road, 276 m | Colab 2 Oct: 487.9 s (live servers) | laptop, empty caches: **466 s** before → **1.0–1.2 s** from the local copy through the API, 2.5–2.7 s in-process with a new database connection (D53) | measured |
+
+**Street click and estimate, before / after D53** (real API, empty caches, 3 Oct; "before" = `LOCAL_MAP_DATA=0`):
+
+| Street | click before → after | estimate ready before → after |
+|---|---|---|
+| Sakthi Main Road (1,221 m) | 42.9 → 2.8 s | 83 → 37 s |
+| Ganapathy - Avarampalayam Road (1,039 m) | 64.5 → 1.0 s | 120 → 38 s |
+| Dr Alagesan Road (1,201 m) | 16.3 → 0.9 s | 126 → 31 s |
+| Pioneer Mills Cross Street (291 m) | 5.0* → 3.4 s | 243 → 15 s |
+| Unnamed road near 5th Street (50 m) | 2.9* → 3.0 s | 27 → 7 s |
+
+\* reused map tiles fetched for the streets above in the same run. Same street name and length before and after in all
+five. What remains of the estimate time is Google's Street View search (free metadata calls). With Overpass blocked
+entirely the five still work; a click in Salem or Erode gives "Map server is busy — try again in a minute." after 12–13 s.
 
 ### 13.3 How the estimate is made (P7.2, P7 R2)
 - **From the real camera plan.** Clicking a street starts the pipeline's own first three stages in the background on the

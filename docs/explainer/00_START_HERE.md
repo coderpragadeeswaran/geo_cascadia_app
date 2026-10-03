@@ -20,7 +20,7 @@
 | [02_PIPELINE_AND_ACCURACY](02_PIPELINE_AND_ACCURACY.md) | pipeline step by step, methods compared, accuracy and honesty, known building errors | [§7](02_PIPELINE_AND_ACCURACY.md#7-the-pipeline-step-by-step), [§8](02_PIPELINE_AND_ACCURACY.md#8-methods-compared), [§9](02_PIPELINE_AND_ACCURACY.md#9-accuracy-and-honesty) (9.1–9.6, 9.9) |
 | [03_APP_AND_FLOWS](03_APP_AND_FLOWS.md) | the app page by page, click flows, legend, review, sources and error owners, traced examples | [§10](03_APP_AND_FLOWS.md#10-the-app-page-by-page), [§9.7](03_APP_AND_FLOWS.md#97-where-every-ui-item-comes-from-and-who-owns-an-error), [§9.8](03_APP_AND_FLOWS.md#98-traced-examples-real-ids) |
 | [04_BACKEND_DB_WORKER](04_BACKEND_DB_WORKER.md) | the technical file: server requests, database, analyse-a-street end to end, worker and Colab, costs | [§11](04_BACKEND_DB_WORKER.md#11-backend), [§6](04_BACKEND_DB_WORKER.md#6-the-database), [§12](04_BACKEND_DB_WORKER.md#12-live-analysis-and-the-worker), [§13](04_BACKEND_DB_WORKER.md#13-costs-and-performance) |
-| [05_EXPLAIN_AND_DEFEND](05_EXPLAIN_AND_DEFEND.md) | demo script, FAQ, limitations, to-do, decisions D1–D45, conflicts, open questions | [§14](05_EXPLAIN_AND_DEFEND.md#14-demo-script-for-judges), [§17](05_EXPLAIN_AND_DEFEND.md#17-faq), [§15](05_EXPLAIN_AND_DEFEND.md#15-limitations-and-known-issues), [§18](05_EXPLAIN_AND_DEFEND.md#18-still-to-do-p7), Appendices A–C |
+| [05_EXPLAIN_AND_DEFEND](05_EXPLAIN_AND_DEFEND.md) | demo script, FAQ, limitations, to-do, decisions D1–D53, conflicts, open questions | [§14](05_EXPLAIN_AND_DEFEND.md#14-demo-script-for-judges), [§17](05_EXPLAIN_AND_DEFEND.md#17-faq), [§15](05_EXPLAIN_AND_DEFEND.md#15-limitations-and-known-issues), [§18](05_EXPLAIN_AND_DEFEND.md#18-still-to-do-p7), Appendices A–C |
 
 Section numbers ([§1](#1-one-page-summary)…[§18](05_EXPLAIN_AND_DEFEND.md#18-still-to-do-p7)) are kept from the original single document, so every "[§7.11](02_PIPELINE_AND_ACCURACY.md#711-asset-positions-and-pole-merging)" style reference is a stable link.
 
@@ -138,6 +138,9 @@ Street View calls (D42–D45, 1 Oct 2026). What changed and why, one line each:
 | Detection / box | a YOLO rectangle with a class and a confidence (0–1) |
 | Usable for positions | the box came from a level Google-car photo, so it can place things |
 | Outline / footprint | a building polygon from OSM (or Microsoft) |
+| Overpass | OpenStreetMap's public question server; the app asks it only outside the four covered cities (answers kept 30 days) |
+| Map snapshot / covered cities | the monthly copy of OpenStreetMap and Microsoft outlines kept in the app's database for Coimbatore, Trichy, Tiruppur and Madurai (D53); its date is shown on Under the Hood |
+| Possible dark stretch, "within N m" question | a building is "within 50 m of a possible dark stretch" when its outline lies within 50 m of the stretch as the map draws it, measured on the ground by the database (D53) |
 | Registered building | an outline at least one planned photo faced; one of the 381 |
 | Ray / line of sight | the line from the camera in the direction of a point in the photo |
 | Triangulation | where rays from two or more cameras cross |

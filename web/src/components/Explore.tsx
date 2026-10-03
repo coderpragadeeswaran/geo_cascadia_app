@@ -137,12 +137,14 @@ function OverviewButton() {
   )
 }
 
-/** CLAUDE.md §9.6 footer note; sits between Google's logo (left) and attribution (right), never over them. */
+/** CLAUDE.md §9.6 footer note; sits between Google's logo (left) and attribution (right), never over them. Two lines
+ *  since D53 (OpenStreetMap / Microsoft attribution), so it stays clear of the logo at 1366 px with the panel open. */
 function Footer({ right }: { right: number }) {
   return (
     <div className="pointer-events-none absolute bottom-1.5 z-10 flex justify-center" style={{ left: 0, right }}>
-      <span className="t-small ink3 whitespace-nowrap rounded-[var(--ns-r-control)] px-2 py-0.5 text-[13px]" style={{ background: 'color-mix(in srgb, var(--ns-bg0) 70%, transparent)' }}>
-        Registers are synthetic demo data. Prototype — imagery © Google.
+      <span className="t-small ink3 rounded-[var(--ns-r-control)] px-2 py-0.5 text-center text-[13px] leading-[1.3]" style={{ background: 'color-mix(in srgb, var(--ns-bg0) 70%, transparent)' }}>
+        <span className="block whitespace-nowrap">Registers are synthetic demo data. Prototype — imagery © Google.</span>
+        <span className="block whitespace-nowrap">Map data © OpenStreetMap contributors · building footprints © Microsoft.</span>
       </span>
     </div>
   )

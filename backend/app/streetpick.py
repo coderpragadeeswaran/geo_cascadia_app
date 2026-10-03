@@ -31,6 +31,8 @@ from shapely.ops import linemerge, transform, unary_union
 from geo_cascadia.geo import Frame
 from geo_cascadia.picker import ROADS            # same road classes as the pipeline
 
+from . import mapdata
+
 # Hotfix: every global public Overpass instance, asked in parallel; the first good answer wins. A mirror that fails
 # (timeout, refused, 5xx) is skipped for MIRROR_REST_S, so dead ones drop out at runtime (all of them resting = ask all).
 # Regional instances (e.g. overpass.osm.ch, Switzerland only) are left out: their empty answers would look valid.
@@ -46,6 +48,7 @@ LOCAL_SNAP_M = 15          # a click this close to an analysed street line is th
 OVERLAP_BUFFER_M, OVERLAP_SHARE = 15, 0.30
 LABEL_RULE = 3             # P7.1 naming rule; resolved streets cached under an older rule are resolved again
 UA = {"User-Agent": "geo-cascadia/0.2 (research prototype; street picker)"}
+CACHE_TTL_S = 30 * 86400   # D53: Overpass answers (and streets resolved from them) are kept 30 days
 
 
 class OverpassBusy(RuntimeError):
@@ -68,8 +71,10 @@ class Pending(OverpassBusy):
         self.partial = partial
 
 
-def _read_json(path):
+def _read_json(path, max_age_s=None):
     try:
+        if max_age_s is not None and time.time() - os.path.getmtime(path) > max_age_s:
+            return None                                           # expired (D53: 30 days)
         with open(path, encoding="utf-8") as f:
             return json.load(f)
     except (OSError, ValueError):
@@ -173,11 +178,15 @@ def _race(query, path):
 
 
 def overpass(query, cache_dir, deadline, per_call=None):
-    """Cached Overpass call. Returns (elements, from_cache). Waits until `deadline` (time.monotonic) at most: a query
-    still running then raises OverpassSlow and keeps running in the background (a later identical call joins it).
-    per_call: unused, kept for callers of the old signature."""
+    """Cached Overpass call. Returns (elements, from_cache); from_cache is "local" when the covered city's PostGIS copy
+    answered (D53: no Overpass call, nothing cached on disk). Otherwise the disk cache (30 days), then Overpass. Waits
+    until `deadline` (time.monotonic) at most: a query still running then raises OverpassSlow and keeps running in the
+    background (a later identical call joins it). per_call: unused, kept for callers of the old signature."""
+    loc = mapdata.answer(query)
+    if loc is not None:
+        return loc[0], "local"
     path = os.path.join(cache_dir, "overpass", hashlib.md5(query.encode()).hexdigest() + ".json")
-    hit = _read_json(path)
+    hit = _read_json(path, CACHE_TTL_S)
     if hit is not None:
         return hit, True
     with _LOCK:
@@ -322,25 +331,31 @@ def pick_overpass(cache_dir, lat, lon, deadline, google_key=None):
     every = [w for w in els if "geometry" in w and len(w["geometry"]) >= 2]
     ways = [w for w in every if re.search(ROADS, (w.get("tags") or {}).get("highway", ""))]   # the pipeline's road classes
     geom = lambda w: LineString([F.xy(n["lat"], n["lon"]) for n in w["geometry"]])
-    hit = min(ways, key=lambda w: geom(w).distance(Point(0, 0))) if ways else None
+    if cached == "local":
+        # D53: candidates by PostGIS nearest-neighbour (<-> on the index); among them the same rule as before
+        near = {i for i, _ in (mapdata.nearest_roads(lat, lon, ROADS, SEARCH_M) or [])}
+        ways_near = [w for w in ways if w["id"] in near] or ways
+        hit = min(ways_near, key=lambda w: geom(w).distance(Point(0, 0))) if ways_near else None
+    else:
+        hit = min(ways, key=lambda w: geom(w).distance(Point(0, 0))) if ways else None
     if hit is None or geom(hit).distance(Point(0, 0)) > SEARCH_M:
         raise NoRoad(f"no road within {SEARCH_M} m of the clicked point")
     # the same road clicked before (anywhere along it): its street is resolved already
-    known = _read_json(os.path.join(cache_dir, "byway", f"{hit['id']}.json"))
+    known = _read_json(os.path.join(cache_dir, "byway", f"{hit['id']}.json"), CACHE_TTL_S)
     if known and known.get("rule") == LABEL_RULE:
         return _result(F, _from_ll(F, known["lines"]), known["way_ids"], known["street"], known["name_source"],
                        known.get("osm_name"), "cache"), True
     tags = hit.get("tags", {})
     name = tags.get("name")
     group = [w for w in ways if name and w.get("tags", {}).get("name") == name] or [hit]
-    source, complete = ("cache" if cached else "overpass"), True
+    source, complete = ("local" if cached == "local" else "cache" if cached else "overpass"), True
     if name:                                                      # extend a named street beyond the tile
         safe = name.replace("\\", "").replace('"', '\\"')
         q2 = f'[out:json][timeout:25];way["highway"]["name"="{safe}"](around:1500,{round(lat, 3)},{round(lon, 3)});out geom tags;'
         try:
             els2, cached2 = overpass(q2, cache_dir, deadline)
             group = [w for w in els2 if "geometry" in w] or group
-            source = "cache" if cached and cached2 else "overpass"
+            source = source if cached2 else "overpass"
         except OverpassBusy:
             complete = False                                      # keep the pieces within the tile
     line = unary_union([geom(w) for w in group])
@@ -627,7 +642,7 @@ def pick(cache_dir, bundles, lat, lon, google_key=None):
     if res is None:
         # picks2: resolved clicks (complete answers named by the current rule only)
         path = os.path.join(cache_dir, "picks2", f"{round(lat, 4):.4f}_{round(lon, 4):.4f}.json")
-        hit = _read_json(path)
+        hit = _read_json(path, CACHE_TTL_S)
         if hit and hit.get("complete") and hit.get("rule") == LABEL_RULE:
             res = {**hit["res"], "source": "cache"}
         else:
