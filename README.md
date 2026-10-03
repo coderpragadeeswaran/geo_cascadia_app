@@ -68,6 +68,18 @@ web (React, :5173) ──> API (FastAPI, :8000) ──> Supabase Postgres + Post
    press **Approve** (or Cancel). You can also raise the cap in the sheet before starting.
 7. The guided tour (**?** on the left rail) walks through the app on the saved data, with or without the worker.
 
+### Regression pass (run it the day before, and again on the morning of the demo)
+With T1 (API :8000) and T2 (the production preview on :5173) running:
+```powershell
+backend\.venv\Scripts\python tools\regression.py            # everything, about 30–40 min; ends with a PASS / FAIL table
+backend\.venv\Scripts\python tools\regression.py --quick    # questions, review round trip, estimates, reports: a few minutes
+```
+It checks the spec and extra questions, a review decision + undo (the review tables must be back exactly as before), the
+Analyse estimate for a street inside and outside the local map data (no job is created), PDF + Excel reports for every
+area and one street against the app's numbers, every page of every area in both themes with no console errors, the tour,
+and the offline cases (it starts and stops two helper APIs on :8001 / :8002 itself). The log and screenshots go to
+`docs/screenshots/regression/` (`run-<date-time>.log`). Exit code 1 = something failed: read the FAIL lines.
+
 ### If something fails during the demo
 
 | What happened | What the app shows | What to do |
@@ -148,8 +160,8 @@ to OpenStreetMap's servers, as before D53).
 ("376 m on a main road, 37 shops and businesses along it"). A fixed points rule, 0–3 each, written down before any result
 was seen: **length** (under 120 m = 1, 120–239 m = 2, 240 m+ = 3), **road type** from the OpenStreetMap copy (main road = 3,
 connecting road = 2, residential / service = 1, unknown = 0), **shops and businesses within 30 m** (none = 0, 1–4 = 1,
-5–9 = 2, 10+ = 3; commercial or mixed-use buildings, OpenStreetMap shop / amenity / office points, businesses read from
-signs). High = 7–9, Medium = 5–6, Low = 0–4. The list opens in this order ("Fix first"; "Longest first" switches), the map's
+5–9 = 2, 10+ = 3; buildings that are commercial or mixed use or carry a shop name read clearly from their sign (D56),
+OpenStreetMap shop / amenity / office points, businesses read from signs with no analysed building). High = 7–9, Medium = 5–6, Low = 0–4. The list opens in this order ("Fix first"; "Longest first" switches), the map's
 dark bands get a brighter / wider edge for higher priority, and you can ask "High priority dark stretches". These are
 *possible* dark stretches (the lamp detector finds about 43% of lamp heads), so the priority ranks candidates. It needs
 the database (not available in offline data mode). Ward 29's table: DECISIONS D54.

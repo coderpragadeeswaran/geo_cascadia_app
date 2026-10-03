@@ -18,13 +18,15 @@ export interface AreaCard {
   counts: {
     buildings: number; assets: number; streets: number; streetlight_gaps_60m: number; review_items: number
     unmapped_businesses: number; missing_asset_records: number; use_not_classified: number; assets_triangulated: number
+    /** D56: buildings seen only by the camera (no map outline); shown next to the building count, never added to it */
+    camera_only_buildings?: number
   }
   match_status: Partial<Record<MatchStatus, number>>
   /** view counts from meta.run.coverage; building / business counts computed from records */
   coverage: {
     level: 'full' | 'partial' | null; verdict: string | null; views_planned: number | null
     views_facing_no_mapped_building: number | null; share_views_no_mapped_building: number | null
-    osm_footprints: number | null; buildings: number; unmapped_businesses: number; assets: number
+    osm_footprints: number | null; buildings: number; unmapped_businesses: number; assets: number; camera_only_buildings?: number
   }
 }
 

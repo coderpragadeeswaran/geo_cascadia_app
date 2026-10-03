@@ -111,7 +111,7 @@ export function CommandPalette() {
                   </Group>
                 )}
                 <Group heading="Areas">
-                  {areas?.map((a) => <Item key={a.slug} value={`area ${a.name}`} icon={<MapPin />} onSelect={done(() => { ui().go('explore'); ui().setArea(a.slug) })} hint={`${a.counts.buildings} bldg`}>{a.name.replace(/^Unseen street: /, '')}</Item>)}
+                  {areas?.map((a) => <Item key={a.slug} value={`area ${a.name}`} icon={<MapPin />} onSelect={done(() => { ui().go('explore'); ui().setArea(a.slug) })} hint={`${a.counts.buildings} bldg${a.counts.camera_only_buildings ? ` +${a.counts.camera_only_buildings} camera only` : ''}`}>{a.name.replace(/^Unseen street: /, '')}</Item>)}
                 </Group>
                 <Group heading="Go to">
                   {(['city', 'area', 'street', 'object'] as Band[]).map((b) => <Item key={b} value={`go ${b} level`} icon={<Zap />} onSelect={done(() => map && goToBand(map, b, areas))}>{b[0].toUpperCase() + b.slice(1)} level</Item>)}

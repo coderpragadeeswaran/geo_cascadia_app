@@ -1996,3 +1996,54 @@ words). CORS now exposes `Content-Disposition` so the browser keeps the file nam
   the audit's Ward 29 UI numbers = the area PDF.
 - Offline data mode: the report still builds from the JSON copy, with priority "not available" and roads from the
   analysed streets only (said on the map).
+
+## 2026-10-03 — final polish and regression pass (branch final-polish)
+
+### D56. Fairer activity count, all assets in Excel, camera-only buildings next to the count, heap, regression script
+**1. Lighting priority: activity counts readable shop signs too** (definition fix, not tuning; points thresholds and the
+High / Medium / Low cut-offs of D54 unchanged). Use is not known for many buildings (Ward 29: 139 of 381), so counting
+buildings by use alone undercounted. A building within 30 m now counts when its use is commercial or mixed **or** it
+has a shop name read clearly from a sign linked to it (`name_quality = 'good'`, the app's "Shop names read clearly").
+OpenStreetMap points inside such a building are not counted again. Ward 29, before → after:
+
+| stretch | street | length | activity before → after | points before → after | priority before → after |
+|---|---|---|---|---|---|
+| gap60-001 | Sathy Main Road | 376 m | 37 → 39 | 9 → 9 | High → High |
+| gap60-004 | Ganapathy - Avarampalayam Road | 193 m | 9 → 13 | 7 → 8 | High → High |
+| gap60-010 | Sakthi Main Road | 142 m | 14 → 14 | 8 → 8 | High → High |
+| gap60-003 | 8th Street, Ganapathy | 313 m | 7 → 7 | 6 → 6 | Medium → Medium |
+| gap60-002 | Sathy Main Road | 67 m | 5 → 6 | 6 → 6 | Medium → Medium |
+| gap60-006 | Sri Ganapathy Gardens 3rd Street (approx.) | 254 m | 2 → 3 | 5 → 5 | Medium → Medium |
+| gap60-000 | 4th Street, Tatabad / Vinobaji Street | 211 m | 2 → 3 | 4 → 4 | Low → Low |
+| gap60-005 | 2nd Street, Ganapathy Gardens (approx.) | 203 m | 2 → 4 | 4 → 4 | Low → Low |
+| gap60-009 | 2nd Street, Gandhi Nagar | 99 m | 4 → 9 | 3 → 4 | Low → Low |
+| gap60-007 | Korathottam Road | 83 m | 1 → 2 | 3 → 3 | Low → Low |
+| gap60-008 | Korathottam Road | 78 m | 1 → 1 | 3 → 3 | Low → Low |
+
+No level changed in any area. Ward 29's order changes once: gap60-004 (8 points, 193 m) now comes before gap60-010
+(8 points, 142 m). Other areas: Trichy three counts +1 to +2, Vadakku Masi Veethi 27 → 30, Bharathiar Road 2 → 3,
+Kattabomman 0 → 1 (3 → 4 points, still Low). Limit: a clearly read name board on a home also counts.
+
+**2. Excel assets sheet = every pole and streetlight** (Ward 29: 268), finding rows first (identical to the PDF's 45),
+the Finding cell empty when there is none; a single-photo detection says "seen in one photo only" in Position. The PDF
+keeps listing only the ones with a finding. Test updated.
+
+**3. Buildings seen only by the camera, next to the count.** `backend/app/camonly.py` counts `building_positions.json`
+`no_footprint` (with a position): Ward 29 9, Trichy 79, Tiruppur 12, Vadakku Masi Veethi 4, Sanganur Road 2, the
+other three 0. The main number stays the analysed buildings (381); "+ 9 seen only by camera" is shown next to it, never
+added: Explore's key number (hidden while a street is selected: the camera-only points carry no street), the area hover
+card, Jobs, the command palette, Under the Hood (Matched chapter, coverage card, Compare), Trust (Limits), the guided
+tour, the report (PDF page 1 under the number, Excel About sheet "Note"). Tooltip: "Buildings the camera saw where the
+map has no building outline. They are not checked against the register, so they are not in the main count." API:
+`counts.camera_only_buildings` and `coverage.camera_only_buildings` on area cards, `n.camera_only_buildings` on Hood.
+
+**4. Memory** (production build, `web/scripts/heap.ts`, JS heap after GC, 2 runs): Ward 29 idle 25.4 / 25.6 MB · building
+evidence (tour step 2) 45.0 / 45.3 MB · after the whole tour 46.2 / 46.4 MB. Target ≤ 60 MB: met; nothing changed. (A
+first attempt measured 47 / 67 / 68 MB because an older **dev** server was still on :5173; it was stopped and the
+numbers above re-measured on the production preview.)
+
+**5. Regression pass** — `tools/regression.py` (+ `web/scripts/regression.ts`, reusing `web/scripts/offline.ts`), run
+before the demo with the API and the production preview up. Sections A questions, B review round trip, C Analyse up to
+the estimate (no job), D reports, E browser, F offline cases; log in `docs/screenshots/regression/run-<date-time>.log`.
+Result (3 Oct, one complete run, `run-2026-10-03_1502.log`): A–F all PASS, 242 checks; details in explainer 06. Section F now removes any test job left behind when a check stops half way (a first attempt lost its API to a time limit and left one test job queued; removed). Small fixes made while building it: `web/scripts/audit.ts` printed an
+empty Gate 1 status (the badge is shown in capitals by CSS; the regex is now case-insensitive).

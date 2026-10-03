@@ -13,7 +13,7 @@ import { post, useAreas } from '@/api/queries'
 import type { AreaCard, WorkerStatus } from '@/api/types'
 import { Card } from '@/components/Detail'
 import { GeoMini } from '@/components/GeoMini'
-import { deviceWord, JOB_STAGES, jobStatus, minutesText, shortArea, STAGE_PLAIN, stageLine, timeLeft } from '@/lib/labels'
+import { deviceWord, JOB_STAGES, jobStatus, minutesText, shortArea, STAGE_PLAIN, stageLine, timeLeft, cameraOnlyText } from '@/lib/labels'
 import { cn, fmt, plural } from '@/lib/utils'
 import { useUi } from '@/store/ui'
 
@@ -49,7 +49,7 @@ export default function Jobs() {
             <li key={a.slug} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rule-t py-3">
               <div className="min-w-0">
                 <div className="truncate text-[17.5px]">{shortArea(a.name)}</div>
-                <div className="t-small ink3 mt-0.5">{plural(a.counts.buildings, 'building')} · {plural(a.counts.assets, 'pole or light', 'poles & lights')} · {plural(a.counts.streetlight_gaps_60m, 'possible dark stretch')}{a.coverage.level === 'partial' ? ' · few buildings on the map here' : ''}</div>
+                <div className="t-small ink3 mt-0.5">{plural(a.counts.buildings, 'building')}{a.counts.camera_only_buildings ? ` (${cameraOnlyText(a.counts.camera_only_buildings)})` : ''} · {plural(a.counts.assets, 'pole or light', 'poles & lights')} · {plural(a.counts.streetlight_gaps_60m, 'possible dark stretch')}{a.coverage.level === 'partial' ? ' · few buildings on the map here' : ''}</div>
               </div>
               <div className="flex gap-1.5">
                 <button className="btn btn-line" onClick={() => open(a.slug, 'explore')}>Open on the map</button>

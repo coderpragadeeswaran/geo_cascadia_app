@@ -15,7 +15,7 @@ import io
 import math
 import os
 
-from . import lighting, mapdata
+from . import camonly, lighting, mapdata
 from .hood import hood as hood_view
 from .imagery import imagery as imagery_view
 
@@ -272,17 +272,22 @@ def _building_rows(bundle, street):
     return rows, links
 
 
-def _asset_rows(bundle, street):
+def _asset_rows(bundle, street, everything=False):
+    """poles and streetlights with a register finding (the PDF), or all of them with the finding blank when there is
+    none (the Excel sheet, D56): the finding rows come first, identical in both"""
     keep = ("unrecorded_asset", "discrepancy")
-    A = [a for a in bundle["assets"] if (a.get("register") or {}).get("status") in keep and (not street or a.get("street") == street)]
-    A.sort(key=lambda a: (keep.index(a["register"]["status"]), a.get("street") or "", a["id"]))
+    st = lambda a: (a.get("register") or {}).get("status")
+    A = [a for a in bundle["assets"] if (everything or st(a) in keep) and (not street or a.get("street") == street)]
+    A.sort(key=lambda a: (keep.index(st(a)) if st(a) in keep else len(keep), a.get("street") or "", a["id"]))
     rows, links = [], []
     for a in A:
         reg = a.get("register") or {}
         pos = ("pinpointed from " + plural(a.get("cameras_used") or 0, "camera position") if a.get("method") == "triangulated"
                else f"approximate (±{a.get('uncertainty_m'):g} m)" if a.get("uncertainty_m") is not None else "approximate")
-        finding = ASSET_REG.get(reg.get("status"), pretty(reg.get("status")))
-        if reg.get("flags"):
+        if reg.get("status") == "unconfirmed_detection":
+            pos += " · seen in one photo only"
+        finding = ASSET_REG.get(reg.get("status"), pretty(reg.get("status"))) if reg.get("status") in keep else ""
+        if finding and reg.get("flags"):
             finding += ": " + "; ".join(DIFF.get(f, pretty(f)) for f in reg["flags"])
         record = " · ".join(x for x in (reg.get("asset_no"), pretty(reg.get("record_type")) if reg.get("record_type") else None) if x) \
             or "No record"
@@ -435,6 +440,8 @@ def content(store, bundle, F, model_card, areas_dir, street=None, today=None):
     k = kpis(bundle, street)
     numbers = [{"key": key, "label": (one if k[key] == 1 and one else label), "value": k[key], "main": i < MAIN_KPIS}
                for i, (key, label, one) in enumerate(KPI_DEFS)]
+    cam = 0 if street else camonly.count(bundle["slug"], areas_dir)          # D56: next to the count, never added to it
+    numbers[0]["note"] = camonly.phrase(cam)
     prio = lighting.for_area(store, bundle)
     hood = hood_view(bundle, F, mc)
     im = imagery_view(bundle, F)["summary"] if not street else _street_photo_dates(F, _street_names(areas_dir, bundle["slug"]), street)
@@ -511,13 +518,14 @@ def content(store, bundle, F, model_card, areas_dir, street=None, today=None):
 
     b_rows, b_links = _building_rows(bundle, street)
     a_rows, a_links = _asset_rows(bundle, street)
+    aa_rows, aa_links = _asset_rows(bundle, street, everything=True)
     s_rows, s_links = _stretch_rows(bundle, street, prio)
     r_rows, r_links = _review_rows(bundle, street)
     return {
         "area": area_name, "slug": bundle["slug"], "street": street, "generated": today.isoformat(),
         "title": f"{street} — {area_name}" if street else area_name,
         "scope": f"One street: {street}" if street else f"Whole area ({plural(k['streets_covered'], 'street')})",
-        "sources": sources, "numbers": numbers, "kpis": k, "recall": recall,
+        "sources": sources, "numbers": numbers, "kpis": k, "recall": recall, "camera_only_buildings": cam,
         "priority": {"available": prio["available"], "rule": prio["rule"], "note": prio["note"],
                      "counts": {lv: sum(1 for r in s_rows if r[1] == PRIORITY_WORD[lv]) for lv in PRIORITY_WORD}},
         "tables": {
@@ -525,6 +533,8 @@ def content(store, bundle, F, model_card, areas_dir, street=None, today=None):
                           "rows": b_rows, "links": b_links},
             "assets": {"title": "Poles and streetlights with a register finding", "sheet": "Assets", "columns": ASSET_COLS,
                        "rows": a_rows, "links": a_links},
+            "assets_all": {"title": "All poles and streetlights (register finding blank when there is none)", "sheet": "Assets",
+                           "columns": ASSET_COLS, "rows": aa_rows, "links": aa_links},
             "stretches": {"title": "Possible dark stretches, in priority order", "sheet": "Possible dark stretches",
                           "columns": STRETCH_COLS, "rows": s_rows, "links": s_links},
             "review": {"title": "Review queue", "sheet": "Review items", "columns": REVIEW_COLS, "rows": r_rows, "links": r_links},
@@ -779,8 +789,8 @@ def pdf(c):
         doc.set_xy(x, y + 8.5)
         doc.set_font("Anek", "", 8.5)
         doc.set_text_color(*INK2)
-        doc.multi_cell(w - 3, 4, n["label"], new_x="LMARGIN", new_y="NEXT")
-    doc.set_xy(14, y + 18)
+        doc.multi_cell(w - 3, 4, n["label"] + (f"\n{n['note']}" if n.get("note") else ""), new_x="LMARGIN", new_y="NEXT")
+    doc.set_xy(14, y + 22)
     doc.set_font("Anek", "", 8.5)
     doc.set_text_color(*INK2)
     doc.multi_cell(0, 4.3, " · ".join(f"{n['label']} {fmt(n['value'])}" for n in nums[MAIN_KPIS:]), new_x="LMARGIN", new_y="NEXT")
@@ -867,9 +877,9 @@ def xlsx(c):
     ws.append(["Made", c["generated"]])
     ws.append(["Register", "SYNTHETIC demo data (made up), not the city's records"])
     ws.append([])
-    ws.append(["Key number", "Value"])
+    ws.append(["Key number", "Value", "Note"])
     for n in c["numbers"]:
-        ws.append([n["label"], n["value"]])
+        ws.append([n["label"], n["value"]] + ([n["note"]] if n.get("note") else []))
     ws.append([])
     ws.append(["Data source", "Detail"])
     for k, v in c["sources"]:
@@ -887,7 +897,7 @@ def xlsx(c):
     ws.column_dimensions["A"].width = 44
     ws.column_dimensions["B"].width = 110
     head_fill = PatternFill("solid", fgColor="ECE8DE")
-    for key in ("buildings", "assets", "stretches", "review"):
+    for key in ("buildings", "assets_all", "stretches", "review"):
         t = c["tables"][key]
         sh = wb.create_sheet(t["sheet"])
         sh.append(t["columns"])

@@ -14,7 +14,7 @@ import { GeoMini } from '@/components/GeoMini'
 import { StreetNames } from '@/components/StreetNames'
 import { AlignedBars, Donut, Funnel, SegBar, StageTimeline } from '@/components/viz'
 import { KPI_DEFS, kpiFilter } from '@/lib/derive'
-import { shortArea } from '@/lib/labels'
+import { shortArea, CAMERA_ONLY_TIP, cameraOnlyText } from '@/lib/labels'
 import { MATCH_LEGEND, REGISTER_NOTE, assetPoints, buildingPolys, darkLines, miniStreets } from '@/lib/mini'
 import { useAreaData } from '@/lib/useAreaData'
 import { cn, fmt, monthText, noun, plural, usd } from '@/lib/utils'
@@ -182,7 +182,7 @@ function Story({ h, pick }: { h: HoodData; pick: Pick }) {
             { key: 'c', label: 'middle of the outline', value: n.pos_footprint_centre, kind: 'idle', examples: n.pos_footprint_centre ? 'pos.footprint_centre' : null }]} />
         </div>),
       examples: n.pos_rejected ? [exBtn('pos.rejected', 'Camera results rejected')] : [] },
-    { id: 'matched', title: 'Matched to map and register', figure: n.buildings, unit: 'buildings compared',
+    { id: 'matched', title: 'Matched to map and register', figure: n.buildings, unit: `buildings compared${n.camera_only_buildings ? ` (${cameraOnlyText(n.camera_only_buildings)}, not compared: no map outline)` : ''}`,
       plain: `Each building was compared with the register (made-up for this demo: it copies what the photos show, except a few planted mistakes). Records are paired with buildings by position, never by a shared ID. ${fmt.format(n.match_matched)} have an entry and no difference was found, ${fmt.format(n.match_discrepancy)} differ and ${fmt.format(n.match_no_record)} have no entry. For ${fmt.format(n.matched_use_unknown)} of the ${fmt.format(n.match_matched)} the use could not be compared, because it is not known.`,
       tech: `match_status: matched ${n.match_matched}, discrepancy ${n.match_discrepancy}, no_record ${n.match_no_record}. D43 register.match_by_location: one-to-one by distance (≤ 50 m) + area/use penalty; pin > match_m = 15 m = location_shift. Pairing confidence high ${n.register_pair_high ?? 0} / medium ${n.register_pair_medium ?? 0} / low ${n.register_pair_low ?? 0}; records with no building nearby ${n.register_unmatched ?? 0}. Discrepancy types: ${Object.entries(n.discrepancy_types).map(([k, v]) => `${k} ${v}`).join(', ') || '—'}. Registers are SYNTHETIC (D42: the observations + planted mistakes; Trust › Register tests).`,
       visual: (run) => <SegBar run={run} onPick={pick} unit="buildings" segs={[
@@ -293,7 +293,7 @@ function Coverage({ h }: { h: HoodData }) {
           {partial ? `${Math.round(share * 100)}% of camera photos face no mapped building` : `Map coverage: full — ${Math.round(share * 100)}% of photos face no mapped building`}
         </div>
         <p className="t-small ink2 mt-0.5">
-          <T plain={partial ? `Streetlights, poles and signs are analysed everywhere, but buildings only where the map has an outline (${plural(c.buildings, 'building')} here). ${c.unmapped_kept ? `${plural(c.unmapped_kept, 'business', 'businesses')} were found where the map has no building.` : ''}`
+          <T plain={partial ? `Streetlights, poles and signs are analysed everywhere, but buildings only where the map has an outline (${plural(c.buildings, 'building')} here${h.n.camera_only_buildings ? `; ${cameraOnlyText(h.n.camera_only_buildings)}` : ''}). ${c.unmapped_kept ? `${plural(c.unmapped_kept, 'business', 'businesses')} were found where the map has no building.` : ''}`
             : 'Almost every photo faces a building that is on the map, so buildings, lights and signs are all analysed.'}
             tech={<>Verdict (meta.run.coverage): “{c.verdict ?? '—'}”. plan.json views with footprint == null: {fmt.format(c.views_unmapped)} of {fmt.format(c.views)}.</>} />
         </p>
@@ -579,7 +579,7 @@ function Compare({ slugs, onOpen }: { slugs: string[]; onOpen: (slug: string) =>
               {h.coverage.level === 'partial' ? `Low map coverage: ${Math.round((h.coverage.share_views_unmapped ?? 0) * 100)}% of photos face no mapped building` : 'Full map coverage'}</p>
             <dl className="t-small mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
               <dt className="ink3">streets</dt><dd className="t-data text-right">{h.n.streets} · {fmt.format(h.n.streets_m)} m</dd>
-              <dt className="ink3">buildings</dt><dd className="t-data text-right">{fmt.format(h.n.buildings)}</dd>
+              <dt className="ink3">buildings</dt><dd className="t-data text-right">{fmt.format(h.n.buildings)}{h.n.camera_only_buildings ? <span className="ink3" title={CAMERA_ONLY_TIP}> {cameraOnlyText(h.n.camera_only_buildings)}</span> : null}</dd>
               <dt className="ink3">not in register</dt><dd className="t-data text-right">{fmt.format(h.n.match_no_record)}</dd>
               <dt className="ink3">use not known</dt><dd className="t-data text-right">{fmt.format(h.n.use_unknown)}</dd>
               <dt className="ink3">possible dark stretches</dt><dd className="t-data text-right">{fmt.format(h.n.gaps)}</dd>

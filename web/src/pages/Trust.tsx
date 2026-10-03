@@ -19,7 +19,7 @@ import { Badge, Card as Panel, jumpTo, REDUCED, SectionNav, Src, T, useDetail, u
 import { SYNONYM_HINTS } from '@/components/QueryHelp'
 import { AlignedBars } from '@/components/viz'
 import { KPI_DEFS, kpiFilter, kpis } from '@/lib/derive'
-import { shortArea } from '@/lib/labels'
+import { shortArea, cameraOnlyText } from '@/lib/labels'
 import { useAreaData } from '@/lib/useAreaData'
 import { cn, fmt, plural } from '@/lib/utils'
 import { useUi } from '@/store/ui'
@@ -237,7 +237,7 @@ export default function Trust() {
             <ul className="t-small space-y-2">
               {k && <li><b>Use not classified:</b> {fmt.format(k.use_not_classified)} of {plural(k.buildings_analysed, 'building')} in {area ? shortArea(area.name) : 'this area'} had no usable view for use (shown as “use not known”, never hidden). Where a register entry exists for them, the app says “Register entry exists — use not compared”.</li>}
               {areas?.filter((a) => a.coverage.share_views_no_mapped_building != null).map((a) => (
-                <li key={a.slug}><b>{shortArea(a.name)}:</b> {pct(a.coverage.share_views_no_mapped_building)} of camera views face frontage with no OpenStreetMap building outline; buildings are checked only where an outline exists ({fmt.format(a.counts.buildings)}), lights and signs everywhere.</li>
+                <li key={a.slug}><b>{shortArea(a.name)}:</b> {pct(a.coverage.share_views_no_mapped_building)} of camera views face frontage with no OpenStreetMap building outline; buildings are checked only where an outline exists ({fmt.format(a.counts.buildings)}{a.counts.camera_only_buildings ? `; ${cameraOnlyText(a.counts.camera_only_buildings)}, not checked` : ''}), lights and signs everywhere.</li>
               ))}
               {k && <li><b>Positions:</b> {fmt.format(k.assets - k.assets_triangulated)} of {plural(k.assets, 'pole or streetlight')} here were seen from one camera only; they are approximate and go to review ({m.positions.independent_camera_check_n30.single_camera_on_or_near} single-camera positions were close to where a second camera placed them, a consistency check, not surveyed positions).</li>}
               <li><b>Streetlights:</b> the detector finds lamp heads in photos; it cannot tell whether a lamp works. A VLM check was rejected ({m.streetlights.vlm_lamp_check}).</li>
