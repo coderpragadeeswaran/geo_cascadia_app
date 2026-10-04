@@ -1,0 +1,268 @@
+{
+ "run_dir": "rathinapuri_sanganoor_main_road_9520da.upload-5ceee7",
+ "area": "Rathinapuri (Sanganoor) Main Road",
+ "generated": "2026-10-03T17:00:54.705431+00:00",
+ "pipeline": {
+  "detector": "YOLOv8s v8s_640_s2",
+  "ocr": "PaddleOCR en+ta (full)",
+  "vlm": "apac.amazon.nova-lite-v1:0",
+  "name_gate": 0.7,
+  "footprints": "OSM",
+  "reference": "Google Places (New)"
+ },
+ "imagery": {
+  "panoramas_found": 69,
+  "google_car": 69,
+  "user_photospheres": 0,
+  "cameras_planned": 21,
+  "cameras_dropped": {},
+  "views_planned": 140,
+  "views_by_type": {
+   "unmapped": 3,
+   "perpendicular": 39,
+   "oblique": 70,
+   "tilt": 28
+  },
+  "views_facing_mapped_building": 137,
+  "views_facing_no_mapped_building": 3,
+  "views_fetched_ok": 140,
+  "street_view_requests": 177,
+  "street_view_cost_usd_notional": 1.24,
+  "by_street": {
+   "Rathinapuri (Sanganoor) Main Road": {
+    "cameras": 21,
+    "views": 140
+   }
+  }
+ },
+ "maps": {
+  "footprints": {
+   "osm": 163,
+   "microsoft": 0
+  },
+  "osm_built_fraction": 0.379,
+  "buildings_registered": 51,
+  "buildings_by_source": {
+   "osm": 51
+  },
+  "verdict": "full: footprints on most frontages"
+ },
+ "detection": {
+  "boxes_total": 713,
+  "by_class": {
+   "pole": 145,
+   "building": 260,
+   "signboard": 287,
+   "lamp_head": 21
+  },
+  "used_for_geometry": 580,
+  "excluded_from_geometry": {
+   "tilted view": 133
+  },
+  "mean_conf_by_class": {
+   "building": 0.603,
+   "lamp_head": 0.421,
+   "pole": 0.53,
+   "signboard": 0.585
+  }
+ },
+ "assets": {
+  "located": 35,
+  "by_type": {
+   "pole": 28,
+   "streetlight": 7
+  },
+  "by_confidence": {
+   "medium": 12,
+   "low": 20,
+   "high": 3
+  },
+  "triangulated_2plus_cameras": 3,
+  "single_camera_approximate": 32,
+  "register_status": {
+   "discrepancy": 4,
+   "unconfirmed_detection": 20,
+   "matched": 7,
+   "unrecorded_asset": 4
+  },
+  "streetlight_gaps_60m": 1,
+  "missing_asset_records": 1
+ },
+ "buildings": {
+  "registered": 51,
+  "with_a_building_box": 49,
+  "no_building_box_detected": 2,
+  "box_rejected_by_quality_gate": {
+   "implausibly tall box": 4,
+   "thin sliver at image edge": 6,
+   "roof cut off at top": 2
+  },
+  "usable_view": 37,
+  "vlm_said_wrong_target": 0,
+  "use_route": {
+   "tier1_local_clip": 23,
+   "tier3_vlm": 14
+  },
+  "use_values": {
+   "commercial": 26,
+   "under_construction": 2,
+   "other": 2,
+   "residential": 9,
+   "industrial": 1,
+   "not observed": 11
+  },
+  "floors_status": {
+   "measured": 31,
+   "low_confidence": 2,
+   "not_measured": 18
+  },
+  "floor_values": {
+   "2": 13,
+   "1": 20
+  }
+ },
+ "signs": {
+  "crops": 287,
+  "tiers": {
+   "read by OCR (Tier 2)": 136,
+   "no readable text": 126,
+   "escalated to VLM (Tier 3)": 24,
+   "Google watermark": 1
+  },
+  "ocr_seconds_per_crop": 0.13,
+  "ocr_mode": "full",
+  "vlm_name_calls": 36,
+  "vlm_name_verdicts": {
+   "advertisement": 10,
+   "notice": 2,
+   "business": 23,
+   "none": 1
+  },
+  "buildings_named": 33,
+  "name_route": {
+   "tier2_ocr": 17,
+   "tier3_vlm+ocr_gate": 16
+  },
+  "name_quality": {
+   "good": 25,
+   "tamil_unverified": 2,
+   "fragment": 6
+  },
+  "google_confirmed": 6
+ },
+ "unmapped_businesses": {
+  "sign_candidates_checked_by_vlm": 4,
+  "kept": 1,
+  "vlm_said_not_business": 2,
+  "examples": [
+   "Evon"
+  ]
+ },
+ "matching": {
+  "match_status": {
+   "matched": 42,
+   "discrepancy": 9
+  },
+  "discrepancy_types": {
+   "use_change": 4,
+   "location_shift": 3,
+   "area_understated": 2
+  },
+  "planted_error_scores": {
+   "missing_record": {
+    "planted": 0,
+    "caught": 0,
+    "missed": 0,
+    "false_alarms": 0
+   },
+   "location_shift": {
+    "planted": 3,
+    "caught": 3,
+    "missed": 0,
+    "false_alarms": 0
+   },
+   "area_understated": {
+    "planted": 2,
+    "caught": 2,
+    "missed": 0,
+    "false_alarms": 0
+   },
+   "use_change": {
+    "planted": 4,
+    "caught": 4,
+    "missed": 0,
+    "false_alarms": 0
+   },
+   "extra_floor": {
+    "planted": 0,
+    "caught": 0,
+    "missed": 0,
+    "false_alarms": 0
+   }
+  },
+  "asset_register_scores": {
+   "location_shift": {
+    "planted": 2,
+    "tp": 2,
+    "fp": 0
+   },
+   "type_mismatch": {
+    "planted": 2,
+    "tp": 2,
+    "fp": 0
+   },
+   "missing_asset": {
+    "planted": 1,
+    "tp": 1,
+    "fp": 0
+   }
+  },
+  "register_note": "SYNTHETIC property + asset registers with planted errors (no open municipal data)"
+ },
+ "review": {
+  "items": 28,
+  "by_priority": {
+   "2": 4,
+   "4": 2,
+   "5": 2,
+   "6": 20
+  },
+  "by_reason": {
+   "attribute discrepancy \u2014 verify on imagery": 4,
+   "building seen from one view only": 5,
+   "floor count low confidence (roofline not visible)": 2,
+   "single-detection asset": 20
+  }
+ },
+ "cost_time": {
+  "stage_seconds": {
+   "panoramas": 2.1,
+   "area": 4.9,
+   "plan": 2.4,
+   "detect": 15.0,
+   "geometry": 7.7,
+   "ocr": 79.7,
+   "vlm": 58.1,
+   "reference": 9.5,
+   "match": 4.0
+  },
+  "total_minutes": 3.1,
+  "vlm_calls": 91,
+  "vlm_cost_usd": 0.0103,
+  "places_calls": 16,
+  "device": "gpu",
+  "buildings_use_local": 23,
+  "buildings_use_vlm": 14
+ },
+ "story": [
+  "Found 69 Street View panoramas (0 user photospheres, excluded from geometry).",
+  "Planned 21 camera stops and 140 views instead of a full 12-heading sweep.",
+  "3 views face frontage with no building outline in OSM \u2014 map coverage verdict: full: footprints on most frontages.",
+  "The detector drew 713 boxes; 580 were usable for positioning.",
+  "Located 35 poles/streetlights; 3 triangulated from 2+ cameras, 32 approximate (single camera).",
+  "51 buildings registered; 37 had a usable view for use/floors, 2 had no building box at all.",
+  "287 sign crops: 136 read locally, 24 escalated; 33 buildings named, 6 confirmed by Google.",
+  "1 businesses found with no analysed building (signs on frontage with no analysed building outline).",
+  "28 items sent to human review."
+ ]
+}
