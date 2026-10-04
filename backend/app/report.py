@@ -549,7 +549,7 @@ INK, INK2, INK3 = (27, 31, 42), (61, 67, 86), (91, 96, 112)
 LINE = (214, 210, 200)
 SODIUM = (156, 78, 7)
 STATUS = {"no_record": (204, 31, 99), "discrepancy": (0, 132, 159), "matched": (142, 157, 196)}
-PRIORITY_RGB = {"high": (63, 75, 176), "medium": (134, 145, 210), "low": (195, 200, 232)}   # daylight ramp (D54)
+PRIORITY_RGB = {"high": (42, 42, 143), "medium": (85, 96, 204), "low": (143, 153, 227)}   # daylight ramp (D54; re-stepped D57)
 DARK = (27, 31, 42)
 ROAD_W = {"motorway": 1.2, "trunk": 1.2, "primary": 1.0, "secondary": 0.9, "tertiary": 0.7}
 
@@ -656,6 +656,10 @@ def _draw_map(pdf, m, x, y, w, h):
                 if g["level"] != lv or len(g["line"]) < 2:
                     continue
                 pts = [P(*p) for p in g["line"]]
+                lw = {"high": 2.4, "medium": 2.0, "low": 1.7}.get(lv, 1.7)
+                pdf.set_draw_color(255, 255, 255)                                  # D57: white casing, as on the map
+                pdf.set_line_width(lw + 0.7)
+                pdf.polyline(pts)
                 pdf.set_draw_color(*(PRIORITY_RGB.get(lv) or (150, 150, 150)))
                 pdf.set_line_width({"high": 2.4, "medium": 2.0, "low": 1.7}.get(lv, 1.7))
                 pdf.polyline(pts)

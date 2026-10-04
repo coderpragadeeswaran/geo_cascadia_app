@@ -14,6 +14,8 @@ export function TrimHandles() {
   const map = useMap('main')
   const preview = useAnalyse((s) => s.preview)
   const trim = useAnalyse((s) => s.trim)
+  // D57: both pieces of a street included: no handles (a stretch can't run across the gap between them)
+  const include = useAnalyse((s) => s.include && !!s.preview?.elsewhere)
   const main = useMemo(() => mainLine(preview?.lines), [preview])
   const proj = useRef<google.maps.MapCanvasProjection | null>(null)
   const [, redraw] = useReducer((x: number) => x + 1, 0)
@@ -27,7 +29,7 @@ export function TrimHandles() {
     ov.setMap(map)
     return () => { ov.setMap(null); proj.current = null }
   }, [map, main])
-  if (!map || !main || !proj.current || main.length <= 0) return null
+  if (!map || !main || !proj.current || main.length <= 0 || include) return null
   const trimmable = main.length >= MIN_STRETCH_M * 2
   const t = trim ?? { a: 0, b: main.length }
   const px = (ll: LonLat): Px | null => {

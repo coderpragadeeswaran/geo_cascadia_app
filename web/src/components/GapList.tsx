@@ -7,8 +7,11 @@ import type { GapProps, GapRow } from '@/api/types'
 import { byPriority, gapTypeLabel, PRIORITY_ORDER, priorityLabel } from '@/lib/labels'
 import { propsFor, useAreaData } from '@/lib/useAreaData'
 import { cn, fmt, plural } from '@/lib/utils'
+import { colors, mapBase } from '@/design/tokens'
+import { prioColor } from '@/map/layers'
 import { flyToBounds } from '@/map/MapView'
 import { useUi } from '@/store/ui'
+import { OldImagery } from './EvidenceDrawer'
 import { LampRecall } from './LampRecall'
 import { Fact, HowWeKnow } from './HowWeKnow'
 
@@ -43,12 +46,15 @@ export function GapList({ rows }: { rows: Gap[] }) {
   const map = useMap('main')
   const paths = new Map(gaps.map((g) => [g.props.id, g.geometry.coordinates as [number, number][]]))
   const hasPriority = rows.some((g) => g.priority)
+  const scrollTo = (el: HTMLLIElement | null) => el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   const [order, setOrder] = useState<'priority' | 'length'>('priority')
   const byP = hasPriority && order === 'priority'
   const list = [...rows].sort(byP ? byPriority : (a, b) => b.length_m - a.length_m)
   const counts = PRIORITY_ORDER.map((p) => [p, rows.filter((g) => g.priority === p).length] as const)
   const total = list.reduce((n, g) => n + g.length_m, 0)
+  // D57: a card selects its stretch (highlighted on the map, the others dimmed) and frames it; the same card again clears it
   const open = (g: Gap) => {
+    if (selected?.kind === 'streetlight_gap' && selected.id === g.id) return select(null)
     const p = propsFor(props, 'streetlight_gap', g.id)
     if (p) select(p)
     const pts = paths.get(g.id)
@@ -74,16 +80,20 @@ export function GapList({ rows }: { rows: Gap[] }) {
         {list.map((g) => {
           const on = selected?.kind === 'streetlight_gap' && selected.id === g.id
           return (
-            <li key={g.id} className={cn('rule-t px-5 py-2.5', on && 'bg-accent-soft')}>
-              <button onClick={() => open(g)} className="block w-full cursor-pointer text-left">
+            <li key={g.id} ref={on ? scrollTo : undefined} aria-current={on ? 'true' : undefined} className={cn('rule-t px-5 py-2.5', on && 'bg-accent-soft')}
+              style={on ? { boxShadow: 'inset 3px 0 0 var(--ns-sodium)' } : undefined}>
+              <button onClick={() => open(g)} aria-pressed={on} className="block w-full cursor-pointer text-left"
+                title={on ? 'Shown on the map. Click again to clear.' : 'Show this stretch on the map'}>
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="min-w-0"><span className="t-data text-[15.5px]">{fmt.format(Math.round(g.length_m))} m</span> <span>of {g.street}</span></span>
-                  {g.priority ? <PriorityTag p={g.priority} /> : <span className="mt-1 h-2 w-8 shrink-0 rounded-sm" style={{ background: 'var(--ns-dark)', boxShadow: '0 0 0 1px var(--ns-dark-edge)' }} aria-hidden />}
+                  {g.priority ? <PriorityTag p={g.priority} /> : <StretchSwatch />}
                 </div>
                 {g.priority_reason && <div className="t-small ink2 mt-0.5">{g.priority_reason}</div>}
                 <div className="t-small ink3 mt-0.5">{gapTypeLabel(g.gap_type)}</div>
                 {g.display_mode === 'check' && <p className="t-small mt-1 border-l-2 pl-2 ink2" style={{ borderColor: 'var(--ns-sodium)' }}>Needs checking on the ground: the road bends here and some lights were seen part way along.</p>}
+                {on && <p className="t-small mt-1 ink3">Shown on the map · click again or press Esc to clear</p>}
               </button>
+              {on && <div className="mt-2"><OldImagery k={`gap:${g.id}`} /></div>}
               <GapHow g={g} />
             </li>
           )
@@ -93,13 +103,26 @@ export function GapList({ rows }: { rows: Gap[] }) {
   )
 }
 
-/** D54: the priority as a word plus the map's mark (a dark band with the priority's edge colour; wider = higher) */
+/** D54: the priority as a word plus the map's mark */
 export function PriorityTag({ p, long }: { p: string; long?: boolean }) {
-  const w = p === 'high' ? 3 : p === 'medium' ? 2.5 : 2
   return (
     <span className="inline-flex shrink-0 items-center gap-1.5 t-small">
-      <span className="h-2 w-7 rounded-sm" style={{ background: 'var(--ns-dark)', boxShadow: `0 0 0 ${w}px var(--ns-prio-${p})` }} aria-hidden />
+      <StretchSwatch p={p} />
       <span className="font-[560]">{priorityLabel(p)}{long ? ' priority' : ''}</span>
+    </span>
+  )
+}
+
+/** D57: a possible dark stretch exactly as the map draws it (dark core, priority edge, casing) on a piece of road, so the
+ *  key, the list and the drawer match the map in both themes; wider edge = higher priority. No priority = the plain edge. */
+export function StretchSwatch({ p, width = 16 }: { p?: string | null; width?: number }) {
+  const mode = useUi((s) => s.mode)
+  const c = colors[mode]
+  const e = p === 'high' ? 3.5 : p === 'medium' ? 2.5 : p === 'low' ? 1.5 : 1
+  const edge = prioColor(c, p) ?? c.darkEdge
+  return (
+    <span aria-hidden className="inline-flex shrink-0 items-center rounded-[3px] px-[7px] py-[6px]" style={{ background: mapBase[mode].arterial, boxShadow: `inset 0 0 0 1px ${c.lineStrong}` }}>
+      <span className="block h-[5px] rounded-full" style={{ width, background: c.dark, boxShadow: `0 0 0 ${e}px ${edge}, 0 0 0 ${e + 1.5}px ${c.darkCasing}` }} />
     </span>
   )
 }

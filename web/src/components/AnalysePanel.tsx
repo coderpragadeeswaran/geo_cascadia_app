@@ -14,7 +14,7 @@ import type { JobEstimate, PlanStatus } from '@/api/p5'
 import { post, useAreas } from '@/api/queries'
 import { deviceWord, JOB_STAGES, jobStatus, minutesParts, planSlowText, planTooSlow, shortArea, STAGE_PLAIN, stageLine, timeLeft } from '@/lib/labels'
 import { fmt, noun } from '@/lib/utils'
-import { streetKey, useAnalyse } from '@/map/analyse'
+import { pickedLines, streetKey, useAnalyse } from '@/map/analyse'
 import { flyToBounds } from '@/map/MapView'
 import { mainLine, MIN_STRETCH_M, slice } from '@/map/trim'
 import { useUi } from '@/store/ui'
@@ -31,6 +31,7 @@ function usePlanEstimate() {
   const preview = useAnalyse((s) => s.preview)
   const trim = useAnalyse((s) => s.trim)
   const clickAt = useAnalyse((s) => s.clickAt)
+  const include = useAnalyse((s) => s.include && !!s.preview?.elsewhere)
   const [st, setSt] = useState<PlanStatus | null>(null)
   const [last, setLast] = useState<JobEstimate | null>(null)
   const [nonce, setNonce] = useState(0)
@@ -41,14 +42,16 @@ function usePlanEstimate() {
   // which planning to follow: the preview's (whole street) or a trimmed stretch's
   useEffect(() => {
     if (!preview) { setSt(null); return }
-    if (!stretchKey || !clickAt) { setSt(nonce ? null : preview.plan_estimate); if (!nonce) return }
+    if ((!stretchKey && !include) || !clickAt) { setSt(nonce ? null : preview.plan_estimate); if (!nonce) return }
     let off = false
     const t = setTimeout(() => {
-      post<PlanStatus>('/jobs/plan-estimate', { lat: clickAt!.lat, lon: clickAt!.lng, ...(stretchKey ? { lines: { type: 'LineString', coordinates: JSON.parse(stretchKey) } } : {}) })
+      // D57: both pieces included → the backend plans the clicked piece + the rest of the name (no trim then)
+      post<PlanStatus>('/jobs/plan-estimate', { lat: clickAt!.lat, lon: clickAt!.lng, ...(include ? { include_elsewhere: true } : {}),
+        ...(stretchKey && !include ? { lines: { type: 'LineString', coordinates: JSON.parse(stretchKey) } } : {}) })
         .then((r) => { if (!off) setSt(r) }).catch(() => { if (!off) setSt({ key: '', status: 'failed', error: 'Could not plan this stretch.' }) })
     }, stretchKey ? 600 : 0)
     return () => { off = true; clearTimeout(t) }
-  }, [preview, stretchKey, clickAt, nonce])
+  }, [preview, stretchKey, clickAt, nonce, include])
   // poll while planning
   useEffect(() => {
     if (st?.status === 'done' && st.estimate) setLast(st.estimate)
@@ -124,19 +127,22 @@ export function AnalysePanel() {
   const est = plan.est
   const trimmable = (mainLine(a.preview?.lines)?.length ?? 0) >= MIN_STRETCH_M * 2
   const p = a.preview
+  const both = a.include && !!p?.elsewhere
   // P7.1: frame the snapped street ONCE when a street is selected, so its highlight is in view above the sheet. Clicking
   // the same street again, trimming it or the estimate arriving never moves the camera; only another street does.
   const fitted = useRef<string | null>(null)
-  const key = streetKey(p)
+  // D57: the clicked piece is framed as before (the rest of the name is a dashed guide); switching "include it?" on frames
+  // both pieces, off frames the clicked piece again
+  const key = streetKey(p) && `${streetKey(p)}|${both ? 'both' : 'one'}`
   useEffect(() => {
     if (!key) fitted.current = null
     if (!map || !p?.lines?.coordinates.length || !key || fitted.current === key) return
     fitted.current = key
-    const pts = p.lines.coordinates.flat()
+    const pts = pickedLines(p, both)!.coordinates.flat()
     const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1])
     // the sheet covers ~300 px at the bottom: frame the street above it so both end dots can be dragged (fix 10)
     flyToBounds(map, [Math.min(...xs) - 0.0003, Math.min(...ys) - 0.0003, Math.max(...xs) + 0.0003, Math.max(...ys) + 0.0003], { maxZoom: 17.2, bottomPx: 300 })
-  }, [map, p, key])
+  }, [map, p, key, both])
   const already = p?.already ?? []
   const openExisting = (slug: string, street: string) => {
     const ui = useUi.getState()
@@ -180,10 +186,23 @@ export function AnalysePanel() {
                 <div className="t-micro">Analyse this street?</div>
                 <div className="t-title mt-1">{p.street}</div>
                 <div className="t-small ink2 mt-0.5">
-                  {a.trim ? <><span className="t-data">{fmt.format(Math.round(a.trim.b - a.trim.a))} m</span> of {fmt.format(p.length_m)} m · <button className="link" onClick={() => a.setTrim(null)}>whole street</button></>
+                  {both ? <><span className="t-data">{fmt.format(p.length_m + p.elsewhere!.length_m)} m</span> in {p.elsewhere!.pieces + 1} separate pieces · highlighted on the map</>
+                    : a.trim ? <><span className="t-data">{fmt.format(Math.round(a.trim.b - a.trim.a))} m</span> of {fmt.format(p.length_m)} m · <button className="link" onClick={() => a.setTrim(null)}>whole street</button></>
                     : <><span className="t-data">{fmt.format(p.length_m)} m</span> · highlighted on the map</>}
                   </div>
-                <div className="t-small ink3 mt-0.5">Drag the orange end dots on the map to analyse only part of it{trimmable ? '' : ' (this street is too short to trim)'}.</div>
+                {p.elsewhere && (
+                  <label className="t-small mt-1.5 flex cursor-pointer items-center gap-2">
+                    <button type="button" role="switch" aria-checked={both} onClick={() => a.setInclude(!both)}
+                      aria-label={`This street continues elsewhere (${fmt.format(p.elsewhere.length_m)} m) — include it?`}
+                      className="relative h-[18px] w-[32px] shrink-0 rounded-full transition-colors"
+                      style={{ background: both ? 'var(--ns-sodium)' : 'var(--ns-line-strong)' }}>
+                      <span className="absolute top-[2px] size-[14px] rounded-full bg-[var(--ns-bg2)] transition-[left]" style={{ left: both ? 16 : 2 }} />
+                    </button>
+                    <span>This street continues elsewhere (<span className="t-data">{fmt.format(p.elsewhere.length_m)} m</span>) — include it?</span>
+                  </label>
+                )}
+                <div className="t-small ink3 mt-0.5">{both ? 'Trimming is off while both pieces are included.'
+                  : <>Drag the orange end dots on the map to analyse only part of it{trimmable ? '' : ' (this street is too short to trim)'}.</>}</div>
               </div>
               <button className="btn btn-icon" onClick={() => a.reset()} aria-label="Pick another street"><X /></button>
             </div>

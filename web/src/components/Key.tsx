@@ -6,10 +6,11 @@ import { useAreaGeo, useCameraBuildings } from '@/api/queries'
 import { colors } from '@/design/tokens'
 import { FLOOR_HEIGHT_M } from '@/map/layers'
 import { cn } from '@/lib/utils'
+import { StretchSwatch } from './GapList'
 import { useUi } from '@/store/ui'
 
 const Item = ({ sw, children }: { sw: React.ReactNode; children: React.ReactNode }) => (
-  <li className="t-small flex items-center gap-2.5 py-[3px]"><span className="flex w-5 justify-center">{sw}</span>{children}</li>
+  <li className="t-small flex items-center gap-2.5 py-[3px]"><span className="flex w-8 shrink-0 justify-center">{sw}</span>{children}</li>
 )
 
 export function Key() {
@@ -28,12 +29,11 @@ export function Key() {
   const near = band === 'street' || band === 'object'
   const hasCheck = !!geo?.features.some((f) => f.properties.kind === 'streetlight_gap' && f.properties.display_mode === 'check')
   const prios = new Set(geo?.features.map((f) => (f.properties.kind === 'streetlight_gap' ? f.properties.priority : null)).filter(Boolean))
-  const prioSw = (p: 'high' | 'medium' | 'low') => <span className="h-2 w-5 rounded-sm" style={{ background: c.dark, boxShadow: `0 0 0 ${p === 'high' ? 3 : p === 'medium' ? 2.5 : 2}px ${p === 'high' ? c.prioHigh : p === 'medium' ? c.prioMedium : c.prioLow}` }} />
   const lamp = <span className="dot" style={night ? { background: '#fff4e0', boxShadow: `0 0 8px 3px ${c.sodiumGlow}` } : { background: c.sodium, boxShadow: `0 0 0 1.5px ${c.bg1}` }} />
   return (
     <div className="pointer-events-auto absolute bottom-8 left-4 z-10">
       {open && (
-        <ul className="sheet mb-2 w-[240px] px-4 py-3" aria-label="Map key">
+        <ul className="sheet mb-2 w-[272px] px-4 py-3" aria-label="Map key">
           {band === 'city' ? (
             <>
               <Item sw={<span className="h-2.5 w-4 rounded-[2px]" style={{ boxShadow: `inset 0 0 0 1.5px ${c.sodium}`, background: c.sodiumSoft }} />}>Analysed area</Item>
@@ -43,9 +43,9 @@ export function Key() {
           ) : (
             <>
               <Item sw={<span className="h-1 w-5 rounded" style={{ background: c.sodiumGlow, boxShadow: night ? `0 0 8px ${c.sodium}` : undefined }} />}>Analysed road, lit</Item>
-              {layers.gaps && !prios.size && <Item sw={<span className="h-2 w-5 rounded-sm" style={{ background: c.dark, boxShadow: `0 0 0 1px ${c.darkEdge}` }} />}>Dark: no streetlight seen in 60 m</Item>}
+              {layers.gaps && !prios.size && <Item sw={<StretchSwatch width={12} />}>Dark: no streetlight seen in 60 m</Item>}
               {layers.gaps && (['high', 'medium', 'low'] as const).filter((p) => prios.has(p)).map((p) => (
-                <Item key={p} sw={prioSw(p)}>Possible dark stretch, {p} priority</Item>
+                <Item key={p} sw={<StretchSwatch p={p} width={12} />}>Possible dark stretch, {p} priority</Item>
               ))}
               {layers.gaps && hasCheck && <Item sw={<span className="h-2 w-5 rounded-sm" style={{ background: c.dark, outline: `1.5px dotted ${c.ink2}` }} />}>Possible dark stretch to check (road bends)</Item>}
               {layers.assets && <Item sw={lamp}>Streetlight</Item>}

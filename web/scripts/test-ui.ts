@@ -6,6 +6,8 @@ import { kpis, type Records } from '../src/lib/derive'
 import { photoProblem, saveDecision } from '../src/lib/review'
 import { article, costText, noun, plural, usd, withArticle } from '../src/lib/utils'
 import { mainLine, pointAt, project, separate, slice } from '../src/map/trim'
+import { pickedLines, streetKey } from '../src/map/analyse'
+import { gapListOpen, panelOf } from '../src/store/ui'
 
 let n = 0
 const t = (name: string, fn: () => void) => { fn(); n++; console.log('ok', name) }
@@ -193,6 +195,29 @@ t('lighting priority (D54): the list orders by points, then longer, then id; wor
   const rows = [g('a', 'low', 3, 400), g('b', 'high', 7, 100), g('c', 'high', 9, 50), g('d', 'medium', 6, 300), g('e', 'medium', 6, 310), g('f', null, null, 900)]
   assert.deepEqual([...rows].sort(byPriority).map((r) => r.id), ['c', 'b', 'e', 'd', 'a', 'f'])
   assert.deepEqual(['high', 'medium', 'low', null].map(priorityLabel), ['High', 'Medium', 'Low', 'Not available'])
+})
+
+t('D57: a stretch picked in a dark-stretch list keeps the list (card highlighted); elsewhere it opens the drawer', () => {
+  const gap = { kind: 'streetlight_gap', id: 'gap60-002' } as never
+  const base = { drive: null, query: null, builder: false, kpi: 'streetlight_gaps', panelOpen: false, analyse: false,
+    filter: { gaps: true, street: 'Sathy Main Road' } } as never as Parameters<typeof panelOf>[0]
+  assert.equal(panelOf({ ...base, selected: gap }), 'kpi')
+  assert.equal(panelOf({ ...base, selected: { kind: 'building', id: 'w1' } as never }), 'evidence')
+  assert.equal(panelOf({ ...base, kpi: null, filter: { street: 'Sathy Main Road' } as never, selected: gap }), 'evidence')
+  const q = { intent: 'streetlight_gaps', rows: [] } as never
+  assert.ok(gapListOpen({ ...base, kpi: null, filter: {} as never, query: q }))
+  assert.ok(!gapListOpen({ ...base, kpi: null, filter: {} as never, query: { intent: 'buildings', rows: [] } as never }))
+})
+t('D57: two pieces of one street name are two streets; "include it" adds the other piece', () => {
+  const lines = (c: number[][][]) => ({ type: 'MultiLineString' as const, coordinates: c })
+  const one = { way_ids: [2, 1], street: 'X', length_m: 300, lines: lines([[[0, 0], [1, 0]]]) } as never
+  assert.equal(streetKey(one), '1,2')                                               // a one-piece street: as before
+  const a = { way_ids: [1, 2], street: 'X', length_m: 327, lines: lines([[[0, 0], [1, 0]]]), elsewhere: { length_m: 65, pieces: 1, lines: lines([[[5, 5], [6, 5]]]) } } as never
+  const b = { way_ids: [1, 2], street: 'X', length_m: 65, lines: lines([[[5, 5], [6, 5]]]), elsewhere: { length_m: 327, pieces: 1, lines: lines([[[0, 0], [1, 0]]]) } } as never
+  assert.notEqual(streetKey(a), streetKey(b))
+  assert.equal(pickedLines(a, false)!.coordinates.length, 1)
+  assert.equal(pickedLines(a, true)!.coordinates.length, 2)
+  assert.equal(pickedLines(one, true)!.coordinates.length, 1)
 })
 
 console.log(`${n} UI tests passed`)

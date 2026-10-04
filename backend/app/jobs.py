@@ -187,6 +187,8 @@ class JobIn(BaseModel):
     name: Optional[str] = Field(None, max_length=120)
     lines: Optional[dict] = Field(None, description="with {lat, lon}: the trimmed stretch of the clicked street (GeoJSON "
                                   "LineString / MultiLineString, lon/lat); the job polygon is rebuilt from it")
+    include_elsewhere: bool = Field(False, description="D57: with {lat, lon}: also analyse the pieces of the same street "
+                                    "name that don't connect to the clicked piece (the preview's `elsewhere`)")
     test: bool = Field(False, description="made by an automated test (only such jobs, and jobs cancelled before any worker "
                                           "started them, are removed by 'clear test jobs')")
     cost_cap_usd: Optional[float] = Field(None, gt=0, le=100, description="pause for approval above this planned cost "
@@ -227,6 +229,7 @@ class PlanIn(BaseModel):
     lon: float = Field(ge=-180, le=180)
     lines: Optional[dict] = Field(None, description="the trimmed stretch (GeoJSON LineString / MultiLineString, lon/lat); "
                                   "none = the whole street")
+    include_elsewhere: bool = Field(False, description="D57: include the unconnected pieces of the same name")
 
 
 @router.post("/jobs/plan-estimate", tags=["jobs"])
@@ -234,6 +237,8 @@ def job_plan_estimate(body: PlanIn, request: Request, D: Data = Depends(get_data
     """Start (or join) the real-planner estimate for the street under {lat, lon}, or for a trimmed stretch of it.
     Same job polygon as POST /jobs would store. Returns {key, status, estimate?}."""
     pick = pick_street(request.app.state.settings, D, body.lat, body.lon)
+    if body.include_elsewhere:
+        pick = streetpick.with_elsewhere(pick)
     if body.lines is not None:
         try:
             pick = streetpick.trim(pick, body.lines)
@@ -269,6 +274,8 @@ def job_create(body: JobIn, request: Request, D: Data = Depends(get_data)):
         kind, inp = "polygon", {"polygon": mapping(poly), "name": name, "street": name, "area_km2": round(km2, 3)}
     elif body.lat is not None and body.lon is not None:
         pick = pick_street(settings, D, body.lat, body.lon)
+        if body.include_elsewhere:
+            pick = streetpick.with_elsewhere(pick)
         if body.lines is not None:
             try:
                 pick = streetpick.trim(pick, body.lines)

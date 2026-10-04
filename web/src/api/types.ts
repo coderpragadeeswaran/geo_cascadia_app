@@ -186,6 +186,8 @@ export interface JobPreview {
   cost_cap_usd: number
   /** hotfix: "ok" when the street was found (a "pending" answer has no street yet) */
   status?: 'ok' | 'partial'
+  /** D57: the same street name continues in pieces that don't connect to the clicked one (not included unless asked) */
+  elsewhere?: { length_m: number; pieces: number; lines: import('geojson').MultiLineString }
 }
 /** one evidence photo with every detection box on it (GET /areas/{slug}/evidence/{kind}/{id}) */
 export interface EvidenceBox {

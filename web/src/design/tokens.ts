@@ -30,11 +30,13 @@ const palette = {
     unclassified: '#4a5270',
     dark: '#02040a',       // an unlit stretch of road
     darkEdge: '#34407a',
-    // D54 lighting priority of a possible dark stretch: one hue (the dark edge's indigo), light->bright = low->high.
-    // Sequential, lightness monotonic, adjacent ΔE ≥ 21 (dataviz validator); low = the old edge. Width + label too.
-    prioLow: '#3a4680',
-    prioMedium: '#7a86d6',
-    prioHigh: '#c5cbff',
+    // D54 lighting priority of a possible dark stretch: one hue (the dark edge's indigo), dim->bright = low->high.
+    // D57: re-stepped to saturated, never pale (adjacent ΔE ≥ 16.8 normal / 15.2 CVD, dataviz validator; low 2.45:1 on
+    // bg1 → relief: the black core, the casing, width and the word). Drawn core + edge + casing (darkCasing).
+    prioLow: '#3446b8',
+    prioMedium: '#6b78ee',
+    prioHigh: '#a9b1ff',
+    darkCasing: '#070a14', // D57: thin outer line of a dark stretch, so it never melts into the street highlight
   },
   daylight: {
     // paper & ink for projectors
@@ -58,10 +60,13 @@ const palette = {
     unclassified: '#b9b2a2',
     dark: '#1b1f2a',       // unlit stretch = heavy ink
     darkEdge: '#1b1f2a',
-    // D54 priority on paper: pale -> deep indigo = low -> high (adjacent ΔE ≥ 17); the PDF report uses the same ramp
-    prioLow: '#c3c8e8',
-    prioMedium: '#8691d2',
-    prioHigh: '#3f4bb0',
+    // D54 priority on paper: light -> deep indigo = low -> high; the PDF report uses the same ramp.
+    // D57: re-stepped so Medium and Low are no longer pale (adjacent ΔE ≥ 17.6 normal / 16.0 CVD; low 2.36:1 on paper →
+    // relief: the ink core, the white casing, width and the word)
+    prioLow: '#8f99e3',
+    prioMedium: '#5560cc',
+    prioHigh: '#2a2a8f',
+    darkCasing: '#ffffff', // D57: white outer line, so the ink core never merges with the (ink) street highlight
   },
 } as const
 export type Palette = { [K in keyof (typeof palette)['night']]: string }

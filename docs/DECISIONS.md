@@ -2047,3 +2047,64 @@ before the demo with the API and the production preview up. Sections A questions
 the estimate (no job), D reports, E browser, F offline cases; log in `docs/screenshots/regression/run-<date-time>.log`.
 Result (3 Oct, one complete run, `run-2026-10-03_1502.log`): A–F all PASS, 242 checks; details in explainer 06. Section F now removes any test job left behind when a check stops half way (a first attempt lost its API to a time limit and left one test job queued; removed). Small fixes made while building it: `web/scripts/audit.ts` printed an
 empty Gate 1 status (the badge is shown in capitals by CSS; the regex is now case-insensitive).
+
+## 2026-10-04 — three UI fixes (branch ui-fixes)
+
+### D57. Dark stretches readable in every state; a picked stretch stays in its list; a street pick keeps the clicked piece
+**1. Possible dark stretches on the map.** Since D54 the priority sat in the stretch's edge colour; Medium and Low were
+pale (Daylight `#8691d2` / `#c3c8e8`), the Daylight core was the same ink as the selected-street casing, and at area zoom
+a selected street's building dots covered the stretch (8th Street, Ganapathy: the stretch could not be seen).
+- Every stretch is drawn **dark core + priority edge + a thin casing** (`darkCasing`: Night `#070a14`, Daylight white),
+  so it never melts into the chalk / ink street highlight. Core 7 px (area) / 13 px (street); edge 12 / 14 / 16 px
+  (Low / Medium / High) at area zoom, 19.5 / 22.5 / 25.5 px at street zoom; casing +4 px.
+- At area zoom the stretch layers are drawn **above** the building dots and question dots; at street zoom they stay
+  under poles and lamps (which stand at the road edge). The edge and the core are both click targets.
+- Ramp re-stepped, one indigo hue, never pale, dataviz validator: Night `#3446b8 / #6b78ee / #a9b1ff` (adjacent ΔE ≥ 16.8
+  normal, 15.2 CVD; Low 2.45:1 on the panel), Daylight `#8f99e3 / #5560cc / #2a2a8f` (ΔE ≥ 17.6 / 16.0; Low 2.36:1 on
+  paper). The Low contrast WARN is relieved by the black/ink core, the casing, the width and the word on every swatch.
+- **One swatch everywhere** (`GapList.StretchSwatch`): the stretch exactly as the map draws it, on a piece of road
+  (the base map's arterial colour). Used by the Key, the list's priority pill and the drawer's priority box. The Night
+  pill used to be a dark core on a dark panel (it looked empty). The PDF report's map uses the new Daylight ramp and a
+  white casing too (`report.PRIORITY_RGB`).
+- The selected stretch: sodium outline outside the casing (it used to sit under the wider High edge, so it was hidden).
+
+**2. A stretch picked in a dark-stretch list stays in that list.** Clicking a card used to swap the list for the drawer,
+and nothing on the map showed which stretch it was.
+- While a dark-stretch list is open (a key number's list, or a dark-stretch question: `store/ui.gapListOpen`), a selected
+  stretch keeps the list (`panelOf`): its card is highlighted (sodium bar, `aria-current`), scrolled into view, and says
+  "Shown on the map · click again or press Esc to clear"; the old-imagery note appears in the card.
+- On the map that stretch gets the sodium outline and **every other stretch dims**; the card click frames it
+  (`flyToBounds`, max zoom 18). Clicking it on the map selects the same card. The same card again, Esc or × clears it.
+- Anywhere else (no list open) a stretch opens the drawer as before.
+- Sathy Main Road: card 1 → gap60-001 (zoom 17.3), card 2 → gap60-002 (zoom 18), map click on gap60-001 → card 1.
+
+**3. A street pick keeps only the connected piece that was clicked.** Rathinapuri (Sanganoor) Main Road's job (3 Oct)
+took two pieces of that name that don't meet (Sanganoor Road between them), 549 m in total, without asking.
+- `streetpick.split_pieces` runs on the finished pick (after names, caches and "already analysed", which are unchanged):
+  pieces are connected when an end of one lies within **5 m** of the other (or they cross). The piece nearest the click
+  is kept (length, lines, job polygon with the pipeline's 45 m buffer); the rest is `elsewhere {length_m, pieces, lines}`.
+  A street in one piece is returned unchanged (same object, no new key). `way_ids` stay the street's full list (used for
+  "already analysed" and job naming); the pipeline only analyses roads inside the job polygon.
+- Analyse sheet: "This street continues elsewhere (N m) — include it?" with a switch, **off by default**. On: the length
+  is the sum ("628 m in 2 separate pieces"), the estimate is planned again for both (`POST /jobs/plan-estimate
+  {include_elsewhere}`), both pieces are bright and framed, and the trim handles are hidden ("Trimming is off while both
+  pieces are included."). Off: the clicked piece with its handles; the rest is a dashed chalk guide on the map.
+  `POST /jobs {include_elsewhere: true}` stores both pieces (`streetpick.with_elsewhere`, a MultiPolygon).
+- Two pieces of one name are two streets for the sheet (`streetKey` adds the piece length only when `elsewhere` exists),
+  so each keeps its own camera and trim.
+- **D40 default changed:** a street whose ways leave gaps used to keep every piece; now the clicked piece only, every piece
+  when included. `tests/test_d40.py` updated accordingly (intended change).
+- Measured: Rathinapuri, click on the western piece (job click) → from the analysed area 327 m + 65 m elsewhere (the
+  area's lines stop at its polygon); from OpenStreetMap 327 m + 222 m (the job's 549 m); a click on the southern piece →
+  794 m connected + 230 m elsewhere. All six demo streets (Sakthi Main Road 1,221 m in 4 parts, Ganapathy - Avarampalayam
+  Road 1,039 m in 3 parts, Dr Alagesan Road 1,201 m, Pioneer Mills Cross Street 291 m, Sanganur Road 1,106 m, Unnamed road
+  near 5th Street 50 m) return exactly their cached answers (lines, length, polygon), with no `elsewhere`.
+- Finished jobs and areas are not changed (the Rathinapuri area stays the 549 m two-piece run).
+- Limit: analysed streets stored in pieces now offer the rest too: Ward 29's Sathy Main Road (clipped at the ward edge:
+  803 / 111 / 37 m) and Sakthi Main Road (142 / 13 m) show "continues elsewhere" when picked from Ward 29's own lines.
+
+Tests: `backend/tests/test_ui_fixes.py` (7), `test_d40.py` (updated), two `test:ui` cases; `web/scripts/ui-fixes-shots.ts`
+(both themes, screenshots in `docs/screenshots/ui-fixes/`).
+Checks (4 Oct): backend 443 passed / 1 skipped; typecheck, build, test:ui 18, check:data, audit (both themes) pass;
+regression all six sections PASS, 266 checks (`run-2026-10-04_1246.log`; a first run's failures were the log's Windows
+code page and two slow loads, see explainer 06). No regression expected answer changed.

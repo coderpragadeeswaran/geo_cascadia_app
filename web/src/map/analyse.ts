@@ -32,6 +32,9 @@ interface AnalyseState {
   anyway: boolean
   /** review fix 10: the stretch kept after dragging the end dots, in metres along the main piece (null = whole street) */
   trim: { a: number; b: number } | null
+  /** D57: also analyse the unconnected pieces of the same name (preview.elsewhere); off by default, no trimming then */
+  include: boolean
+  setInclude: (on: boolean) => void
   setTrim: (t: { a: number; b: number } | null) => void
   job: JobFull | null
   /** the job's planner estimate (stored when it was queued) for the honest time-left line */
@@ -57,7 +60,9 @@ let ctrl: AbortController | null = null
 
 export const useAnalyse = create<AnalyseState>((set, get) => ({
   clickAt: null, preview: null, loading: false, startedAt: null, error: null, anyway: false, job: null, estimate: null, cap: null, workerOnline: false, trim: null,
+  include: false,
   setTrim: (trim) => set({ trim }),
+  setInclude: (include) => set({ include, trim: null }),
   pick: async (lat, lng) => {
     ctrl?.abort('replaced')                                       // one request at a time: a new click wins
     const mine = new AbortController()
@@ -85,7 +90,7 @@ export const useAnalyse = create<AnalyseState>((set, get) => ({
         if (r && r.status !== 'pending') {
           const preview = r as JobPreview
           const same = streetKey(get().preview) === streetKey(preview)
-          set({ preview, loading: false, startedAt: null, ...(same ? {} : { trim: null, anyway: false }) })
+          set({ preview, loading: false, startedAt: null, ...(same ? {} : { trim: null, anyway: false, include: false }) })
           // the road is shown; its full name / length are still loading: keep asking quietly and swap them in
           if (preview.status !== 'partial' || performance.now() - t0 > DETAILS_LIMIT_MS) return
         } else if (performance.now() - t0 > FIND_LIMIT_MS) {
@@ -112,15 +117,15 @@ export const useAnalyse = create<AnalyseState>((set, get) => ({
   retry: async () => { const at = get().clickAt; if (at) await get().pick(at.lat, at.lng) },
   cancelPick: () => { ctrl?.abort('cancelled'); ctrl = null; set({ loading: false, startedAt: null }) },
   start: async () => {
-    const { clickAt: at, trim, preview, cap } = get()
+    const { clickAt: at, trim, preview, cap, include } = get()
     if (!at) return
     set({ loading: true, error: null })
     // a trimmed stretch goes with the click; the backend checks it lies on the street and builds the polygon from it
-    const m = trim && preview ? mainLine(preview.lines) : null
+    const m = trim && preview && !include ? mainLine(preview.lines) : null
     const lines = m && trim ? { type: 'LineString', coordinates: slice(m, trim.a, trim.b) } : undefined
     try {
       const r = await post<{ job: JobFull; worker_online: boolean }>('/jobs', { lat: at.lat, lon: at.lng, ...(lines ? { lines } : {}),
-        ...(cap != null ? { cost_cap_usd: cap } : {}) })
+        ...(include && preview?.elsewhere ? { include_elsewhere: true } : {}), ...(cap != null ? { cost_cap_usd: cap } : {}) })
       set({ job: r.job, workerOnline: r.worker_online, loading: false, preview: null, estimate: null })
       get().poll()
       useUi.getState().setAnalyse(false)
@@ -157,7 +162,7 @@ export const useAnalyse = create<AnalyseState>((set, get) => ({
       set({ job: r.job, workerOnline: r.worker_online, error: null })
     } catch (e) { set({ error: { kind: 'other', message: e instanceof ApiError ? e.message : 'Could not retry' } }) }
   },
-  reset: () => { ctrl?.abort('cancelled'); ctrl = null; set({ clickAt: null, preview: null, loading: false, startedAt: null, error: null, anyway: false, trim: null }) },
+  reset: () => { ctrl?.abort('cancelled'); ctrl = null; set({ clickAt: null, preview: null, loading: false, startedAt: null, error: null, anyway: false, trim: null, include: false }) },
   poll: async () => {
     const j = get().job
     if (!j) return
@@ -171,4 +176,9 @@ export const useAnalyse = create<AnalyseState>((set, get) => ({
 /** one street = the same OSM ways (or, for a street of an analysed area, the same name and length): a second click on it
  *  keeps the camera and the trim (P7.1) */
 export const streetKey = (p: JobPreview | null | undefined) =>
-  !p ? null : p.way_ids?.length ? [...p.way_ids].sort((a, b) => a - b).join(',') : `${p.street}|${p.length_m}`
+  !p ? null : (p.way_ids?.length ? [...p.way_ids].sort((a, b) => a - b).join(',') : `${p.street}|${p.length_m}`)
+    // D57: the way ids cover every piece of the name; two pieces of it are two streets (own camera, own trim)
+    + (p.elsewhere ? `|piece ${p.length_m}` : '')
+/** D57: the lines to analyse: the clicked piece, plus the rest of the same name when the person included it */
+export const pickedLines = (p: JobPreview | null | undefined, include: boolean) =>
+  !p?.lines ? null : include && p.elsewhere ? { ...p.lines, coordinates: [...p.lines.coordinates, ...p.elsewhere.lines.coordinates] } : p.lines
