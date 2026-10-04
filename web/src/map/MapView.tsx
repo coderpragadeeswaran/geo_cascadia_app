@@ -135,6 +135,9 @@ function DeckLayers({ introDone }: { introDone: boolean }) {
   const analyseRest = useMemo(() => (trim && preview?.lines ? (preview.lines.coordinates as Position[][]) : null), [preview, trim])
   const analyseElsewhere = useMemo(() => (!include && preview?.elsewhere ? (preview.elsewhere.lines.coordinates as Position[][]) : null), [preview, include])
   const drive = useDriveMark()
+  // extras 3: OpenStreetMap's own shop points, only while a "businesses vs OpenStreetMap" question is on screen
+  const q = useUi((s) => s.query)
+  const osmPoints = useMemo(() => (q?.intent === 'osm_businesses' && queryApplies(q) ? q.osm?.points ?? null : null), [q])
   const { data: camB } = useCameraBuildings(area)
   // clickable: each diamond carries its props, so a click opens the camera-only drawer (Gate 1 case 3)
   const cameraBuildings = useMemo(() => camB?.points?.map((d) => ({ lat: d.lat, lon: d.lon, p: { kind: 'camera_building' as const, id: d.id, lat: d.lat, lon: d.lon,
@@ -213,8 +216,8 @@ function DeckLayers({ introDone }: { introDone: boolean }) {
   const layers = useMemo(
     () => buildLayers({ mode, band, flat, layers: layerToggles, areas: areas ?? [], activeArea: area, split, jobs, pulse: animate ? pulse : 0,
       jobShown: shown.current,
-      selectedId: selected && 'id' in selected ? selected.id : null, focus, lightsOn, analyseLines, analysePoly, analyseRest, analyseElsewhere, drive, predicted, cameraBuildings }),
-    [mode, band, flat, layerToggles, areas, area, split, jobs, pulse, animate, selected, focus, lightsOn, analyseLines, analysePoly, analyseRest, analyseElsewhere, drive, predicted, cameraBuildings],
+      selectedId: selected && 'id' in selected ? selected.id : null, focus, lightsOn, analyseLines, analysePoly, analyseRest, analyseElsewhere, drive, predicted, cameraBuildings, osmPoints }),
+    [mode, band, flat, layerToggles, areas, area, split, jobs, pulse, animate, selected, focus, lightsOn, analyseLines, analysePoly, analyseRest, analyseElsewhere, drive, predicted, cameraBuildings, osmPoints],
   )
 
   useEffect(() => {

@@ -1,0 +1,134 @@
+{
+ "fetched": "2026-10-04T08:26:07Z",
+ "source": "OpenStreetMap: point positions from the app's copy (snapshot 2026-10-02); names and tags from the Overpass API on the fetch date",
+ "osm_snapshot": "2026-10-02",
+ "scope_m": 30,
+ "pois": [],
+ "buildings": {
+  "w1238008955": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251629262": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251629231": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251629831": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251629091": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1238009077": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251629762": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1238008994": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251629912": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251629633": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251629736": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1238009028": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251629238": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251626626": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251629996": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251629186": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251629797": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251629318": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1238009045": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251629977": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1238008968": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251629183": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251629127": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251626622": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1238008980": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  }
+ }
+}

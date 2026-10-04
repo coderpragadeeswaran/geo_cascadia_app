@@ -54,6 +54,8 @@ QUESTIONS = [
     ("Poles on Sathy Main Road", {"intent": "assets", "asset_type": "pole", "street": "Sathy Main Road"}, 40, None),
     ("Streets where no streetlight is detected within 100 m", {"intent": "streetlight_gaps", "interval_m": 100}, 7, None),
     ("Show possible dark stretches", {"intent": "streetlight_gaps", "interval_m": 60}, 11, None),
+    # extras (added with the OpenStreetMap comparison, an intended addition): our businesses not on OpenStreetMap
+    ("Businesses not in OpenStreetMap", {"intent": "osm_businesses", "osm": "camera_only"}, 138, None),
 ]
 INSIDE = ("Sakthi Main Road (Coimbatore, local map data)", 11.042553, 76.9841361)
 OUTSIDE = ("a road in Erode (outside the four cities: OpenStreetMap's public servers)", 11.3410, 77.7172)
@@ -61,6 +63,16 @@ STREET = ("ward29", "Sathy Main Road")
 
 LOG = []
 RESULT = {}
+
+
+def utf8_io():
+    """extras F2: print UTF-8 whatever the console or redirect is (Windows gives a redirected file the ANSI code page,
+    where "→" or Tamil text raised UnicodeEncodeError and stopped the run). Unencodable text is never fatal."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
 
 
 def say(s=""):
@@ -92,7 +104,7 @@ def section_a():
     s = Section("A", "questions: spec + extra (Ward 29)")
     for text, filters, total, why in QUESTIONS:
         r = requests.post(f"{API}/query", json={"area": "ward29", "text": text}, timeout=120).json()
-        got = {k: v for k, v in r["parsed_filters"].items() if k in filters or k in ("priority", "near_dark_m")}
+        got = {k: v for k, v in r["parsed_filters"].items() if k in filters or k in ("priority", "near_dark_m", "osm")}
         und = (r.get("understanding") or {}).get("status")
         ok = got == filters and r["total"] == total and und == "ok"
         if why is not None:
@@ -173,10 +185,10 @@ def _preview(s, label, lat, lon, wait_s):
 
 def section_c():
     s = Section("C", "Analyse a street up to the estimate (no job created)")
-    jobs_before = [j["id"] for j in get("/jobs").json()["jobs"]]
+    jobs_before = job_ids()
     _preview(s, INSIDE[0], INSIDE[1], INSIDE[2], 240)
     _preview(s, OUTSIDE[0], OUTSIDE[1], OUTSIDE[2], 420)
-    jobs_after = [j["id"] for j in get("/jobs").json()["jobs"]]
+    jobs_after = job_ids()
     s.check(jobs_before == jobs_after, f"no job was created ({len(jobs_after)} jobs before and after)")
     s.done()
 
@@ -277,9 +289,39 @@ def _check_report(s, slug, app_numbers, cam, street=None):
             bad.append(f"{k!r} missing from the PDF")
     s.check(not bad, f"{name}: {pages} pages; every key number = the app; Assets sheet {n_assets} rows"
                      + (f" — {'; '.join(bad)}" if bad else ""))
+    _check_gis(s, slug, q, name, wb)
     if not street:
         with open(os.path.join(OUT, f"report_{slug}.pdf"), "wb") as f:
             f.write(p.content)
+
+
+GIS_SHEETS = {"buildings": "Buildings with findings", "poles_streetlights": "Assets", "dark_stretches": "Possible dark stretches",
+              "review_items": "Review items", "businesses_vs_osm": "OSM shops"}
+
+
+def _check_gis(s, slug, q, name, wb):
+    """extras 1: the GeoJSON and the zipped Shapefile set carry one feature per Excel row, per layer, in WGS84"""
+    import zipfile
+    import shapefile
+    g = get(f"/areas/{slug}/report.geojson{q}", timeout=300)
+    z = get(f"/areas/{slug}/report.shp.zip{q}", timeout=300)
+    if not s.check(g.status_code == 200 and z.status_code == 200, f"{name}: GeoJSON + Shapefile download"):
+        return
+    feats = g.json()["features"]
+    zf = zipfile.ZipFile(io.BytesIO(z.content))
+    bad, counts = [], {}
+    for layer, sheet in GIS_SHEETS.items():
+        rows = max(0, wb[sheet].max_row - 1) if sheet in wb.sheetnames else 0
+        n_geo = sum(1 for f in feats if f["properties"]["layer"] == layer)
+        r = shapefile.Reader(shp=io.BytesIO(zf.read(f"{layer}.shp")), shx=io.BytesIO(zf.read(f"{layer}.shx")),
+                             dbf=io.BytesIO(zf.read(f"{layer}.dbf")))
+        n_shp = len(r)
+        prj = zf.read(f"{layer}.prj").decode().startswith('GEOGCS["GCS_WGS_1984"')
+        counts[layer] = n_geo
+        if not (n_geo == n_shp == rows and prj):
+            bad.append(f"{layer}: GeoJSON {n_geo}, Shapefile {n_shp}, Excel {rows}, prj {prj}")
+    s.check(not bad, f"{name}: GIS layers = the Excel sheets ({', '.join(f'{k} {v}' for k, v in counts.items())})"
+                     + (f" — {'; '.join(bad)}" if bad else ""))
 
 
 def section_d():
@@ -345,21 +387,50 @@ def section_f():
     dead = {"HTTP_PROXY": "http://127.0.0.1:9", "HTTPS_PROXY": "http://127.0.0.1:9", "NO_PROXY": "127.0.0.1,localhost"}
     nokeys = {"GOOGLE_PLACES_SERVER_KEY": "", "GOOGLE_MAPS_BROWSER_KEY": "", "GOOGLE_MAP_ID": ""}
     helpers = [_helper_api(8001, dead), _helper_api(8002, nokeys)]
-    before = {j["id"] for j in get("/jobs").json()["jobs"]}
+    before = job_ids()
+    made_file = os.path.join(OUT, "offline", "created_jobs.txt")
+    if os.path.exists(made_file):
+        os.remove(made_file)
     try:
         _run(["npx", "tsx", "scripts/offline.ts", os.path.join(OUT, "offline")], os.path.join(ROOT, "web"), s,
              "web/scripts/offline.ts", 1800)
     finally:
         for h in helpers:
             h.terminate()
-        # offline.ts removes its own test job; if it stopped half way, remove any TEST job it left (never a real one)
-        for j in get("/jobs").json()["jobs"]:
-            if j["id"] not in before and j.get("is_test"):
-                requests.post(f"{API}/jobs/{j['id']}/cancel", timeout=30)
-                d = requests.delete(f"{API}/jobs/{j['id']}", timeout=30)
-                say(f"  (left-over test job {j['id'][:8]} removed: {d.status_code})")
-        s.check({j["id"] for j in get("/jobs").json()["jobs"]} == before, "the jobs list is as before (no test job left)")
+        # offline.ts removes its own test job; if it stopped half way, remove exactly the ids it recorded when it made
+        # them (extras F1: never by name, status or "new since" — a job someone else made meanwhile stays)
+        made = open(made_file, encoding="utf-8").read().split() if os.path.exists(made_file) else []
+        for jid, status in remove_own_jobs(made, requests, API):
+            say(f"  (left-over test job {jid[:8]} removed: {status})")
+        after = job_ids()
+        s.check(not (set(made) & after), f"every job this check made is gone ({len(made)} made)")
+        s.check(before <= after, f"every job that existed before is still there ({len(before)})")
     s.done()
+
+
+def job_ids(wait_s=120):
+    """the jobs list from the database. In offline data mode (a network blip to Supabase) the API lists no jobs at all,
+    which must never read as "the jobs are gone": wait for an online answer (it retries the database after 30 s)."""
+    t0 = time.time()
+    while True:
+        r = get("/jobs").json()
+        if not r.get("offline") or time.time() - t0 > wait_s:
+            if r.get("offline"):
+                raise RuntimeError("the API stayed in offline data mode: the jobs list can't be checked")
+            return {j["id"] for j in r["jobs"]}
+        time.sleep(5)
+
+
+def remove_own_jobs(ids, http, base=""):
+    """extras F1: cancel + remove exactly these job ids (the ones a check recorded when it created them). Returns
+    [(id, HTTP status)] for the ids still present. Nothing else is looked at or touched."""
+    out = []
+    for jid in dict.fromkeys(ids):
+        if http.get(f"{base}/jobs/{jid}").status_code != 200:
+            continue                                                    # already removed by the check itself
+        http.post(f"{base}/jobs/{jid}/cancel")
+        out.append((jid, http.delete(f"{base}/jobs/{jid}").status_code))
+    return out
 
 
 def main():
@@ -367,6 +438,7 @@ def main():
     ap.add_argument("--quick", action="store_true", help="API sections only (A-D)")
     ap.add_argument("--only", default="", help="e.g. AD: run only these sections")
     a = ap.parse_args()
+    utf8_io()
     os.makedirs(OUT, exist_ok=True)
     stamp = dt.datetime.now().strftime("%Y-%m-%d_%H%M")
     say(f"GEO-CASCADIA regression · {stamp} · API {API} · app {APP}")

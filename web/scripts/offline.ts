@@ -4,7 +4,7 @@
  *  Cases: map servers blocked · analysis computer offline (a test job stays queued) · Google keys missing · the API
  *  stops answering mid-session. Each prints what the person sees and saves a screenshot. */
 import { chromium, type Page } from 'playwright'
-import { mkdirSync } from 'node:fs'
+import { appendFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 const OUT = process.argv[2] ?? '../docs/screenshots/p7r3/offline'
@@ -25,7 +25,24 @@ async function open(port?: number) {
   await page.goto(APP, { waitUntil: 'domcontentloaded' })
   return { browser, page, errors }
 }
-const said = async (page: Page, re: RegExp) => re.test(await page.locator('body').innerText())
+/** extras F3: wait for what the person should see (up to ms), instead of a fixed timer; true as soon as it is there */
+const said = async (page: Page, re: RegExp, ms = 30_000) => {
+  const end = Date.now() + ms
+  for (;;) {
+    if (re.test(await page.locator('body').innerText())) return true
+    if (Date.now() > end) return false
+    await page.waitForTimeout(500)
+  }
+}
+/** the opposite: wait until the text is gone */
+const gone = async (page: Page, re: RegExp, ms = 30_000) => {
+  const end = Date.now() + ms
+  for (;;) {
+    if (!re.test(await page.locator('body').innerText())) return true
+    if (Date.now() > end) return false
+    await page.waitForTimeout(500)
+  }
+}
 const go = async (page: Page, label: string, wait = 3500) => { await page.locator('nav[aria-label="Sections"]').getByRole('button', { name: label, exact: true }).click(); await page.waitForTimeout(wait) }
 
 async function mapServersBlocked() {
@@ -37,9 +54,9 @@ async function mapServersBlocked() {
   check(true, 'Explore loads (areas, numbers, map layers from the database)')
   await go(page, 'Jobs', 6000)
   await page.screenshot({ path: join(OUT, 'a2-jobs-minimap.png') })
-  check(!(await said(page, /other roads not loaded/i)), 'Jobs mini-map draws the roads around (from the cache)')
-  await go(page, 'Under the hood', 7000)
-  check(await said(page, /How Ward 29/), 'Under the Hood loads')
+  check(!(await said(page, /other roads not loaded/i, 1500)), 'Jobs mini-map draws the roads around (from the cache)')
+  await go(page, 'Under the hood', 2000)
+  check(await said(page, /How Ward 29/, 90_000), 'Under the Hood loads (a just-started API reads every area first)')
   check(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
   await browser.close()
 }
@@ -49,6 +66,8 @@ async function workerOffline() {
   const r = await fetch(`${API}/jobs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lat: 11.042553, lon: 76.9841361, test: true }) })
   const job = await r.json() as { id?: string; job?: { id: string } }
   const id = job.id ?? job.job?.id
+  // extras F1: record the exact id at creation, so a clean-up after a crash removes this job and nothing else
+  if (id) appendFileSync(join(OUT, 'created_jobs.txt'), id + '\n')
   check(r.status === 201 && !!id, `test job queued (${r.status})`)
   const { browser, page, errors } = await open()
   try {
@@ -78,9 +97,10 @@ async function keysMissing() {
   await page.screenshot({ path: join(OUT, 'c1-explore-no-map.png') })
   check(true, 'Explore: "The map can’t be shown" with what to set, and links to the pages that work')
   await go(page, 'Review', 5000)
+  // a just-started helper API reads every area first: wait for a real count ("0 waiting" shows while it loads)
+  check(await said(page, /[1-9][\d,]* waiting/, 90_000), 'Review: the queue loads')
+  check(await said(page, /Street View photos need the Google Maps browser key/, 60_000), 'Review: the photo says the key is missing')
   await page.screenshot({ path: join(OUT, 'c2-review.png') })
-  check(await said(page, /\d+ waiting/), 'Review: the queue loads')
-  check(await said(page, /Street View photos need the Google Maps browser key/), 'Review: the photo says the key is missing')
   await go(page, 'Trust', 4000)
   check(await said(page, /Why you can, and can’t, trust each result/), 'Trust loads')
   await go(page, 'Jobs', 3000)
@@ -102,7 +122,7 @@ async function apiDown() {
   check(await said(page, /The API isn’t answering/), 'banner: "The API isn’t answering … What is on screen stays"')
   await page.context().unroute(`${API}/**`)
   await go(page, 'Review', 6000)
-  check(!(await said(page, /The API isn’t answering/)), 'banner clears once the API answers again')
+  check(await gone(page, /The API isn’t answering/), 'banner clears once the API answers again')
   await browser.close()
 }
 

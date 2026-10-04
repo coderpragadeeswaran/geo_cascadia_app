@@ -322,8 +322,12 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             card = mc()
             pos = gate1pos.check(b, rec, app.state.gate1rows.get(area), r["roads"] if r["available"] else None,
                                  ((card or {}).get("gate1_position") or {}).get("target_m", 3.5), gate1pos.area_stats(card, area))
+            from . import osmref
+            tags = osmref.load(area, settings.areas_dir)
+            fc = osmref.floor_confidence((rec.get("attributes") or {}).get("floors"), card)
             return {"area": area, "building": rec, "review_item": item, "front_wall": frontwall.front_wall(b, rec),
-                    "position_check": pos}
+                    "position_check": pos, "floor_confidence": {**fc, "rule": osmref.FLOOR_RULE},
+                    "osm_levels": {**osmref.building_levels(tags, id), "fetched": (tags or {}).get("fetched")}}
         res, off = D.read(fn)
         return {"offline": off, **res}
 
@@ -405,14 +409,21 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         def fn(s):
             b = need(s, slug)
             try:
-                return report.content(s, b, app.state.runfiles.get(slug), mc(), settings.areas_dir, street=street or None)
+                return report.content(s, b, app.state.runfiles.get(slug), mc(), settings.areas_dir, street=street or None), b
             except KeyError:
                 raise HTTPException(404, f"street {street!r} is not in area {slug!r}") from None
-        c, _ = app.state.data.read(fn)
-        body = report.pdf(c) if ext == "pdf" else report.xlsx(c)
-        media = "application/pdf" if ext == "pdf" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        (c, b), _ = app.state.data.read(fn)
+        if ext in ("geojson", "zip"):
+            from . import gisexport
+            body = gisexport.geojson(c, b) if ext == "geojson" else gisexport.shapefile_zip(c, b)
+            media = "application/geo+json" if ext == "geojson" else "application/zip"
+            name = gisexport.filename(c, "geojson" if ext == "geojson" else "shp.zip")
+        else:
+            body = report.pdf(c) if ext == "pdf" else report.xlsx(c)
+            media = "application/pdf" if ext == "pdf" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            name = report.filename(c, ext)
         return Response(body, media_type=media, headers={
-            "Content-Disposition": f'attachment; filename="{report.filename(c, ext)}"', "Cache-Control": "no-store"})
+            "Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "no-store"})
 
     @app.get("/areas/{slug}/report.pdf", tags=["report"])
     def area_report_pdf(slug: str, street: Optional[str] = Query(None, description="one street of the area (display name)")):
@@ -426,6 +437,40 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         """D55: the same tables as the PDF, one sheet each (buildings with findings, assets, possible dark stretches,
         review items) plus an About sheet."""
         return _report(slug, street, "xlsx")
+
+    @app.get("/areas/{slug}/report.geojson", tags=["report"])
+    def area_report_geojson(slug: str, street: Optional[str] = Query(None, description="one street of the area (display name)")):
+        """extras 1: the report's tables as GIS features in one GeoJSON file (WGS84): buildings with findings (outlines),
+        poles and streetlights (points), possible dark stretches (lines), review items (points), businesses vs
+        OpenStreetMap (points); the Excel sheets' columns and values, with a `layer` property."""
+        return _report(slug, street, "geojson")
+
+    @app.get("/areas/{slug}/report.shp.zip", tags=["report"])
+    def area_report_shapefile(slug: str, street: Optional[str] = Query(None, description="one street of the area (display name)")):
+        """extras 1: the same layers as a zipped Shapefile set (one .shp/.shx/.dbf/.prj/.cpg per layer, WGS84), with
+        fields.csv = the key from the 10-character field names to the Excel column names, and README.txt."""
+        return _report(slug, street, "zip")
+
+    @app.get("/projection", tags=["areas"])
+    def city_projection(D: Data = Depends(get_data)):
+        """extras 2: "Whole <city>: about N km of streets -> about X photos, $Y, Z hours" for each city in the local map
+        data, as a low-high range from our completed runs (an ESTIMATE; Street View coverage not checked; list price)."""
+        from . import projection
+        pool = D.pool if D.db_online else None
+        return {"offline": not D.db_online, **projection.project(pool, settings.areas_dir, mc())}
+
+    @app.get("/areas/{slug}/osm", tags=["areas"])
+    def area_osm(slug: str, street: Optional[str] = None, D: Data = Depends(get_data)):
+        """extras 3 + 4: OpenStreetMap as a real (crowd-sourced) reference: our businesses vs OSM shop / office / business
+        amenity points (matched / camera only / OSM only), and OSM building:levels vs our floor counts."""
+        from . import osmref
+        def fn(s):
+            b = need(s, slug)
+            tags = osmref.load(slug, settings.areas_dir)
+            return {"shops": osmref.shops(b, tags, street), "levels": osmref.levels(b, tags),
+                    "floor_rule": osmref.FLOOR_RULE}
+        res, off = D.read(fn)
+        return {"offline": off, "area": slug, **res}
 
     @app.get("/areas/{slug}/lighting", tags=["areas"])
     def area_lighting(slug: str, D: Data = Depends(get_data)):
@@ -521,9 +566,11 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
                 gaps_at = lambda iv: app.state.gapcalc.get(b, iv)
                 near_at = lambda m: spatial.near_dark(s, b, m)          # D53: "within N m of a possible dark stretch"
                 prio_at = lambda rows, disp, iv: lighting.for_area(s, b, rows, disp, key=iv)   # D54: lighting priority
-                return views.run_filters(b, body.filters, gaps_at, near_at, prio_at) if body.filters \
+                from . import osmref
+                osm_at = lambda st: osmref.shops(b, osmref.load(b["slug"], settings.areas_dir), st)   # extras 3
+                return views.run_filters(b, body.filters, gaps_at, near_at, prio_at, osm_at) if body.filters \
                     else views.run_query(b, body.text, gaps_at=gaps_at, scope_street=body.scope_street, near_at=near_at,
-                                         prio_at=prio_at)
+                                         prio_at=prio_at, osm_at=osm_at)
             res, off = D.read(fn)
         except views.FilterError as e:
             raise HTTPException(422, str(e)) from None

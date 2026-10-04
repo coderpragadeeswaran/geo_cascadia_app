@@ -242,4 +242,127 @@
 
 ---
 
+## 4 Oct 2026 · D58 — Four fixes, GIS downloads, a whole-city estimate, OpenStreetMap as a check, floor confidence, a shorter report
+
+### What
+**Fixes from the last round**
+1. **Test clean-ups delete only their own jobs.** Every test and check now removes the jobs it made by the exact id it noted
+   when it made them — never by name, status or "anything new". The app's "Clear test jobs" removes only the ids a person
+   confirmed. (The old job "Unnamed road between Marutha Konar Street and Maniakarar Nagar", removed in the last round,
+   can't be brought back.)
+2. **The regression script never crashes on "→" or Tamil text**, also when its output goes to a file.
+3. **Browser checks wait until a page is really ready** (the key numbers show figures, not just labels), and try an area
+   once more if a check still fails; the retry is written in the log.
+4. **"This street continues …" is measured on OpenStreetMap's road**, never on an analysed area's own street lines. When
+   most of the rest lies outside the analysed area, the sheet says "This street continues outside this area (N m) —
+   include it?".
+
+**Five additions**
+1. **GIS downloads:** GeoJSON and a zipped Shapefile set next to PDF and Excel (area and street).
+2. **Whole-city estimate:** "Whole <city>: about N km of streets → photos, cost, hours" for the four cities, as a range.
+3. **OpenStreetMap shops as a real check** next to the synthetic register: matched, seen only by our camera, only on
+   OpenStreetMap — on Under the Hood, Trust, in the report and as a question with markers on the map.
+4. **Floor-count confidence** (High / Medium / Low with the reason) in the building card and the report, and
+   OpenStreetMap's own floor count next to ours where it has one.
+5. **A new PDF report:** every page landscape, larger text, six main pages that read in two minutes, then the lists.
+
+### Why
+- The last round's clean-up removed a real job because it deleted "test jobs" by a rule. A redirected log crashed on
+  "→". Two slow Night checks failed once and passed on a re-run. The same Rathinapuri road showed 65 m or 222 m depending on
+  where the answer came from.
+- Officials use GIS; the synthetic register is made up, so a real outside reference helps; the old report was 27 dense
+  pages with mixed page directions and small text.
+
+### How it works
+- **F1:** `POST /jobs/clear-test` refuses a removal without the ids (422). Tests delete by id; the browser fallback check
+  writes each job id it makes to a file, and the regression script removes exactly those. A test keeps a "bystander" job
+  (shaped like the lost one) and checks every clean-up leaves it; another test scans every test and script for
+  `delete from jobs` that is not by id.
+- **F2:** the regression script switches its output to UTF-8 first. A test runs it in Windows' code page into a file: it
+  passes with the fix and crashes without (the control).
+- **F3:** waits on what the page shows instead of fixed timers, plus one logged retry per area.
+- **F4:** after the street pick, the street's OpenStreetMap line is fetched (the local copy in the four cities; elsewhere
+  the 30-day cache; 3 s at most) within the same 1.2 km window a job takes. Everything of that road that is not the picked
+  piece is the continuation. If OpenStreetMap can't answer, the old answer stays and says so.
+- **GIS:** `backend/app/gisexport.py` builds the files from the Excel rows (same columns and values); Shapefile names are
+  shortened to 10 characters and `fields.csv` gives the key. WGS84 with a `.prj`. Pure Python (pyshp).
+- **Projection:** `backend/app/projection.py` measures the streets the analysis would cover in each city (the database copy
+  of OpenStreetMap; no service lanes, bridges or tunnels) and multiplies by photos per km, cost per photo and time per photo
+  from our own completed runs (lowest and highest run = the range).
+- **OpenStreetMap shops:** `backend/app/osmref.py` compares our businesses with OpenStreetMap's shop / office / business
+  points within 30 m of the analysed streets: the same place within 25 m, one to one, a matching name first, then the
+  nearest. The database copy keeps only positions, so names (and building floor counts) come from one free OpenStreetMap
+  look-up per area (`tools/fetch_osm_tags.py`, saved in `data/areas/<slug>/osm_tags.json`; new areas fetch it themselves).
+- **Floor confidence:** a fixed rule set before looking at any OpenStreetMap number: High = counted from the photo, 1–2
+  floors; Medium = counted, 3 or more (the model card notes a mild under-count on 3+ storeys); Low = an estimate, the roof was
+  not visible; otherwise "not counted".
+- **Report v2:** `backend/app/report.py` redrawn with fpdf2: at a glance, charts, map, what to do next, method & limits, scale
+  & confidence; the appendix keeps key columns (priority-6 review items and camera-only businesses are counted there and
+  listed in the Excel file). `tools/render_report.py` saves the PDF and every page as PNG for checking.
+
+### Files changed
+- Backend: new `app/gisexport.py`, `app/projection.py`, `app/osmref.py`; changed `app/report.py`, `app/streetpick.py`,
+  `app/jobs.py`, `app/views.py`, `app/main.py`, `requirements.txt` (pyshp; also fixed two requirement lines that had run
+  together, `../pipelinefpdf2>=2.8`).
+- Tests: new `tests/test_extras.py`; changed `tests/test_report.py` (reads the GIS files back), `tests/test_p6.py` (delete by
+  id), `tests/test_pick_drive.py` (an analysed street may ask OpenStreetMap for its own line — intended).
+- Tools: new `tools/fetch_osm_tags.py`, `tools/render_report.py`; changed `tools/regression.py`.
+- Web: new `components/OsmPanels.tsx`, `scripts/extras-shots.ts`; changed `components/ReportButton.tsx`,
+  `components/EvidenceDrawer.tsx`, `components/QueryPanel.tsx`, `components/AnalysePanel.tsx`, `pages/Hood.tsx`,
+  `pages/Trust.tsx`, `map/layers.ts`, `map/icons.ts`, `map/MapView.tsx`, `lib/derive.ts`, `lib/query.ts`, `api/types.ts`,
+  `api/queries.ts`, `scripts/regression.ts`, `scripts/offline.ts`.
+- Data: `data/areas/<slug>/osm_tags.json` for all 9 areas. No change to the analysis pipeline or the Colab worker.
+
+### Key numbers
+- **F4, Rathinapuri:** 65 m (area lines) / 222 m (OpenStreetMap) before → **222 m** from both; included = 549 m, the original
+  job. **Ward 29:** Sakthi Main Road 142 m + 544 m outside the area; Sathy Main Road near the ward edge 624 m + 761 m outside;
+  Sathy Main Road clicked mid-ward: nothing (within the job's 1.2 km window OpenStreetMap's divided road is the same road
+  the ward already holds).
+- **GIS, Ward 29** (read back with geopandas): buildings 77 (outlines), poles and streetlights 268, possible dark stretches 11
+  (lines), review items 218, businesses vs OpenStreetMap 152; all EPSG:4326.
+- **Whole-city estimate:**
+
+  | City | Streets | Photos | Cost (list price) | GPU hours |
+  |---|---|---|---|---|
+  | Coimbatore | about 5,711 km | 0.63 – 2.6 million | $4,400 – $18,000 | 160 – 423 |
+  | Madurai | about 3,333 km | 0.37 – 1.5 million | $2,600 – $11,000 | 94 – 247 |
+  | Tiruppur | about 2,534 km | 0.28 – 1.1 million | $2,000 – $8,100 | 71 – 188 |
+  | Tiruchirappalli | about 1,713 km | 0.19 – 0.77 million | $1,300 – $5,500 | 48 – 127 |
+
+  From 110–452 photos per km (our 9 runs), $0.007 per photo + $0.00002–$0.00008 cloud AI, 0.49 s per photo + 3.8 min start-up
+  per 4.8 km job.
+- **OpenStreetMap shops, Ward 29:** our camera 147 businesses, OpenStreetMap 14 → 9 the same place (none with the same name),
+  138 only seen by our camera, 5 only on OpenStreetMap.
+- **Floors, Ward 29:** High 194 · Medium 23 · Low 4 · not counted 160. OpenStreetMap floor counts: 2 of 381 buildings (both
+  "10"); 1 can be compared (ours 1) → 0 the same, 0 within one floor. No other area has any.
+- **Report, Ward 29:** 27 → **19 pages** (6 main + 13 appendix); Sathy Main Road 8 pages. Files in
+  `docs/screenshots/report_v2/`.
+
+- **Tests:** backend 457 passed, 1 skipped; typecheck, build, test:ui (18), check:data and the audit (both themes) pass.
+- **F3, not flaky:** six full regression runs, each with its output redirected to a file (F2: no crash). The early runs found
+  three more timing traps in the fallback checks and one network outage (fixed or explained in DECISIONS D58); the last two
+  runs on the final code, back to back, **passed all six sections, 288 checks each, with no area needing its retry**
+  (`docs/screenshots/regression/run-2026-10-04_1834.log`, `run-2026-10-04_1855.log`). No expected answer was changed; two
+  were added: "Businesses not in OpenStreetMap" → 138, and the GIS files' layer counts = the Excel sheets.
+- **Screenshots:** `docs/screenshots/extras/` (both themes): `f4a–f4d` the continuation, `rep1` the report buttons + the two
+  downloaded GIS files, `q1/q2` the OpenStreetMap questions with the square map tags, `d-…` floor confidence, `h-osm`,
+  `h-projection`, `t-osm`.
+
+### Limits
+- The continuation length depends on where the street is clicked (the job's 1.2 km window is centred on the click).
+- The shop match is by place: inside a building with several shops, our sign name and OpenStreetMap's shop are often
+  different businesses; four Ward 29 matches are 13–22 m apart and probably neighbours. OpenStreetMap is crowd-sourced and
+  thin here (14 shop points along 10 streets), so "not on OpenStreetMap" says little about the street.
+- OpenStreetMap names and floor tags are from the day of the look-up (4 Oct 2026); positions from the 2 Oct snapshot.
+- The whole-city estimate does not check Street View coverage; the city boxes include 550 m around each boundary; a divided
+  road counts both sides.
+- Floor confidence is a rule, not a measured accuracy per level; OpenStreetMap's floor tags are too few to check it.
+- Shapefile text over 254 bytes is cut (counted in README.txt); the GeoJSON keeps it.
+
+### Lines fixed in 00–05
+- None. README: the report section's page count, the GIS / OpenStreetMap / projection section, and a corrupted path
+  (`tools\build_report_fonts.py`).
+
+---
+
 [← 05 Explain and defend](05_EXPLAIN_AND_DEFEND.md) · [Start here](00_START_HERE.md) · (this is the last file) →

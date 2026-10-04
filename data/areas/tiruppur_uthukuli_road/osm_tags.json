@@ -1,0 +1,29 @@
+{
+ "fetched": "2026-10-04T08:25:56Z",
+ "source": "OpenStreetMap: point positions from the app's copy (snapshot 2026-10-02); names and tags from the Overpass API on the fetch date",
+ "osm_snapshot": "2026-10-02",
+ "scope_m": 30,
+ "pois": [
+  {
+   "osm_type": "w",
+   "osm_id": 691726361,
+   "lat": 11.1087696,
+   "lon": 77.3434507,
+   "tags": {
+    "amenity": "fuel",
+    "brand": "Bharat Petroleum",
+    "brand:wikidata": "Q854826",
+    "brand:wikipedia": "en:Bharat Petroleum",
+    "name": "Bharat Petroleum"
+   },
+   "found": true
+  }
+ ],
+ "buildings": {
+  "w344655428": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  }
+ }
+}

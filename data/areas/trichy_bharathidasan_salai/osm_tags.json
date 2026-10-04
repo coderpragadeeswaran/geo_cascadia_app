@@ -1,0 +1,607 @@
+{
+ "fetched": "2026-10-04T08:25:58Z",
+ "source": "OpenStreetMap: point positions from the app's copy (snapshot 2026-10-02); names and tags from the Overpass API on the fetch date",
+ "osm_snapshot": "2026-10-02",
+ "scope_m": 30,
+ "pois": [
+  {
+   "osm_type": "n",
+   "osm_id": 2441209744,
+   "lat": 10.8048887,
+   "lon": 78.6861204,
+   "tags": {
+    "amenity": "atm",
+    "brand": "State Bank of India",
+    "brand:en": "State Bank of India",
+    "brand:wikidata": "Q1340361",
+    "brand:wikipedia": "en:State Bank of India",
+    "currency:INR": "yes",
+    "drive_through": "no",
+    "indoor": "yes",
+    "name": "State Bank of India",
+    "note": "Contributors are requested to not edit the \"brand\", \"brand:en\", \"brand:wikidata\", \"operator\", \"operator:en\" and \"operator:wikidata\" tags. (2025/03/03)",
+    "opening_hours": "24/7",
+    "operator": "State Bank of India",
+    "operator:en": "State Bank of India",
+    "operator:wikidata": "Q1340361",
+    "operator:wikipedia": "en:State Bank of India",
+    "short_name": "SBI"
+   },
+   "found": true
+  },
+  {
+   "osm_type": "n",
+   "osm_id": 4349265791,
+   "lat": 10.806285,
+   "lon": 78.6842837,
+   "tags": {
+    "amenity": "restaurant",
+    "name": "Grill Chicken"
+   },
+   "found": true
+  },
+  {
+   "osm_type": "n",
+   "osm_id": 4543308056,
+   "lat": 10.807259,
+   "lon": 78.6834039,
+   "tags": {
+    "brand": "Titan",
+    "name": "Fastrack",
+    "shop": "watches"
+   },
+   "found": true
+  },
+  {
+   "osm_type": "n",
+   "osm_id": 4701650726,
+   "lat": 10.8041177,
+   "lon": 78.6870584,
+   "tags": {
+    "brand": "Poorvika",
+    "name": "Poorvika Mobile Store",
+    "name:ta": "பூர்வீகா மொபைல் ஸ்டோர்",
+    "shop": "mobile_phone"
+   },
+   "found": true
+  },
+  {
+   "osm_type": "n",
+   "osm_id": 4832818696,
+   "lat": 10.8052877,
+   "lon": 78.685554,
+   "tags": {
+    "amenity": "bank",
+    "brand": "Indian Overseas Bank",
+    "brand:wikidata": "Q2003611",
+    "brand:wikipedia": "en:Indian Overseas Bank",
+    "name": "Indian Overseas Bank",
+    "name:en": "Indian Overseas Bank",
+    "short_name": "IOB",
+    "website": "https://www.iob.in"
+   },
+   "found": true
+  },
+  {
+   "osm_type": "n",
+   "osm_id": 4832818697,
+   "lat": 10.8064755,
+   "lon": 78.6838403,
+   "tags": {
+    "amenity": "fuel",
+    "brand": "Hindustan Petroleum",
+    "brand:wikidata": "Q1619375",
+    "brand:wikipedia": "en:Hindustan Petroleum",
+    "name": "HP petrol pump",
+    "official_name": "Hindustan Petroleum"
+   },
+   "found": true
+  },
+  {
+   "osm_type": "n",
+   "osm_id": 4832818698,
+   "lat": 10.8067432,
+   "lon": 78.6835251,
+   "tags": {
+    "name": "Mobile store",
+    "shop": "mobile_phone"
+   },
+   "found": true
+  },
+  {
+   "osm_type": "n",
+   "osm_id": 6494325189,
+   "lat": 10.8051465,
+   "lon": 78.6865772,
+   "tags": {
+    "addr:district": "Tiruchirappalli",
+    "addr:full": "C.J. Hospital, P. Box. No. 17,Cantonment,Next To All India Radio",
+    "addr:postcode": "620001",
+    "addr:state": "Tamil Nadu",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "healthcare:speciality": "childcare",
+    "name": "Child Jesus Hospital"
+   },
+   "found": true
+  },
+  {
+   "osm_type": "n",
+   "osm_id": 9633547659,
+   "lat": 10.8022371,
+   "lon": 78.6895417,
+   "tags": {
+    "amenity": "bank",
+    "brand": "Bank of India",
+    "brand:wikidata": "Q2004439",
+    "name": "Bank of India"
+   },
+   "found": true
+  },
+  {
+   "osm_type": "n",
+   "osm_id": 11044550281,
+   "lat": 10.8033032,
+   "lon": 78.6884492,
+   "tags": {
+    "addr:city": "Trichirapalli",
+    "addr:country": "IN",
+    "addr:district": "Tamilnadu",
+    "addr:housenumber": "41, Almas Plasa , Promenade Road,",
+    "addr:postcode": "620001",
+    "addr:street": "Bharathidasan Salai",
+    "description": "\"Computer based troubleshooting, Software upgrade, Unlock done by Skilled Service Engineer. Also available car chargers, multi chargers. One unit charger 6 usb ports, Quality charger for V8 Charging Port, Quality charger for Type-C Charging Port. Wired qu",
+    "name": "SuXuS Mobile ServicsS",
+    "phone": "04314050478",
+    "shop": "mobile_phone"
+   },
+   "found": true
+  },
+  {
+   "osm_type": "n",
+   "osm_id": 12972950169,
+   "lat": 10.8036956,
+   "lon": 78.6879985,
+   "tags": {
+    "brand": "Tanishq",
+    "brand:en": "Tanishq",
+    "brand:wikidata": "Q13117711",
+    "name": "Tanishq",
+    "name:en": "Tanishq",
+    "name:ta": "தனிஷ்க்",
+    "shop": "jewelry",
+    "wheelchair": "no"
+   },
+   "found": true
+  },
+  {
+   "osm_type": "n",
+   "osm_id": 12972985852,
+   "lat": 10.8035105,
+   "lon": 78.6877587,
+   "tags": {
+    "name": "Kay Jay Auto Unit",
+    "name:ta": "கே. ஜெ. ஆட்டோ யூனிட்",
+    "shop": "car_parts"
+   },
+   "found": true
+  },
+  {
+   "osm_type": "n",
+   "osm_id": 13757969202,
+   "lat": 10.8078583,
+   "lon": 78.6826633,
+   "tags": {
+    "amenity": "place_of_worship",
+    "name": "பிள்ளையார் கோயில்"
+   },
+   "found": true
+  },
+  {
+   "osm_type": "n",
+   "osm_id": 13765768903,
+   "lat": 10.8041568,
+   "lon": 78.6870007,
+   "tags": {
+    "name": "N.R. Brothers",
+    "shop": "hardware"
+   },
+   "found": true
+  },
+  {
+   "osm_type": "n",
+   "osm_id": 13767480301,
+   "lat": 10.8039958,
+   "lon": 78.6877482,
+   "tags": {
+    "name": "New Lips",
+    "shop": "stationery"
+   },
+   "found": true
+  },
+  {
+   "osm_type": "n",
+   "osm_id": 14143817702,
+   "lat": 10.8072633,
+   "lon": 78.6833148,
+   "tags": {
+    "amenity": "bank",
+    "name": "Axis bank"
+   },
+   "found": true
+  },
+  {
+   "osm_type": "n",
+   "osm_id": 14143820601,
+   "lat": 10.807392,
+   "lon": 78.6831537,
+   "tags": {
+    "amenity": "bank",
+    "name": "City Union Bank"
+   },
+   "found": true
+  },
+  {
+   "osm_type": "w",
+   "osm_id": 456124855,
+   "lat": 10.8045348,
+   "lon": 78.6863771,
+   "tags": {
+    "building": "yes",
+    "name": "TABS Complex",
+    "shop": "mall"
+   },
+   "found": true
+  },
+  {
+   "osm_type": "w",
+   "osm_id": 691897366,
+   "lat": 10.8082692,
+   "lon": 78.6814859,
+   "tags": {
+    "amenity": "fuel",
+    "brand": "Indian Oil",
+    "brand:wikidata": "Q1289348",
+    "brand:wikipedia": "en:Indian Oil Corporation",
+    "fuel:cng": "yes",
+    "fuel:diesel": "yes",
+    "fuel:petrol": "yes",
+    "name": "Indian Oil",
+    "operator": "PL.A"
+   },
+   "found": true
+  }
+ ],
+ "buildings": {
+  "w1229049685": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w167036803": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229049694": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w456124855": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w735111700": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1231077054": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050662": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050275": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050065": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050646": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050520": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050557": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050340": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050603": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229049682": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050106": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050305": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1231079639": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1227735400": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050448": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050150": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050547": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229049699": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1227735212": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050318": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050569": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1227734885": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229049698": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050192": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1231076803": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050539": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050573": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050681": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050490": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050564": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050487": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050678": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050549": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1227734827": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050524": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050693": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050320": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050480": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1231076852": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050636": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050143": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1231076953": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050228": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050512": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050289": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050308": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050329": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050507": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1231088366": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050687": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050085": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050357": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1231076940": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1227734756": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050222": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050583": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1231079223": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050367": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050200": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1231076904": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1229050417": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  }
+ }
+}

@@ -1,0 +1,19 @@
+{
+ "fetched": "2026-10-04T08:26:05Z",
+ "source": "OpenStreetMap: point positions from the app's copy (snapshot 2026-10-02); names and tags from the Overpass API on the fetch date",
+ "osm_snapshot": "2026-10-02",
+ "scope_m": 30,
+ "pois": [],
+ "buildings": {
+  "w1251628086": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251627349": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  }
+ }
+}

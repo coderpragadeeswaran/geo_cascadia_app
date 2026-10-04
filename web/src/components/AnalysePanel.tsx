@@ -27,6 +27,11 @@ const card = 'sheet pointer-events-auto w-[min(470px,92vw)] px-5 py-4'
  *  whole street; a trimmed stretch is planned again (debounced) while the end dots move. Planning runs on the backend
  *  (free Street View metadata calls + OpenStreetMap), so the sheet polls it and keeps the last finished estimate,
  *  dimmed, meanwhile. Start never waits for it. */
+/** extras F4: "outside this area" when most of the continuation lies beyond the analysed area the click is in */
+export function continuesText(el: { outside_area?: { name: string } | null }) {
+  return el.outside_area ? 'This street continues outside this area' : 'This street continues elsewhere'
+}
+
 function usePlanEstimate() {
   const preview = useAnalyse((s) => s.preview)
   const trim = useAnalyse((s) => s.trim)
@@ -186,22 +191,22 @@ export function AnalysePanel() {
                 <div className="t-micro">Analyse this street?</div>
                 <div className="t-title mt-1">{p.street}</div>
                 <div className="t-small ink2 mt-0.5">
-                  {both ? <><span className="t-data">{fmt.format(p.length_m + p.elsewhere!.length_m)} m</span> in {p.elsewhere!.pieces + 1} separate pieces · highlighted on the map</>
+                  {both ? <><span className="t-data">{fmt.format(p.length_m + p.elsewhere!.length_m)} m</span>{p.elsewhere!.pieces > 0 && !p.elsewhere!.joins ? ` in ${p.elsewhere!.pieces + 1} separate pieces` : ' in total'} · highlighted on the map</>
                     : a.trim ? <><span className="t-data">{fmt.format(Math.round(a.trim.b - a.trim.a))} m</span> of {fmt.format(p.length_m)} m · <button className="link" onClick={() => a.setTrim(null)}>whole street</button></>
                     : <><span className="t-data">{fmt.format(p.length_m)} m</span> · highlighted on the map</>}
                   </div>
                 {p.elsewhere && (
                   <label className="t-small mt-1.5 flex cursor-pointer items-center gap-2">
                     <button type="button" role="switch" aria-checked={both} onClick={() => a.setInclude(!both)}
-                      aria-label={`This street continues elsewhere (${fmt.format(p.elsewhere.length_m)} m) — include it?`}
+                      aria-label={`${continuesText(p.elsewhere)} (${fmt.format(p.elsewhere.length_m)} m) — include it?`}
                       className="relative h-[18px] w-[32px] shrink-0 rounded-full transition-colors"
                       style={{ background: both ? 'var(--ns-sodium)' : 'var(--ns-line-strong)' }}>
                       <span className="absolute top-[2px] size-[14px] rounded-full bg-[var(--ns-bg2)] transition-[left]" style={{ left: both ? 16 : 2 }} />
                     </button>
-                    <span>This street continues elsewhere (<span className="t-data">{fmt.format(p.elsewhere.length_m)} m</span>) — include it?</span>
+                    <span>{continuesText(p.elsewhere)} (<span className="t-data">{fmt.format(p.elsewhere.length_m)} m</span>) — include it?</span>
                   </label>
                 )}
-                <div className="t-small ink3 mt-0.5">{both ? 'Trimming is off while both pieces are included.'
+                <div className="t-small ink3 mt-0.5">{both ? (p.elsewhere!.outside_area ? 'Trimming is off while the rest of the street is included.' : 'Trimming is off while both pieces are included.')
                   : <>Drag the orange end dots on the map to analyse only part of it{trimmable ? '' : ' (this street is too short to trim)'}.</>}</div>
               </div>
               <button className="btn btn-icon" onClick={() => a.reset()} aria-label="Pick another street"><X /></button>

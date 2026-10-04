@@ -11,6 +11,7 @@ import { useAreas } from '@/api/queries'
 import { Card, CountUp, jumpTo, REDUCED, SectionNav, T, useDetail, useInView, useScrollSpy } from '@/components/Detail'
 import { ExampleSheet } from '@/components/ExampleSheet'
 import { GeoMini } from '@/components/GeoMini'
+import { OsmLevelsSummary, OsmShopsSummary, ProjectionTable } from '@/components/OsmPanels'
 import { StreetNames } from '@/components/StreetNames'
 import { AlignedBars, Donut, Funnel, SegBar, StageTimeline } from '@/components/viz'
 import { KPI_DEFS, kpiFilter } from '@/lib/derive'
@@ -28,6 +29,7 @@ const NAV: [string, string][] = [
   ['detection', '04 · Objects detected'], ['signs', '05 · Signs read'], ['routed', '06 · Local or cloud AI'], ['buildings', '07 · Floors and use'],
   ['positions', '08 · Positions'], ['matched', '09 · Matched'], ['findings', '10 · Findings'], ['flow', 'Whole pipeline'],
   ['dropped', 'What got dropped'], ['streets-table', 'Street by street'], ['street-names', 'Street names'], ['routing', 'Routing and cost'], ['cost', 'Time and cost'],
+  ['osm', 'Businesses vs OpenStreetMap'], ['projection', 'Whole-city projection'],
 ]
 
 export default function Hood() {
@@ -215,6 +217,15 @@ function Story({ h, pick }: { h: HoodData; pick: Pick }) {
       </Section>
       {h.routing && <RoutingCost r={h.routing} />}
       <CostTime h={h} />
+      <Section id="osm" title="Businesses vs OpenStreetMap" lead={<T plain="A real, outside reference next to the synthetic register: the businesses our camera found against the shop points on OpenStreetMap, the open map volunteers edit. It is not an official register: a shop missing from it says nothing about the street."
+        tech="GET /areas/{slug}/osm (osmref.shops): local osm_pois within 30 m of the analysed streets, names by one Overpass id look-up (osm_tags.json); one-to-one within 25 m, a same_business name first, then the nearest." />}>
+        <OsmShopsSummary area={h.area} />
+        <div className="mt-4"><OsmLevelsSummary area={h.area} /></div>
+      </Section>
+      <Section id="projection" title="What a whole city would take (an estimate)" lead={<T plain="If every street of a city were analysed like this one: the streets come from the app's OpenStreetMap copy, the photos per km and the cost per photo from our own completed runs. Shown as a range, never one precise number."
+        tech="GET /projection (projection.py): osm_roads clipped to the city box, area.ROAD_TYPES without bridges / tunnels; photos per km = photos_of_run / streets.json km per run (min–max); time = start-up per Ward-29-sized job + photos × the Ward 29 GPU rate." />}>
+        <ProjectionTable city={h.map_data?.city?.name ?? null} />
+      </Section>
     </div>
   )
 }

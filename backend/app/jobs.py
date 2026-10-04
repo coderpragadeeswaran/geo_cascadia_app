@@ -7,12 +7,14 @@ Jobs need the database: in offline data mode, creating/claiming jobs returns 503
 """
 import hmac
 import json
+import logging
 import math
 import os
 import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from typing import List, Optional
@@ -26,6 +28,8 @@ from shapely.validation import explain_validity
 
 from . import loader, mapdata, minimap, planest, streetpick, views
 from .store import Data, OfflineError
+
+log = logging.getLogger("geo_cascadia")
 
 router = APIRouter()
 # P6: the worker heartbeats every ~15 s, so a running job silent for 2 minutes lost its worker (Colab died, account
@@ -338,6 +342,10 @@ def job_clear_test(body: ClearIn, request: Request, D: Data = Depends(get_data))
     and jobs cancelled before any worker started them. Real analyses, their areas and the three original areas are never
     touched. Call with dry_run first; send the listed ids back to remove exactly what was confirmed."""
     settings = request.app.state.settings
+    if not body.dry_run and body.ids is None:
+        # extras F1: never remove by rule alone. A removal names the exact jobs (the ones the dry run listed and a
+        # person confirmed, or the ones a test made); a job that is not named is never touched.
+        raise HTTPException(422, "give the ids to remove (from the dry run); nothing is removed by rule alone")
 
     def fn(s):
         with s.pool.connection() as c:
@@ -778,10 +786,23 @@ def worker_result(request: Request, job: str = Form(...), files: List[UploadFile
                       (res["area_id"], bool(wr.get("replay_of")), j["id"]))
             out = _get_job(c, j["id"])
         s.invalidate(slug)
+        _osm_tags_later(s, request.app.state.settings, slug)
         return out
     out = D.write(fn)
     _seen(request, worker_id, job="")
     return {"offline": False, "job": out}
+
+
+def _osm_tags_later(s, settings, slug):
+    """extras 3 + 4: a new area gets its OpenStreetMap names and building:levels (one Overpass look-up by id, in the
+    background; best effort: until it lands, the comparison says it is not loaded yet)"""
+    def run():
+        try:
+            from . import osmref
+            osmref.fetch(s.bundle(slug), settings.areas_dir, os.path.join(settings.data_dir, "cache", "streetpick"), s.pool)
+        except Exception as e:                                        # noqa: BLE001 - never fails the delivered result
+            log.warning("OpenStreetMap tags for %s not fetched (%s): run tools/fetch_osm_tags.py", slug, type(e).__name__)
+    threading.Thread(target=run, name="osm-tags", daemon=True).start()
 
 
 def is_deletable(slug):

@@ -1,0 +1,26 @@
+{
+ "fetched": "2026-10-04T08:26:22Z",
+ "source": "OpenStreetMap: point positions from the app's copy (snapshot 2026-10-02); names and tags from the Overpass API on the fetch date",
+ "osm_snapshot": "2026-10-02",
+ "scope_m": 30,
+ "pois": [
+  {
+   "osm_type": "n",
+   "osm_id": 6633362794,
+   "lat": 9.9231042,
+   "lon": 78.115274,
+   "tags": {
+    "amenity": "cafe",
+    "name": "Gowree"
+   },
+   "found": true
+  }
+ ],
+ "buildings": {
+  "w772348784": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  }
+ }
+}

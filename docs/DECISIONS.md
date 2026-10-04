@@ -2108,3 +2108,109 @@ Tests: `backend/tests/test_ui_fixes.py` (7), `test_d40.py` (updated), two `test:
 Checks (4 Oct): backend 443 passed / 1 skipped; typecheck, build, test:ui 18, check:data, audit (both themes) pass;
 regression all six sections PASS, 266 checks (`run-2026-10-04_1246.log`; a first run's failures were the log's Windows
 code page and two slow loads, see explainer 06). No regression expected answer changed.
+
+
+## 2026-10-04 — extras (branch extras)
+
+### D58. Test clean-ups by exact id, UTF-8 regression log, readiness waits, continuation on OSM; GIS export, city projection, OpenStreetMap as a reference, floor confidence, report v2
+**F1. Clean-ups remove only their own jobs.** In the ui-fixes round the app's "clear test jobs" call (rule: test jobs +
+jobs cancelled before any worker started them) also removed a real, old job, "Unnamed road between Marutha Konar Street
+and Maniakarar Nagar" (failed / cancelled before start, no area). It can't be restored.
+- `POST /jobs/clear-test {dry_run: false}` now needs `ids` (422 otherwise): nothing is removed by rule alone. The Jobs
+  page already sent the ids the person confirmed; it still lists cancelled-before-start jobs for a person to confirm.
+- `test_p6::test_one_street_at_a_time…` deleted by name pattern + time window → now by the ids it recorded.
+- `tools/regression.py` section F removed "new since the start and is_test" jobs → now `web/scripts/offline.ts` writes each
+  job id it creates to `created_jobs.txt`, and `remove_own_jobs(ids)` removes exactly those.
+- Tests (`backend/tests/test_extras.py`): a bystander job shaped like the lost one survives clear-test (with the test's own
+  ids), the regression clean-up and the fixtures' delete; clear-test without ids → 422; a static check that every
+  `delete from jobs` in tests, tools and scripts is by id.
+
+**F2. UTF-8 output.** `tools/regression.py` reconfigures stdout/stderr to UTF-8 (`errors="replace"`) before printing, so a
+redirect to a file in the Windows code page no longer crashes on "→" or Tamil. Test: a subprocess with `PYTHONUTF8=0`
+writing to a file passes with the fix and crashes without it (the control).
+
+**F3. Readiness, not timers.** `web/scripts/regression.ts` waits until the key numbers show figures (not only labels), the
+network settles, and each step's element appears; then one retry per area, logged ("retry [slug] once — first
+attempt: …") and counted at the end, so a retry is never hidden.
+
+**F4. "Continues …" measured on OpenStreetMap.** `streetpick.osm_continuation` (after D57's `split_pieces`): the street's
+OSM line (the named-street query; local copy in the four cities, else the 30-day cache; 3 s budget) within the same
+1.2 km window a job takes. Continuation = the OSM pieces that don't connect + (for a pick from an analysed area) the
+rest of the connected OSM road beyond the area's own lines (12 m cover, slivers < 5 m dropped; < 15 m = none). When > 50 %
+of it lies outside the analysed area the click is in: `outside_area` → "This street continues outside this area (N m)
+— include it?". OSM unreachable: the area-line answer stays, `measured_on` says so.
+- Rathinapuri (job click): 65 m (area lines) or 222 m (OSM) before → **222 m both ways** (most of it outside the area's
+  outline, so the outside wording). Included: 549 m in 2 pieces = the original job.
+- Ward 29: Sakthi Main Road 142 m + **544 m outside**; Sathy Main Road near the ward edge 624 m + **761 m outside**; Sathy
+  Main Road mid-ward: none — within the job window OSM's dual carriageway covers the same road as the ward (D57's
+  "803 / 111 / 37 m" pieces were the opposite carriageway's fragments in the area's lines).
+- Demo streets unchanged (OSM picks: only unconnected pieces count, as in D57). The number depends on where the click is
+  (the 1.2 km window is centred on it).
+- `test_pick_drive` updated (intended): an analysed street still answers from its area, with at most one map question
+  (the named street's OSM line).
+
+**1. GIS export** (`backend/app/gisexport.py`; `GET /areas/{slug}/report.geojson|.shp.zip?street=`; buttons GeoJSON ·
+Shapefile beside PDF · Excel). Layers = the Excel sheets' rows and columns: buildings with findings (outlines; point
+layer only for buildings without one), every pole and streetlight, possible dark stretches (lines as drawn), review items,
+businesses vs OpenStreetMap. WGS84 `.prj` + `.cpg` per layer, `fields.csv` (10-character names → Excel columns),
+README (text cut at 254 bytes is counted; the GeoJSON keeps it). pyshp (pure Python). Ward 29 read back with geopandas:
+**buildings 77 (polygons) · poles/streetlights 268 · dark stretches 11 (lines) · review items 218 · businesses vs OSM 152**,
+EPSG:4326. The numbers-match test reads both files back and compares every value with the Excel rows.
+
+**2. City-scale projection** (`backend/app/projection.py`, `GET /projection`; Hood › Whole-city projection; PDF method page).
+Streets: `osm_roads` of the area stage's `ROAD_TYPES`, no bridges / tunnels, clipped to each city's box. Photos per km per
+completed run (photos fetched / streets.json km): 110–452 (9 runs; pooled 256). Cost per photo: $0.007 list + cloud AI
+$0.00002–$0.00008 (live runs that recorded it). Time: 0.49 s/photo + 3.8 min start-up per job of 4.8 km (Ward 29's size).
+Road km cached on disk for offline mode.
+
+| city | streets | photos | cost (list price) | GPU hours | Colab days (2.5 h) |
+|---|---|---|---|---|---|
+| Coimbatore | 5,711 km | 0.63 – 2.6 million | $4,400 – $18,000 | 160 – 423 | 64 – 169 |
+| Madurai | 3,333 km | 0.37 – 1.5 million | $2,600 – $11,000 | 94 – 247 | 37 – 99 |
+| Tiruppur | 2,534 km | 0.28 – 1.1 million | $2,000 – $8,100 | 71 – 188 | 28 – 75 |
+| Tiruchirappalli | 1,713 km | 0.19 – 0.77 million | $1,300 – $5,500 | 48 – 127 | 19 – 51 |
+
+An estimate; Street View coverage is not checked for whole cities; Coimbatore's box is its corporation zones + 550 m.
+
+**3. OpenStreetMap shops as a real reference** (`backend/app/osmref.py`, `GET /areas/{slug}/osm`). Ours: buildings with a
+shop name read clearly or commercial / shop + home use, + businesses read from signs. OSM: the local copy's shop /
+office / business-amenity points within 30 m of an analysed street (worship, schools, toilets, parking, ATMs … left out).
+The copy keeps geometry only, so names / tags come from **one Overpass id look-up per area** (`tools/fetch_osm_tags.py` →
+`data/areas/<slug>/osm_tags.json`; new worker areas fetch it in the background). Same place = ≤ 25 m to the outline,
+one-to-one, a `textmatch.same_business` name first, then the nearest.
+- **Ward 29: camera 147, OSM 14 → matched 9 (0 with the same name), camera only 138, OSM only 5** (4 non-business points
+  left out). Five matches are inside / ≤ 2 m of an outline (a building with several shops), four are 13–22 m away and are
+  probably neighbours — the rule was kept as specified, the lists show distance and "same name".
+- Shown: Hood + Trust sections, the question "Businesses not in OpenStreetMap" (also "OpenStreetMap shops not seen by the
+  camera", "businesses in OpenStreetMap"; Show chip "Businesses vs OpenStreetMap") with our businesses highlighted and
+  OpenStreetMap's points as square tags, a column in the report / Excel and an "OSM shops" sheet. Crowd-sourced, not an
+  official register — said wherever it appears. The synthetic register is unchanged.
+
+**4. Floors: confidence + OSM levels.** A fixed rule (`osmref.floor_confidence`, chosen before any OSM result): High = counted
+from the photo, 1–2 floors; Medium = counted, 3+ (model card: mild under-count on 3+ storeys); Low = estimate, roof not
+visible; else not counted. Shown in the drawer's Floors row (an exception to D16's "no confidences" on user screens,
+asked for by the owner) and in the report / Excel. Ward 29: High 194 · Medium 23 · Low 4 · not counted 160. OSM
+`building:levels` (same id look-up, not in the local copy): **2 of 381 Ward 29 buildings** carry it (both "10", on
+Ganapathy - Avarampalayam Road); 1 is compared (ours 1 floor) → **0 exact, 0 within ±1**; the other areas: 0 tagged. Too few
+to judge; never changes our count.
+
+**5. Report v2** (`backend/app/report.py`; `tools/render_report.py` renders pages to PNG). All pages landscape A4, 14 mm
+margins, body 11 pt, tables 9 pt, numbers 30 pt. Main part: at a glance (6 cards, 3 computed sentences, small map) ·
+charts (use, floors counted, register match, findings by street, businesses vs OSM, every key number in one line) · map +
+key · what to do next (≤ 10 actions with streets and one line of why) · method & limits (sources with dates, cost, Gate 1
+worded as on Trust, limits) · scale and confidence (projection, floor rule, OSM). Appendix: key columns; priority-6 review
+items and camera-only businesses are counted and left to the Excel file. **Ward 29: 27 → 19 pages (6 main + 13 appendix);
+Sathy Main Road 8 pages** (a short street report puts the actions beside the map). Excel keeps every column and row, plus
+the new columns and sheet.
+
+**Checks (4 Oct).** Backend 457 passed / 1 skipped (incl. `test_extras.py`); typecheck, build, test:ui 18, check:data, audit
+(both themes) pass; live screenshots `web/scripts/extras-shots.ts` → `docs/screenshots/extras/` (both themes); report pages
+→ `docs/screenshots/report_v2/`. Regression, output redirected to a file every time (F2): six full runs. Run 1: F failed
+twice on fixed timers in `offline.ts` (Hood on a just-started helper API, the API-down banner) → readiness waits there too.
+A section-F check then saw "no jobs" while the API was in offline data mode after a network blip (nothing was deleted: all
+6 jobs in the database) → `job_ids()` waits for an online answer. Run 2 ALL PASSED. Run 3: "0 waiting" matched the Review
+check while the queue was still loading → wait for a non-zero count. Run 4: a network outage (18:15–18:21, DNS / timeouts;
+review state verified clean afterwards: 404 waiting, every decision undone). **Runs 5 and 6 (final code, consecutive):
+ALL PASSED, 288 checks each, 0 areas needed the retry** (`run-2026-10-04_1834.log`, `run-2026-10-04_1855.log`). Expected
+answers: none changed; added (intended) the question "Businesses not in OpenStreetMap" → 138 and, per area / street, GIS
+layer counts = the Excel sheets.

@@ -2,12 +2,14 @@
  *  question purely by clicking), a "partly understood" state that says what was understood and what was ignored and
  *  never applies a guess silently, then the answer — list, dark stretches, one chart, or the why-empty funnel. */
 import { ChevronDown, Inbox, Loader2, Plus, X } from 'lucide-react'
+import { useMap } from '@vis.gl/react-google-maps'
 import { useEffect, useState } from 'react'
-import type { GapRow, QueryFilters, QueryResponse } from '@/api/types'
+import type { GapRow, OsmMode, QueryFilters, QueryResponse } from '@/api/types'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { diffLabel, priorityLabel } from '@/lib/labels'
 import { queryApplies, runQuery, useQueryError } from '@/lib/query'
-import { useAreaData } from '@/lib/useAreaData'
+import { propsFor, useAreaData } from '@/lib/useAreaData'
+import { flyTo, OBJECT_TILT } from '@/map/camera'
 import { cn, fmt, noun, plural } from '@/lib/utils'
 import { useUi } from '@/store/ui'
 import { BarList } from './Charts'
@@ -16,20 +18,25 @@ import { GapList, type Gap } from './GapList'
 import { PanelHead } from './Panel'
 import { WhyEmpty } from './WhyEmpty'
 
-type Key = 'show' | 'street' | 'use' | 'floors' | 'match_status' | 'discrepancy' | 'ref_flag' | 'group_by' | 'interval_m' | 'reason_has' | 'near_dark_m' | 'priority'
+type Key = 'show' | 'osm' | 'street' | 'use' | 'floors' | 'match_status' | 'discrepancy' | 'ref_flag' | 'group_by' | 'interval_m' | 'reason_has' | 'near_dark_m' | 'priority'
 const SHOW: { v: string; label: string; f: QueryFilters }[] = [
   { v: 'buildings', label: 'Buildings', f: { intent: 'buildings' } },
   { v: 'gaps', label: 'Possible dark stretches', f: { intent: 'streetlight_gaps', interval_m: 60 } },
   { v: 'poles', label: 'Poles', f: { intent: 'assets', asset_type: 'pole' } },
   { v: 'streetlights', label: 'Streetlights', f: { intent: 'assets', asset_type: 'streetlight' } },
   { v: 'review', label: 'Review items', f: { intent: 'review' } },
+  { v: 'osm', label: 'Businesses vs OpenStreetMap', f: { intent: 'osm_businesses', osm: 'camera_only' } },
 ]
-const showOf = (f: QueryFilters) => (f.intent === 'streetlight_gaps' ? 'gaps' : f.intent === 'assets' ? (f.asset_type === 'streetlight' ? 'streetlights' : 'poles') : f.intent)
+const showOf = (f: QueryFilters) => (f.intent === 'streetlight_gaps' ? 'gaps' : f.intent === 'osm_businesses' ? 'osm'
+  : f.intent === 'assets' ? (f.asset_type === 'streetlight' ? 'streetlights' : 'poles') : f.intent)
+/** extras 3: which side of the comparison (OpenStreetMap is crowd-sourced, not an official register) */
+const OSM_MODE: Record<OsmMode, string> = { camera_only: 'not in OpenStreetMap', osm_only: 'in OpenStreetMap only', matched: 'also in OpenStreetMap' }
 const ALLOWED: Record<QueryFilters['intent'], Key[]> = {
   buildings: ['street', 'use', 'floors', 'match_status', 'discrepancy', 'ref_flag', 'near_dark_m', 'group_by'],
   streetlight_gaps: ['street', 'interval_m', 'priority'], assets: ['street'], review: ['street', 'reason_has'],
+  osm_businesses: ['osm', 'street'],
 }
-const LABEL: Record<Key, string> = { show: 'Show', street: 'Street', use: 'Use', floors: 'Floors', match_status: 'Register', discrepancy: 'Difference',
+const LABEL: Record<Key, string> = { show: 'Show', osm: 'Businesses', street: 'Street', use: 'Use', floors: 'Floors', match_status: 'Register', discrepancy: 'Difference',
   ref_flag: 'Google', group_by: 'Chart', interval_m: 'Within', reason_has: 'Reason', near_dark_m: 'Dark stretch', priority: 'Priority' }
 const OPS: { op: NonNullable<QueryFilters['floors_op']>; label: string }[] = [
   { op: '>', label: 'more than' }, { op: '>=', label: 'at least' }, { op: '<', label: 'less than' }, { op: '==', label: 'exactly' }]
@@ -38,6 +45,7 @@ const DISC = ['extra_floor', 'use_change', 'location_shift', 'area_understated']
 function value(k: Key, f: QueryFilters) {
   switch (k) {
     case 'show': return SHOW.find((s) => s.v === showOf(f))?.label ?? f.intent
+    case 'osm': return OSM_MODE[f.osm ?? 'camera_only']
     case 'use': return f.use === 'commercial' ? 'shops & businesses' : 'homes'
     case 'floors': return `${OPS.find((o) => o.op === f.floors_op)?.label ?? f.floors_op} ${f.floors_n}`
     case 'match_status': return f.match_status === 'no_record' ? 'not in the register' : 'differs from it'
@@ -66,6 +74,8 @@ const DEFAULTS: Partial<Record<Key, Partial<QueryFilters>>> = {
 
 /** "dark stretch" / "dark stretches", "building(s)", "pole(s)", "review item(s)" for a result count */
 function nounOf(q: QueryResponse, n: number) {
+  if (q.intent === 'osm_businesses') return noun(n, q.parsed_filters.osm === 'osm_only' ? 'OpenStreetMap business' : 'business',
+    q.parsed_filters.osm === 'osm_only' ? 'OpenStreetMap businesses' : 'businesses')
   const one = q.intent === 'streetlight_gaps' ? 'possible dark stretch' : q.intent === 'review' ? 'review item'
     : q.intent === 'assets' ? (q.parsed_filters.asset_type ?? 'asset') : 'building'
   return noun(n, one)
@@ -93,6 +103,7 @@ function Chip({ k, f, streets, typed }: { k: Key; f: QueryFilters; streets: stri
       case 'floors': return <FloorsEditor f={f} onApply={apply} />
       case 'near_dark_m': return [25, 50, 100].map((v) => <Opt key={v} on={f.near_dark_m === v} onClick={() => apply({ ...f, near_dark_m: v })} note="PostGIS distance">within {v} m</Opt>)
       case 'priority': return (['high', 'medium', 'low'] as const).map((v) => <Opt key={v} on={f.priority === v} onClick={() => apply({ ...f, priority: v })} note="lighting priority">{priorityLabel(v)}</Opt>)
+      case 'osm': return (Object.keys(OSM_MODE) as OsmMode[]).map((v) => <Opt key={v} on={(f.osm ?? 'camera_only') === v} onClick={() => apply({ ...f, osm: v })}>{OSM_MODE[v]}</Opt>)
       default: return <p className="t-small ink3 px-2 py-1">Remove this filter with ×.</p>
     }
   })()
@@ -104,7 +115,7 @@ function Chip({ k, f, streets, typed }: { k: Key; f: QueryFilters; streets: stri
             <span className="ink3">{LABEL[k]}</span><span className="max-w-[170px] truncate font-[560]">{value(k, f)}</span><ChevronDown className="size-3.5 text-ink3" />
           </button>
         </PopoverTrigger>
-        {k !== 'show' && <button onClick={() => runQuery({ filters: without(f, k) })} className="!px-1.5 text-ink3 hover:text-ink" aria-label={`Remove ${LABEL[k]}`}><X className="size-3.5" /></button>}
+        {k !== 'show' && k !== 'osm' && <button onClick={() => runQuery({ filters: without(f, k) })} className="!px-1.5 text-ink3 hover:text-ink" aria-label={`Remove ${LABEL[k]}`}><X className="size-3.5" /></button>}
       </span>
       <PopoverContent align="start" className="w-64 p-1.5">{editor}</PopoverContent>
     </Popover>
@@ -239,6 +250,8 @@ export function QueryPanel() {
               <p className="t-small px-5 pb-4" role="status">{q.gaps?.note ?? 'This could not be computed for this area.'}</p>
             ) : q.total === 0 ? (
               <div className="px-5 pb-4"><WhyEmpty steps={q.why_empty} noun={many} /></div>
+            ) : q.intent === 'osm_businesses' ? (
+              <OsmRows q={q} />
             ) : q.intent === 'streetlight_gaps' ? (
               <div className="min-h-0 flex-1 overflow-y-auto pb-4"><GapList rows={(q.rows ?? []) as unknown as Gap[] as GapRow[]} /></div>
             ) : q.groups ? (
@@ -278,4 +291,37 @@ function QueryRows({ q }: { q: QueryResponse }) {
     return b.length ? <FindingsTable kind="building" rows={b} /> : <FindingsTable kind="asset" rows={a} />
   }
   return <FindingsTable kind="building" rows={byId(records.buildings, rows.map((r) => r.id))} />
+}
+
+/** extras 3: the businesses of an "OpenStreetMap" question: ours (click: the evidence) or OpenStreetMap's own points
+ *  (click: the map flies there; the square tags on the map are those points) */
+function OsmRows({ q }: { q: QueryResponse }) {
+  const { props } = useAreaData()
+  const map = useMap('main')
+  const select = useUi((s) => s.select)
+  const rows = (q.rows ?? []) as unknown as { kind: 'building' | 'unmapped' | 'osm'; id: string; street: string | null; lat: number; lon: number
+    name: string | null; why?: string; osm_name?: string | null; osm_kind?: string | null; distance_m?: number; same_name?: boolean; url?: string }[]
+  const open = (r: (typeof rows)[number]) => {
+    const p = r.kind === 'osm' ? null : propsFor(props, r.kind === 'unmapped' ? 'unmapped_business' : 'building', r.id)
+    if (p) select(p)
+    if (map) flyTo(map, { center: { lat: r.lat, lng: r.lon }, zoom: Math.max(map.getZoom() ?? 18, 19), tilt: useUi.getState().flat ? 0 : OBJECT_TILT }, { instant: useUi.getState().flat })
+  }
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto pb-4">
+      <p className="t-small ink3 px-5 pb-2">OpenStreetMap is the open map volunteers edit, not an official register: a business missing from it says nothing about the street. Square tags on the map are OpenStreetMap&apos;s own shop points.</p>
+      <ul aria-label="Businesses">
+        {rows.map((r) => (
+          <li key={`${r.kind}:${r.id}`}>
+            <button className="rule-b block w-full cursor-pointer px-5 py-2 text-left hover:bg-accent-soft" onClick={() => open(r)}>
+              <span className="block truncate">{r.name || (r.kind === 'osm' ? r.osm_kind : 'Business') || 'Business'}</span>
+              <span className="t-small ink3 block truncate">
+                {r.kind === 'osm' ? <>On OpenStreetMap{r.osm_kind ? ` (${r.osm_kind})` : ''} · not seen by our camera</>
+                  : <>{r.street ?? '—'} · {r.why}{r.osm_name !== undefined ? <> · OpenStreetMap: {r.osm_name ?? r.osm_kind}, {fmt.format(Math.round(r.distance_m ?? 0))} m{r.same_name ? ', same name' : ''}</> : null}</>}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
 }

@@ -1,0 +1,49 @@
+{
+ "fetched": "2026-10-04T08:26:17Z",
+ "source": "OpenStreetMap: point positions from the app's copy (snapshot 2026-10-02); names and tags from the Overpass API on the fetch date",
+ "osm_snapshot": "2026-10-02",
+ "scope_m": 30,
+ "pois": [],
+ "buildings": {
+  "w1236977988": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1236978785": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1236978403": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1236978355": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1236978418": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1236977922": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1236978503": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1236978204": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  }
+ }
+}

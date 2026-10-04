@@ -323,6 +323,12 @@ def _from_ll(F, lines_ll):
     return unary_union([LineString([F.xy(la, lo) for lo, la in l]) for l in lines_ll if len(l) >= 2])
 
 
+def _named_query(name, lat, lon):
+    """every way of this name within 1.5 km (the pipeline's named-street extension)"""
+    safe = name.replace("\\", "").replace('"', '\\"')
+    return f'[out:json][timeout:25];way["highway"]["name"="{safe}"](around:1500,{round(lat, 3)},{round(lon, 3)});out geom tags;'
+
+
 def pick_overpass(cache_dir, lat, lon, deadline, google_key=None):
     """Returns (result, complete). complete is False when the details (the named street beyond the tile, the roads at
     an unnamed road's ends) were still loading when the click's budget ran out: the street is shown without them."""
@@ -350,10 +356,8 @@ def pick_overpass(cache_dir, lat, lon, deadline, google_key=None):
     group = [w for w in ways if name and w.get("tags", {}).get("name") == name] or [hit]
     source, complete = ("local" if cached == "local" else "cache" if cached else "overpass"), True
     if name:                                                      # extend a named street beyond the tile
-        safe = name.replace("\\", "").replace('"', '\\"')
-        q2 = f'[out:json][timeout:25];way["highway"]["name"="{safe}"](around:1500,{round(lat, 3)},{round(lon, 3)});out geom tags;'
         try:
-            els2, cached2 = overpass(q2, cache_dir, deadline)
+            els2, cached2 = overpass(_named_query(name, lat, lon), cache_dir, deadline)
             group = [w for w in els2 if "geometry" in w] or group
             source = source if cached2 else "overpass"
         except OverpassBusy:
@@ -663,14 +667,14 @@ def pick(cache_dir, bundles, lat, lon, google_key=None):
             else:
                 _finish_later(cache_dir, lat, lon, path, google_key)
                 res["osm_details"] = False
-                raise Pending(finish(res, bundles, lat, lon))
-    return finish(res, bundles, lat, lon)
+                raise Pending(finish(res, bundles, lat, lon, cache_dir))
+    return finish(res, bundles, lat, lon, cache_dir)
 
 
-def finish(res, bundles, lat, lon):
+def finish(res, bundles, lat, lon, cache_dir=None):
     res = annotate(res, bundles, lat, lon)
     res["street"] = plain_name(res["street"])
-    return split_pieces(res, lat, lon)
+    return osm_continuation(split_pieces(res, lat, lon), bundles, lat, lon, cache_dir)
 
 
 # ------------------------------------------------------------------ 4) only the connected piece that was clicked (D57)
@@ -732,3 +736,67 @@ def with_elsewhere(res):
     both = MultiLineString(_parts(_to_xy(F, MultiLineString(a + b))))
     return {**res, "length_m": round(both.length), "polygon": mapping(_area_ll(F, both)), "included_elsewhere": True,
             "lines": {"type": "MultiLineString", "coordinates": a + b}}
+
+
+# ------------------------------------------------------------------ 5) the continuation, measured on the OSM road (extras F4)
+CONT_BUDGET_S = 3.0           # the named-street query (local copy or the 30-day cache; usually already asked by the pick)
+CONT_MIN_M = 15               # a continuation shorter than this is junction noise, not "the street continues"
+SLIVER_M = 5
+COVER_M = 12                  # OSM line this close to the picked piece is the picked piece (area lines vs OSM drift)
+
+
+def _area_of(bundles, lat, lon, res):
+    """the analysed area the click lies in (the one the pick came from first), or None"""
+    pt = Point(lon, lat)
+    inside = [b for b in bundles if b.get("polygon") and shape(b["polygon"]).buffer(0).contains(pt)]
+    first = (res.get("already_analysed_in") or [None])[0]
+    return next((b for b in inside if b["slug"] == first), inside[0] if inside else None)
+
+
+def osm_continuation(res, bundles, lat, lon, cache_dir):
+    """extras F4: "this street continues" is always measured on the full OpenStreetMap road of the same name, within
+    the same 1.2 km window a job takes (the pipeline's cap around the click), never on an analysed area's own street
+    lines, which stop at that area's outline (Rathinapuri: 65 m from the area's lines, 222 m on OSM). The continuation
+    = every OSM piece of the name that is not the clicked piece. When most of it lies outside the analysed area the
+    click is in (Ward 29's Sathy Main Road, cut at the ward edge), `outside_area` names that area, so the sheet says
+    "continues outside this area". OSM unreachable within the budget: the area-line answer is kept and says so."""
+    name = res.get("osm_name")
+    if not res.get("lines") or not cache_dir or not name or name.startswith("("):
+        return res
+    try:
+        els, _ = overpass(_named_query(name, lat, lon), cache_dir, time.monotonic() + CONT_BUDGET_S)
+    except OverpassBusy:
+        if res.get("elsewhere"):
+            res["elsewhere"]["measured_on"] = "analysed area's lines (OpenStreetMap busy)"
+        return res
+    F = Frame(lat, lon)
+    window = Point(0, 0).buffer(MAX_LEN_M / 2)
+    full = [p for w in els if len(w.get("geometry") or []) >= 2
+            for p in _parts(LineString([F.xy(n["lat"], n["lon"]) for n in w["geometry"]]).intersection(window))]
+    if not full:
+        return res
+    picked = _to_xy(F, shape(res["lines"]))
+    groups = _components(full) if len(full) > 1 else [full]
+    near = min(groups, key=lambda g: MultiLineString(g).distance(Point(0, 0)))
+    apart = [g for g in groups if g is not near]
+    if res.get("source") == "area":
+        # the area's lines stop at its outline: the rest of the connected OSM road is the continuation
+        joined = [p for p in _parts(MultiLineString(near).difference(picked.buffer(COVER_M))) if p.length >= SLIVER_M]
+    else:
+        joined = []           # an OSM pick IS the connected OSM road within the window already (unchanged)
+    rest = joined + [p for g in apart for p in g]
+    total = sum(p.length for p in rest)
+    out = {k: v for k, v in res.items() if k != "elsewhere"}
+    if total < CONT_MIN_M:
+        return out
+    m = MultiLineString(rest)
+    el = {"length_m": round(total), "pieces": len(apart), "joins": bool(joined), "measured_on": "OpenStreetMap",
+          "lines": {"type": "MultiLineString",
+                    "coordinates": [[[round(x, 7), round(y, 7)] for x, y in l.coords] for l in _to_ll(F, m).geoms]}}
+    area = _area_of(bundles, lat, lon, res)
+    if area is not None:
+        poly = _to_xy(F, shape(area["polygon"]).buffer(0))
+        if m.difference(poly).length > 0.5 * total:
+            el["outside_area"] = {"slug": area["slug"], "name": area["name"]}
+    out["elsewhere"] = el
+    return out

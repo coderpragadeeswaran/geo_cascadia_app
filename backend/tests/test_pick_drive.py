@@ -43,7 +43,10 @@ def no_overpass(monkeypatch):
 def test_analysed_streets_answer_locally_with_display_names(slug, street, no_overpass, tmp_path):
     lat, lon = mid_point(slug, street)
     r = streetpick.pick(str(tmp_path), BUNDLES, lat, lon)
-    assert no_overpass == []                                     # no Overpass call for an analysed street
+    # the street itself is answered from the area (no lookup). extras F4: the only map question allowed is the named
+    # street's OpenStreetMap line, to measure "continues …" (local copy in the covered cities, else the 30-day cache);
+    # when it can't be answered (here: busy) the pick is still complete, from the area's own lines
+    assert all('["name"=' in q for q in no_overpass) and len(no_overpass) <= 1
     assert r["street"] == street and r["name_source"] == "street_names" and r["source"] == "area"
     assert not r["street"].startswith("(unnamed")
     assert r["already"][0]["slug"] == slug and r["already"][0]["by"] == "way_ids"
