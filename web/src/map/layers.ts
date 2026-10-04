@@ -115,6 +115,8 @@ export interface LayerCtx {
   analysePoly: Position[][] | null
   /** trimmed: the whole picked street, drawn faint under the kept stretch */
   analyseRest?: Position[][] | null
+  /** D57: the same street name's pieces that don't connect to the clicked one, not included (dashed guide) */
+  analyseElsewhere?: Position[][] | null
   /** drive the street: the branch being driven, camera position, travel heading and view heading */
   drive: DriveMark | null
   /** P7.3: buildings seen by the camera only (no map outline) */
@@ -250,35 +252,47 @@ export function buildLayers(ctx: LayerCtx): Layer[] {
     )
   }
   // ---------------------------------------------------------------- dark stretches: no streetlight seen within 60 m
+  // D57: core (dark) + priority edge + a thin casing (night: near-black, daylight: white), so a stretch never melts into
+  // the selected street's chalk / ink highlight. At area zoom they are drawn above the building dots (pushed further
+  // down); at street zoom they stay under poles and lamps, which stand along the road edge.
+  const gapLayers: Layer[] = []
   {
     const v = on.gaps && !city
     const focused = F.gaps ? split.gaps.filter((d) => F.gaps!.has(d.p.id)) : []
     const selGap = ctx.selectedId ? split.gaps.filter((d) => d.p.id === ctx.selectedId) : []
-    L.push(
-      // selected dark stretch: a sodium outline around the band
+    // a selected stretch: every other stretch dims (D57), so the one picked in the list is the one that stands out
+    const dim = (id: string) => (selGap.length ? id !== ctx.selectedId : dimG(id))
+    const edgeW = (d: { p: GapProps }) => (near ? 18 : 11) + PRIO_EXTRA[d.p.priority ?? ''] * (near ? 1.5 : 1)
+    const maxW = (near ? 18 : 11) + PRIO_EXTRA.high * (near ? 1.5 : 1)
+    const sel = ctx.selectedId
+    gapLayers.push(
+      // selected dark stretch: a sodium outline outside the casing
       new PathLayer({ id: 'dark-selected', visible: v && selGap.length > 0, data: selGap, getPath: (d) => d.path, widthUnits: 'pixels',
-        getWidth: near ? 26 : 19, getColor: rgba(c.sodium, 235), capRounded: true, jointRounded: true, updateTriggers: { getWidth: near, getColor: mode } }),
+        getWidth: (d) => edgeW(d) + 12, getColor: rgba(c.sodium, 245), capRounded: true, jointRounded: true, updateTriggers: { getWidth: near, getColor: mode } }),
       // a question about gaps: the answered stretches get a chalk outline (a dark band can't get brighter)
-      new PathLayer({ id: 'dark-focus', visible: v && focused.length > 0, data: focused, getPath: (d) => d.path, widthUnits: 'pixels',
-        getWidth: near ? 22 : 15, getColor: rgba(c.ink, night ? 150 : 210), capRounded: true, jointRounded: true, updateTriggers: { getWidth: near, getColor: mode } }),
+      new PathLayer({ id: 'dark-focus', visible: v && focused.length > 0 && !selGap.length, data: focused, getPath: (d) => d.path, widthUnits: 'pixels',
+        getWidth: maxW + 8, getColor: rgba(c.ink, night ? 150 : 210), capRounded: true, jointRounded: true, updateTriggers: { getWidth: near, getColor: mode } }),
+      new PathLayer({ id: 'dark-casing', visible: v, data: split.gaps, getPath: (d) => d.path, widthUnits: 'pixels',
+        getWidth: (d) => edgeW(d) + 4, getColor: (d) => rgba(c.darkCasing, dim(d.p.id) ? 60 : 255), capRounded: true, jointRounded: true,
+        updateTriggers: { getWidth: near, getColor: [fk, mode, sel] } }),
       // D54: the edge carries the lighting priority (one indigo hue, brighter / wider = higher); no priority = the old edge
-      new PathLayer({ id: 'dark-edge', visible: v, data: split.gaps, getPath: (d) => d.path, widthUnits: 'pixels',
-        getWidth: (d) => (near ? 18 : 11) + PRIO_EXTRA[d.p.priority ?? ''] * (near ? 1.5 : 1),
+      new PathLayer({ id: 'dark-edge', visible: v, data: split.gaps, getPath: (d) => d.path, widthUnits: 'pixels', getWidth: edgeW,
         getColor: (d) => {
           const pc = prioColor(c, d.p.priority)
-          if (pc) return rgba(pc, dimG(d.p.id) ? 70 : 235)
-          return night ? rgba(c.darkEdge, dimG(d.p.id) ? 80 : 200) : rgba(c.dark, dimG(d.p.id) ? 15 : 40)
-        }, capRounded: true, jointRounded: true,
-        updateTriggers: { getWidth: near, getColor: [fk, mode] } }),
-      new PathLayer({ id: 'dark', visible: v, data: split.gaps, getPath: (d) => d.path, widthUnits: 'pixels', getWidth: near ? 15 : 8,
-        getColor: (d) => rgba(c.dark, dimG(d.p.id) ? 110 : night ? 250 : 235), capRounded: true, jointRounded: true, pickable: true,
-        updateTriggers: { getWidth: near, getColor: [fk, mode] } }),
+          if (pc) return rgba(pc, dim(d.p.id) ? 70 : 255)
+          return night ? rgba(c.darkEdge, dim(d.p.id) ? 80 : 220) : rgba(c.dark, dim(d.p.id) ? 15 : 40)
+        }, capRounded: true, jointRounded: true, pickable: true,   // the whole band is the click target, not just the core
+        updateTriggers: { getWidth: near, getColor: [fk, mode, sel] } }),
+      new PathLayer({ id: 'dark', visible: v, data: split.gaps, getPath: (d) => d.path, widthUnits: 'pixels', getWidth: near ? 13 : 7,
+        getColor: (d) => rgba(c.dark, dim(d.p.id) ? 110 : 255), capRounded: true, jointRounded: true, pickable: true,
+        updateTriggers: { getWidth: near, getColor: [fk, mode, sel] } }),
       // "check" (D13): drawn as recorded; lit camera stops lie on the road between its ends → dotted chalk edge
       new PathLayer({ id: 'dark-check', visible: v, data: split.gaps.filter((d) => d.p.display_mode === 'check'), getPath: (d) => d.path,
         widthUnits: 'pixels', getWidth: 1.6, getColor: rgba(c.ink2, 220), extensions: [dash], updateTriggers: { getColor: mode },
         ...({ getDashArray: [1.5, 3], dashJustified: true } as object) }),
     )
   }
+  if (near) L.push(...gapLayers)
   // ---------------------------------------------------------------- findings density (opt-in, area level)
   L.push(new HexagonLayer<Position>({
     id: 'density', visible: on.density && band === 'area', data: split.findings, getPosition: (d) => d, radius: 45, coverage: 0.88, extruded: false,
@@ -377,6 +391,8 @@ export function buildLayers(ctx: LayerCtx): Layer[] {
       getLineWidth: 2, getLineColor: rgba(c.sodium), updateTriggers: { getFillColor: mode, getLineColor: mode } }))
   }
 
+  if (!near) L.push(...gapLayers)
+
   // ---------------------------------------------------------------- analyse: the exact snapped street (distinct from Google's blue coverage)
   if (ctx.analysePoly) {
     L.push(new PolygonLayer({ id: 'analyse-area', data: [{ polygon: ctx.analysePoly }], getPolygon: (d) => d.polygon,
@@ -385,6 +401,11 @@ export function buildLayers(ctx: LayerCtx): Layer[] {
   if (ctx.analyseRest?.length) {
     L.push(new PathLayer({ id: 'analyse-rest', data: ctx.analyseRest, getPath: (d) => d, widthUnits: 'pixels', getWidth: 4,
       getColor: rgba(c.ink, 110), capRounded: true, jointRounded: true }))
+  }
+  if (ctx.analyseElsewhere?.length) {
+    L.push(new PathLayer({ id: 'analyse-elsewhere', data: ctx.analyseElsewhere, getPath: (d) => d, widthUnits: 'pixels', getWidth: 3.5,
+      getColor: rgba(c.ink, night ? 190 : 210), capRounded: true, jointRounded: true, extensions: [dash],
+      ...({ getDashArray: [2.5, 2], dashJustified: true } as object) }))
   }
   if (ctx.analyseLines?.length) {
     // P7.1: no end or vertex dots here: the street's only dots are its two start / end handles (TrimHandles)

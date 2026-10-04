@@ -11,7 +11,7 @@ import { colors, motion } from '@/design/tokens'
 import { queryApplies } from '@/lib/query'
 import { useFocus } from '@/lib/useAreaData'
 import { useUi } from '@/store/ui'
-import { useAnalyse } from './analyse'
+import { pickedLines, useAnalyse } from './analyse'
 import { bboxCenter, fitZoom, flyTo, isFlying, OBJECT_TILT, STREET_TILT, tiltTo, yieldToUser } from './camera'
 import { useDriveMark } from './drive'
 import { mainLine, slice } from './trim'
@@ -124,12 +124,16 @@ function DeckLayers({ introDone }: { introDone: boolean }) {
   const focus = useFocus()
   const preview = useAnalyse((s) => s.preview)
   const trim = useAnalyse((s) => s.trim)
+  const include = useAnalyse((s) => s.include && !!s.preview?.elsewhere)
   const main = useMemo(() => mainLine(preview?.lines), [preview])
   // trimmed (fix 10): the kept stretch is the bright line; the rest of the street stays as a faint guide
-  const analysePoly = useMemo(() => (preview && !trim ? (preview.polygon.coordinates as Position[][]) : null), [preview, trim])
+  // D57: with "include it?" on, both pieces are bright (no area fill: the preview's polygon covers the clicked piece only);
+  // off, the rest of the same name is a dashed guide (analyseElsewhere), so the person sees what "continues elsewhere" means
+  const analysePoly = useMemo(() => (preview && !trim && !include ? (preview.polygon.coordinates as Position[][]) : null), [preview, trim, include])
   const analyseLines = useMemo(() => (!preview?.lines ? null : trim && main ? [slice(main, trim.a, trim.b) as Position[]]
-    : (preview.lines.coordinates as Position[][])), [preview, trim, main])
+    : (pickedLines(preview, include)!.coordinates as Position[][])), [preview, trim, main, include])
   const analyseRest = useMemo(() => (trim && preview?.lines ? (preview.lines.coordinates as Position[][]) : null), [preview, trim])
+  const analyseElsewhere = useMemo(() => (!include && preview?.elsewhere ? (preview.elsewhere.lines.coordinates as Position[][]) : null), [preview, include])
   const drive = useDriveMark()
   const { data: camB } = useCameraBuildings(area)
   // clickable: each diamond carries its props, so a click opens the camera-only drawer (Gate 1 case 3)
@@ -209,8 +213,8 @@ function DeckLayers({ introDone }: { introDone: boolean }) {
   const layers = useMemo(
     () => buildLayers({ mode, band, flat, layers: layerToggles, areas: areas ?? [], activeArea: area, split, jobs, pulse: animate ? pulse : 0,
       jobShown: shown.current,
-      selectedId: selected && 'id' in selected ? selected.id : null, focus, lightsOn, analyseLines, analysePoly, analyseRest, drive, predicted, cameraBuildings }),
-    [mode, band, flat, layerToggles, areas, area, split, jobs, pulse, animate, selected, focus, lightsOn, analyseLines, analysePoly, analyseRest, drive, predicted, cameraBuildings],
+      selectedId: selected && 'id' in selected ? selected.id : null, focus, lightsOn, analyseLines, analysePoly, analyseRest, analyseElsewhere, drive, predicted, cameraBuildings }),
+    [mode, band, flat, layerToggles, areas, area, split, jobs, pulse, animate, selected, focus, lightsOn, analyseLines, analysePoly, analyseRest, analyseElsewhere, drive, predicted, cameraBuildings],
   )
 
   useEffect(() => {

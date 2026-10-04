@@ -670,4 +670,65 @@ def pick(cache_dir, bundles, lat, lon, google_key=None):
 def finish(res, bundles, lat, lon):
     res = annotate(res, bundles, lat, lon)
     res["street"] = plain_name(res["street"])
-    return res
+    return split_pieces(res, lat, lon)
+
+
+# ------------------------------------------------------------------ 4) only the connected piece that was clicked (D57)
+JOIN_M = 5                    # two pieces of a street are connected when an end of one lies this close to the other
+
+
+def _components(parts):
+    """Connected groups of line pieces (metres): an end of one within JOIN_M of the other, or the two crossing."""
+    n = len(parts)
+    up = list(range(n))
+
+    def root(i):
+        while up[i] != i:
+            up[i] = up[up[i]]
+            i = up[i]
+        return i
+    ends = [[Point(p.coords[0]), Point(p.coords[-1])] for p in parts]
+    for i in range(n):
+        for j in range(i + 1, n):
+            if (parts[i].intersects(parts[j]) or any(e.distance(parts[j]) <= JOIN_M for e in ends[i])
+                    or any(e.distance(parts[i]) <= JOIN_M for e in ends[j])):
+                up[root(i)] = root(j)
+    groups = {}
+    for i in range(n):
+        groups.setdefault(root(i), []).append(parts[i])
+    return list(groups.values())
+
+
+def split_pieces(res, lat, lon):
+    """D57: a street name can cover pieces that don't meet (Rathinapuri (Sanganoor) Main Road: two pieces with Sanganoor
+    Road in between). Keep only the connected piece nearest the click; the rest becomes `elsewhere` {length_m, lines}, so
+    the confirm sheet can ask whether to include it. A street in one piece is returned exactly as before (no new key).
+    The street lookup, its name and its caches are untouched: this runs on the finished answer."""
+    if not res.get("lines"):
+        return res
+    F = Frame(lat, lon)
+    parts = _parts(_to_xy(F, shape(res["lines"])))
+    groups = _components(parts) if len(parts) > 1 else [parts]
+    if len(groups) < 2:
+        return res
+    main = min(groups, key=lambda g: MultiLineString(g).distance(Point(0, 0)))
+    rest = [p for g in groups if g is not main for p in g]
+    mine, other = MultiLineString(main), MultiLineString(rest)
+    ll = lambda m: [[[round(x, 7), round(y, 7)] for x, y in l.coords] for l in _to_ll(F, m).geoms]
+    return {**res, "length_m": round(mine.length), "polygon": mapping(_area_ll(F, mine)),
+            "lines": {"type": "MultiLineString", "coordinates": ll(mine)},
+            "elsewhere": {"length_m": round(other.length), "pieces": len(groups) - 1,
+                          "lines": {"type": "MultiLineString", "coordinates": ll(other)}}}
+
+
+def with_elsewhere(res):
+    """D57: the person switched "include it?" on: the clicked piece plus the rest of the same name, one job polygon."""
+    el = res.get("elsewhere")
+    if not el:
+        return res
+    a, b = res["lines"]["coordinates"], el["lines"]["coordinates"]
+    c = shape(res["lines"]).centroid
+    F = Frame(c.y, c.x)
+    both = MultiLineString(_parts(_to_xy(F, MultiLineString(a + b))))
+    return {**res, "length_m": round(both.length), "polygon": mapping(_area_ll(F, both)), "included_elsewhere": True,
+            "lines": {"type": "MultiLineString", "coordinates": a + b}}

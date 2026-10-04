@@ -242,10 +242,17 @@ export type PanelKind = 'evidence' | 'drive' | 'query' | 'kpi' | 'street' | 'ove
 export function panelOf(s: Pick<UiState, 'selected' | 'drive' | 'query' | 'builder' | 'kpi' | 'filter' | 'panelOpen' | 'analyse'>): PanelKind {
   if (s.analyse) return null
   if (s.drive) return 'drive'
-  if (s.selected && s.selected.kind !== 'area' && s.selected.kind !== 'street') return 'evidence'
+  // D57: a possible dark stretch picked while a dark-stretch list is open stays IN that list (its card highlighted), so
+  // the list and the map keep pointing at the same stretch; anywhere else a selection opens the evidence drawer
+  if (s.selected && s.selected.kind !== 'area' && s.selected.kind !== 'street' && !(s.selected.kind === 'streetlight_gap' && gapListOpen(s))) return 'evidence'
   if (s.query || s.builder) return 'query'
   if (s.kpi || attrActive(s.filter)) return 'kpi'
   if (s.filter.street) return 'street'
   return s.panelOpen ? 'overview' : null
 }
 export const usePanel = () => useUi((s) => panelOf(s))
+/** D57: does the panel (without a selection) show a list of possible dark stretches? (a key number's list or a gap question) */
+export function gapListOpen(s: Pick<UiState, 'query' | 'builder' | 'kpi' | 'filter'>) {
+  if (s.query) return s.query.intent === 'streetlight_gaps' && !!s.query.rows
+  return !s.builder && !!s.filter.gaps
+}

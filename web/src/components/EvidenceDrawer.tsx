@@ -491,7 +491,7 @@ function CameraOnlyBody({ p }: { p: CameraBuildingProps }) {
 }
 
 /** P8: a "missing" or "not in the register" finding that rests only on photos more than three years old */
-function OldImagery({ k }: { k: string }) {
+export function OldImagery({ k }: { k: string }) {
   const area = useUi((s) => s.area)
   const o = useImagery(area).data?.objects[k]
   if (!o?.outdated) return null

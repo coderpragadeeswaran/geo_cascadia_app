@@ -160,4 +160,86 @@
 
 ---
 
+## 4 Oct 2026 · D57 — Three UI fixes: dark stretches easy to see, a clicked stretch highlighted, one piece of a street
+
+### What
+1. **Possible dark stretches are easy to see in every state.** Each one is now drawn as a dark core line with a
+   priority-coloured edge and a thin outline (dark at night, white by day). It sits on top of the selected street's highlight and
+   its building dots. The priority colours are stronger (no pale Medium or Low). The map key, the High / Medium / Low pill in the
+   list and the stretch's card all show the same small picture of a stretch, drawn exactly like the map.
+2. **Clicking a stretch shows which one it is.** In the dark-stretch list, a card click keeps the list open, highlights
+   that card, outlines that stretch in orange on the map, fades the others and zooms to it. Clicking the stretch on the map
+   highlights its card. The same card again, Esc or × clears it.
+3. **A street pick takes only the piece that was clicked.** When the same street name continues somewhere that does not
+   connect (pieces count as connected when their ends are within 5 m), the Analyse box says "This street continues
+   elsewhere (N m) — include it?" with a switch, off by default. Switched on, the length, the estimate and the job cover
+   both pieces and the end dots are hidden (a stretch cannot run across the gap).
+
+### Why
+- On a selected street (8th Street, Ganapathy) the Medium stretch disappeared into the pale street highlight; at area zoom the
+  street's building dots covered it. In Daylight the stretch's core was the same ink as the street highlight. A pale colour
+  also reads wrong for a "dark" stretch, and the Medium pill looked empty at night (a dark core on a dark panel).
+- With two stretches on one street (Sathy Main Road), clicking a card replaced the list with the stretch's card, and the
+  orange "selected" outline sat underneath the wider High-priority edge, so nothing on the map showed which stretch it was.
+- Clicking one part of Rathinapuri (Sanganoor) Main Road picked two separate pieces of that name (549 m), with Sanganoor
+  Road in between, and the job analysed and paid for both without asking.
+
+### How it works
+- **Map** (`map/layers.ts`): three lines per stretch (outline, priority edge, core); widths per priority as before (High
+  widest). At area zoom the stretches are drawn after the building dots; at street zoom they stay under poles and lamps. A
+  selected stretch: orange outline outside everything, the other stretches faded.
+- **Colours** (`design/tokens.ts`): Night `#3446b8 / #6b78ee / #a9b1ff`, Daylight `#8f99e3 / #5560cc / #2a2a8f` (Low →
+  High), checked with the dataviz colour validator; the new `darkCasing` token is the outline. The PDF report's map uses
+  the Daylight colours and a white outline too.
+- **List** (`components/GapList.tsx`, `store/ui.ts`): while a dark-stretch list is open, picking a stretch keeps the list
+  (`gapListOpen`), highlights the card and scrolls it into view; everywhere else a stretch still opens its own card.
+- **Street pick** (`backend/app/streetpick.py` `split_pieces`, `with_elsewhere`): runs on the finished answer, so names,
+  "already analysed" and every cache are unchanged; a street in one piece comes back exactly as before. `POST /jobs` and
+  `POST /jobs/plan-estimate` take `include_elsewhere`. In the browser (`map/analyse.ts`, `components/AnalysePanel.tsx`,
+  `map/MapView.tsx`, `map/TrimHandles.tsx`) the switch sets it; the other piece is a dashed line on the map until included.
+
+### Files changed
+- Backend: `app/streetpick.py`, `app/jobs.py`, `app/report.py`; tests `tests/test_ui_fixes.py` (new), `tests/test_d40.py`
+  (updated: a street with gaps now keeps only the clicked piece unless included, an intended change).
+- Web: `design/tokens.ts`, `map/layers.ts`, `map/MapView.tsx`, `map/TrimHandles.tsx`, `map/analyse.ts`, `store/ui.ts`,
+  `components/GapList.tsx`, `components/Key.tsx`, `components/EvidenceDrawer.tsx`, `components/AnalysePanel.tsx`,
+  `api/types.ts`; `scripts/test-ui.ts` (two tests), `scripts/ui-fixes-shots.ts` (new).
+- No change to the analysis pipeline or the Colab worker. Finished jobs and areas are not changed.
+
+### Key numbers
+- **Sathy Main Road:** card 1 → gap60-001 (376 m, map zoom 17.3), card 2 → gap60-002 (67 m, zoom 18); a click on
+  gap60-001 on the map → card 1 highlighted.
+- **Rathinapuri (Sanganoor) Main Road,** clicked west of Sanganoor Road (the job's click): 327 m kept. The rest is 65 m
+  when the answer comes from the analysed area's own lines (they stop at its outline), or 222 m from OpenStreetMap (327 +
+  222 = the job's 549 m). With the switch on: both pieces, a new estimate (one live run: 141 → 191 photos, $1.00 → $1.35),
+  no end dots. A click on the southern piece: 794 m connected + 230 m elsewhere.
+- **Normal streets unchanged:** all six demo streets (Sakthi Main Road 1,221 m in 4 parts, Ganapathy - Avarampalayam Road
+  1,039 m in 3 parts, Dr Alagesan Road 1,201 m, Pioneer Mills Cross Street 291 m, Sanganur Road 1,106 m, Unnamed road near
+  5th Street 50 m) come back with exactly the same line, length and job area as their cached answers, and no switch.
+- **Tests:** backend 443 passed, 1 skipped (incl. 7 new); typecheck, build, test:ui (18), check:data and the audit (both
+  themes) pass. Regression (`tools/regression.py`, API + production preview): a first run failed A (the log was redirected
+  to a file in the Windows code page, which cannot print "→") and two Night Explore checks of small areas that loaded slowly
+  (the same areas passed in Daylight); the re-run with UTF-8 output passed **all six sections, 266 checks**
+  (`docs/screenshots/regression/run-2026-10-04_1246.log`), now with 9 areas in D and E. No expected answer was changed:
+  the script reads the area list live, so the new Rathinapuri area was included without edits.
+- **Screenshots** (`docs/screenshots/ui-fixes/`, both themes): `a1/a2` 8th Street selected (area / street zoom), `a3/a4` every
+  stretch and the key, `b0–b4` Sathy Main Road (list, each card clicked, map click, cleared), `c1/c2` Rathinapuri before and
+  after the switch; `before/` holds the same views from before the fix.
+
+### Limits
+- Streets stored in pieces in an analysed area now offer the rest too: Ward 29's Sathy Main Road (cut at the ward edge into
+  803 / 111 / 37 m) and Sakthi Main Road (142 / 13 m) show "continues elsewhere" when picked in Analyse.
+- The "elsewhere" length depends on where the answer comes from: an analysed area's own lines stop at its outline (65 m
+  for Rathinapuri), OpenStreetMap gives the whole name within the usual 1.5 km search (222 m).
+- With both pieces included, a trim is not possible; switch it off to trim the clicked piece.
+- The Low priority colour is below 3:1 contrast on the panel / paper; the core, the outline, the width and the word carry it.
+- While checking, one old job with no area ("Unnamed road between Marutha Konar Street and Maniakarar Nagar", status failed;
+  the app's rule lists only test jobs and jobs cancelled before any worker started them) was removed from the Jobs list by the app's own "clear test jobs" call, together
+  with the two test jobs made for this check.
+
+### Lines fixed in 00–05
+- None.
+
+---
+
 [← 05 Explain and defend](05_EXPLAIN_AND_DEFEND.md) · [Start here](00_START_HERE.md) · (this is the last file) →

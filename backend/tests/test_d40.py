@@ -75,9 +75,15 @@ def covers_every_piece(poly_geojson, ranges):
 # ------------------------------------------------------------------------------------------ 1. streets with gaps
 @pytest.mark.parametrize("n, click_x", [(2, 100), (3, 450)])
 def test_whole_street_with_gaps_keeps_every_piece(gap_road, tmp_path, n, click_x):
+    """D57 changed the default: the pick keeps only the clicked piece and offers the rest (`elsewhere`); with the rest
+    included (with_elsewhere, the confirm sheet's toggle) every piece is kept, as D40 required."""
     gap_road["n"] = n
     la, lo = ll(click_x)
-    res = streetpick.pick(str(tmp_path), [], la, lo)
+    one = streetpick.pick(str(tmp_path), [], la, lo)
+    assert one["polygon"]["type"] == "Polygon" and abs(one["length_m"] - 200) <= 2 and len(one["lines"]["coordinates"]) == 1
+    assert covers_every_piece(one["polygon"], [s for s in SEGMENTS[:n] if s[0] <= click_x <= s[1]])
+    assert abs(one["elsewhere"]["length_m"] - 200 * (n - 1)) <= 2 and one["elsewhere"]["pieces"] == n - 1
+    res = streetpick.with_elsewhere(one)
     g = shape(res["polygon"])
     assert res["polygon"]["type"] == "MultiPolygon" and len(parts(res["polygon"])) == n and g.is_valid
     assert covers_every_piece(res["polygon"], SEGMENTS[:n])
@@ -97,7 +103,7 @@ def test_a_street_without_gaps_is_still_one_polygon(gap_road, tmp_path):
     ([(360, 540)], 1),                                      # inside one piece: a single polygon
 ])
 def test_trimmed_street_with_gaps(gap_road, tmp_path, ranges, n):
-    res = streetpick.pick(str(tmp_path), [], *ll(450))
+    res = streetpick.with_elsewhere(streetpick.pick(str(tmp_path), [], *ll(450)))      # D57: every piece included
     t = streetpick.trim(res, stretch(*ranges))
     assert t["trimmed"] and len(parts(t["polygon"])) == n and shape(t["polygon"]).is_valid
     assert t["polygon"]["type"] == ("MultiPolygon" if n > 1 else "Polygon")
@@ -121,13 +127,14 @@ def test_preview_of_a_street_with_gaps_is_not_a_500(offline, gap_road, click_cac
     la, lo = ll(450)
     r = offline.post("/jobs/preview", json={"lat": la, "lon": lo})
     assert r.status_code == 200, r.text
-    assert r.json()["polygon"]["type"] == "MultiPolygon" and len(parts(r.json()["polygon"])) == 3
+    # D57: the clicked piece, the other two offered as `elsewhere`
+    assert r.json()["polygon"]["type"] == "Polygon" and abs(r.json()["elsewhere"]["length_m"] - 400) <= 2
 
 
 @pytest.mark.parametrize("trim", [None, [(100, 200), (350, 450)]])
 def test_job_input_keeps_the_multipolygon(online, gap_road, click_cache, trim):
     la, lo = ll(450 if trim is None else 150)
-    body = {"lat": la, "lon": lo, "test": True, **({"lines": stretch(*trim)} if trim else {})}
+    body = {"lat": la, "lon": lo, "test": True, "include_elsewhere": True, **({"lines": stretch(*trim)} if trim else {})}   # D57
     r = online.post("/jobs", json=body)
     try:
         assert r.status_code == 201, r.text
@@ -143,7 +150,7 @@ def test_job_input_keeps_the_multipolygon(online, gap_road, click_cache, trim):
 def test_pipeline_area_takes_a_multipolygon(gap_road, tmp_path):
     """run_area's area model (pipeline, unchanged) with the picker's MultiPolygon."""
     from geo_cascadia.area import Area
-    res = streetpick.pick(str(tmp_path), [], *ll(450))
+    res = streetpick.with_elsewhere(streetpick.pick(str(tmp_path), [], *ll(450)))      # D57: every piece included
     a = Area(shape(res["polygon"]), str(tmp_path), 40.0)
     assert a.poly_L.geom_type == "MultiPolygon" and len(a.poly_L.geoms) == 3
     assert all(a.poly_L.contains(Point(a.L(*ll((x0 + x1) / 2)))) for x0, x1 in SEGMENTS)
