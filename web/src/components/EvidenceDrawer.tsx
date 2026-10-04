@@ -7,7 +7,7 @@ import { Check, CircleSlash, Flag, Loader2, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { ApiError } from '@/api/client'
 import { useBuildingLinks, useImagery, useModelCard, useObjectDetail, type PositionCheck } from '@/api/queries'
-import type { AnyProps, Asset, Building, CameraBuildingProps, GapProps, MissingProps, ReviewItem, UnmappedBusiness } from '@/api/types'
+import type { AnyProps, Asset, Building, CameraBuildingProps, FloorConfidence, GapProps, MissingProps, OsmLevels, ReviewItem, UnmappedBusiness } from '@/api/types'
 import { assetRegLabel, ASSET_REG, diffLabel, onMapSeenIn, floorsStatusPlain, floorsText, googleFlagPlain, matchLabel, nameQualityPlain, reviewLabel, reviewReasons, useLabel, useNoun } from '@/lib/labels'
 import { RouteLine } from '@/lib/routes'
 import { miniStreets } from '@/lib/mini'
@@ -123,6 +123,19 @@ function LinkedLine({ area, id }: { area: string | null; id: string }) {
   )
 }
 
+/** extras 4: how sure the floor count is, in plain words, and OpenStreetMap's own count next to it when it has one */
+function FloorConfidenceLine({ fc, osm }: { fc?: FloorConfidence; osm?: OsmLevels }) {
+  if (!fc) return null
+  const tone = fc.level === 'high' ? 'var(--ns-ink)' : fc.level === 'medium' ? 'var(--ns-ink2)' : 'var(--ns-sodium)'
+  return (
+    <span className="t-small mt-0.5 block" aria-label="Floor-count confidence">
+      {fc.level ? <><b className="font-[600]" style={{ color: tone }}>{fc.word} confidence</b><span className="ink2">: {fc.reason}</span></>
+        : <span className="ink3">{fc.reason}</span>}
+      {osm?.osm_levels != null && <span className="ink2 block">OpenStreetMap says {osm.osm_levels} {osm.osm_levels === '1' ? 'floor' : 'floors'} <span className="ink3">(volunteer map, a cross-check)</span></span>}
+    </span>
+  )
+}
+
 function BuildingBody({ b }: { b: Building }) {
   const area = useUi((s) => s.area)
   const detail = useObjectDetail(area, 'building', b.id)
@@ -143,7 +156,8 @@ function BuildingBody({ b }: { b: Building }) {
         <LinkedLine area={area} id={b.id} />
         <Section title="What we saw">
           <Row k="Use">{use ? <>{useLabel(use)}</> : <span className="ink3">Not known: no clear photo of the front</span>}</Row>
-          <Row k="Floors">{at?.floors?.value != null ? floorsText(at.floors.value, at.floors.status) : <span className="ink3">Not known</span>}</Row>
+          <Row k="Floors">{at?.floors?.value != null ? floorsText(at.floors.value, at.floors.status) : <span className="ink3">Not known</span>}
+            <FloorConfidenceLine fc={detail.data?.floor_confidence} osm={detail.data?.osm_levels} /></Row>
           <Row k="Frontage">{frontage != null ? <>{fmt1.format(frontage)} m <span className="ink3">along the street, from the map outline</span></> : <span className="ink3">{detail.isPending ? '…' : 'Not known'}</span>}</Row>
           <Row k="Position"><PositionLine pc={detail.data?.position_check} pending={detail.isPending} /></Row>
           <Row k="Sign">{name?.value ? <>{name.value}{name.quality !== 'good' && <span className="ink3"> (hard to read, to double-check)</span>}</> : <span className="ink3">No sign read</span>}</Row>
@@ -153,6 +167,11 @@ function BuildingBody({ b }: { b: Building }) {
             { page: 'hood', section: 'buildings', label: 'How buildings are read' }]}>
             <Fact k="Use"><RouteLine route={at?.use?.route} /></Fact>
             <Fact k="Floors"><RouteLine route={at?.floors?.route} />{at?.floors?.status && <span className="ink3"> Result: {floorsStatusPlain(at.floors.status)}.</span>}</Fact>
+            {detail.data?.floor_confidence && <Fact k="Floor confidence" hint="a fixed rule">{detail.data.floor_confidence.rule}{detail.data.floor_confidence.check && <span className="ink3"> The AI floor count was {detail.data.floor_confidence.check}.</span>}</Fact>}
+            {detail.data?.osm_levels && <Fact k="OpenStreetMap floors" hint="building:levels">{detail.data.osm_levels.osm_levels != null
+              ? <>OpenStreetMap gives this building {detail.data.osm_levels.osm_levels} {detail.data.osm_levels.osm_levels === '1' ? 'level' : 'levels'} (looked up {detail.data.osm_levels.fetched?.slice(0, 10)}). Volunteers add this tag for few buildings; it is a cross-check only and never changes our count.</>
+              : detail.data.osm_levels.loaded ? <span className="ink3">OpenStreetMap has no floor count (building:levels) for this building.</span>
+              : <span className="ink3">OpenStreetMap's floor counts are not loaded for this area yet.</span>}</Fact>}
             <Fact k="Sign / name"><RouteLine route={name?.route} />{name?.quality && <span className="ink3"> The sign was {nameQualityPlain(name.quality)}.</span>}</Fact>
             {b.evidence?.sign_view?.ocr_text && <Fact k="Sign text read" hint={b.evidence.sign_view.ocr_conf != null ? `OCR confidence ${fmt1.format(b.evidence.sign_view.ocr_conf)}` : 'OCR'}>“{b.evidence.sign_view.ocr_text}”{b.evidence.sign_view.ocr_conf != null && <span className="ink2">, the text reader was {Math.round(b.evidence.sign_view.ocr_conf * 100)}% sure</span>}</Fact>}
             {!!at?.property_identifiers?.length && <Fact k="Door numbers">{at.property_identifiers.join(', ')} <span className="ink3">(not confirmed)</span></Fact>}

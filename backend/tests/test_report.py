@@ -19,12 +19,16 @@ def api(online):
     return online
 
 
+_BUNDLES = {}
+
+
 def _content(api, slug, street=None):
     app = api.app
     mapdata.configure(app.state.data.pool)
     mapdata._DOWN["until"] = 0
     s = app.state.data.db
-    return report.content(s, s.bundle(slug), app.state.runfiles.get(slug), app.state.model_card.get(),
+    _BUNDLES[slug] = s.bundle(slug)
+    return report.content(s, _BUNDLES[slug], app.state.runfiles.get(slug), app.state.model_card.get(),
                           app.state.settings.areas_dir, street=street)
 
 
@@ -152,7 +156,7 @@ def _files_carry_the_same_values(c):
     import pypdfium2
     from openpyxl import load_workbook
     wb = load_workbook(io.BytesIO(report.xlsx(c)))
-    for key in ("buildings", "assets_all", "stretches", "review"):
+    for key in ("buildings", "assets_all", "stretches", "review", "shops"):
         t = c["tables"][key]
         sh = wb[t["sheet"]]
         got = [[cell.value for cell in row] for row in sh.iter_rows(min_row=1)]
@@ -173,6 +177,51 @@ def _files_carry_the_same_values(c):
     for r in c["tables"]["buildings"]["rows"]:
         assert r[0] in flat
     assert "SYNTHETIC" in flat and "© OpenStreetMap contributors" in flat
+    _gis_carries_the_same_values(c)
+
+
+def _gis_carries_the_same_values(c):
+    """extras 1: the GeoJSON and the zipped Shapefile carry the Excel sheets' rows (same count per layer, same values;
+    Shapefile names via fields.csv), in WGS84 with a .prj"""
+    import csv
+    import json
+    import tempfile
+    import zipfile
+    import shapefile
+    from app import gisexport
+    b = _BUNDLES[c["slug"]]
+    gj = json.loads(gisexport.geojson(c, b))
+    z = zipfile.ZipFile(io.BytesIO(gisexport.shapefile_zip(c, b)))
+    key = {}
+    for row in list(csv.reader(io.StringIO(z.read("fields.csv").decode("utf-8-sig"))))[1:]:
+        key.setdefault(row[0], {})[row[1]] = row[2]
+    d = tempfile.mkdtemp()
+    z.extractall(d)
+    for layer, tkey, _ in gisexport.LAYERS:
+        t = c["tables"][tkey]
+        feats = [f for f in gj["features"] if f["properties"]["layer"] == layer]
+        assert len(feats) == len(t["rows"]), layer
+        for f, row, link in zip(feats, t["rows"], t["links"]):
+            want = dict(zip(t["columns"], row))
+            want[t["columns"][-1]] = link or want[t["columns"][-1]]
+            assert {k: v for k, v in f["properties"].items() if k != "layer"} == want
+            assert f["geometry"]["type"] in ("Point", "Polygon", "LineString")
+        assert z.read(f"{layer}.prj").decode().startswith('GEOGCS["GCS_WGS_1984"')
+        r = shapefile.Reader(f"{d}/{layer}")
+        names = [fl.name for fl in r.fields[1:]]
+        assert [key[layer][n] for n in names] == t["columns"]
+        recs = r.records()
+        assert len(recs) == len(t["rows"]), layer
+        for rec, row, link in zip(recs, t["rows"], t["links"]):
+            for col, v in zip(t["columns"], list(rec)):
+                exp = link if col == t["columns"][-1] and link else dict(zip(t["columns"], row))[col]
+                if exp is None or exp == "":
+                    assert v in (None, ""), (layer, col, v)
+                elif isinstance(exp, float):
+                    assert abs(float(v) - exp) < 0.01
+                else:
+                    assert (str(v) == str(exp)) or (isinstance(exp, str) and len(exp.encode()) > 254 and exp.startswith(v)), (layer, col, v, exp)
+        r.close()
 
 
 def test_report_offline_builds_and_says_so(offline):

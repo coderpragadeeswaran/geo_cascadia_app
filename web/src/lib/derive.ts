@@ -136,6 +136,9 @@ export function focusOf(r: Records | null, f: Filter, q: QueryResponse | null, g
       case 'streetlight_gaps':
         return { buildings: empty, assets: empty, unmapped: empty, gaps: ids('streetlight_gap'),
           streets: q.parsed_filters.street ? new Set([q.parsed_filters.street]) : null, key: `q:${q.text}` }
+      case 'osm_businesses':
+        return { buildings: ids('building'), assets: empty, unmapped: ids('unmapped'), gaps: empty,
+          streets: q.parsed_filters.street ? new Set([q.parsed_filters.street]) : null, key: `q:${q.text}` }
       case 'review': {
         const rows = (q.rows ?? []) as unknown as { item_type: string; ref_id: string }[]
         return { buildings: new Set(rows.filter((x) => x.item_type === 'building').map((x) => x.ref_id)),

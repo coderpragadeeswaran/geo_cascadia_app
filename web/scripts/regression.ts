@@ -14,35 +14,50 @@ const APP = process.env.APP_URL ?? 'http://localhost:5173/'
 const API = process.env.API_URL ?? 'http://localhost:8000'
 mkdirSync(OUT, { recursive: true })
 let fails = 0
+let retries = 0
 const lines: string[] = []
 const log = (s: string) => { console.log(s); lines.push(s) }
 const check = (ok: boolean, what: string) => { log(`${ok ? '  ok  ' : '  FAIL'} ${what}`); if (!ok) fails++ }
+type Check = (ok: boolean, what: string) => void
 
-async function area(page: Page, errors: string[], mode: string, slug: string, name: string, first: boolean) {
+/** extras F3: the page is ready when the key numbers show figures, not only their labels (a slow area showed
+ *  "BUILDINGS CHECKED NOT IN REGISTER …" with no number yet), and the network has settled */
+async function ready(page: Page) {
+  await page.waitForFunction(() => {
+    const r = document.querySelector('[aria-label="Key figures (click to filter)"]') as HTMLElement | null
+    return !!r && /\d/.test(r.innerText) && !/…/.test(r.innerText)
+  }, undefined, { timeout: 90_000, polling: 250 })
+  await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => { /* the map may keep fetching tiles */ })
+  await page.waitForTimeout(1500)
+}
+
+async function area(page: Page, errors: string[], mode: string, slug: string, name: string, first: boolean, check: Check) {
   const before = errors.length
   await page.evaluate((s) => { localStorage.setItem('gc.area', JSON.stringify(s)) }, slug)
   await page.goto(APP + '#/', { waitUntil: 'domcontentloaded' })
   await page.reload({ waitUntil: 'domcontentloaded' })
   const ribbon = page.locator('[aria-label="Key figures (click to filter)"]')
   await ribbon.getByText(/Buildings? checked/).waitFor({ timeout: 60_000 })
-  await page.waitForTimeout(4500)
+  await ready(page)
   const figs = (await ribbon.innerText()).replace(/\s+/g, ' ')
   check(/^\d|STREET/.test(figs.trim()) && !/…/.test(figs), `[${slug}] Explore key numbers: ${figs.slice(0, 120)}`)
   await page.screenshot({ path: join(OUT, `${mode}-${slug}-explore.png`) })
   // What stands out
   await page.getByRole('button', { name: 'What stands out' }).click()
-  await page.waitForTimeout(1500)
-  check(await page.locator('[aria-label="Download a report for this area"]').count() > 0, `[${slug}] What stands out opens (with Download report)`)
+  const dl = await page.locator('[aria-label="Download a report for this area"]').first().waitFor({ timeout: 15_000 }).then(() => true, () => false)
+  check(dl, `[${slug}] What stands out opens (with Download report)`)
   await page.keyboard.press('Escape'); await page.waitForTimeout(400)
   // a key number → its list → the first row → the drawer
   await ribbon.getByRole('button', { name: /Buildings? checked/ }).click()
-  await page.waitForTimeout(2500)
   const panel = page.locator('[aria-label="Findings panel"]')
-  check(await panel.count() > 0, `[${slug}] a key number opens its list`)
+  check(await panel.first().waitFor({ timeout: 15_000 }).then(() => true, () => false), `[${slug}] a key number opens its list`)
   const row = panel.locator('[role="row"], .r').nth(1)
+  await row.waitFor({ timeout: 15_000 }).catch(() => { /* counted below */ })
   if (await row.count()) {
-    await row.click(); await page.waitForTimeout(4000)
-    check(await page.locator('[aria-label="Evidence"]').count() > 0, `[${slug}] a row opens the evidence drawer`)
+    await row.click()
+    const ev = await page.locator('[aria-label="Evidence"]').first().waitFor({ timeout: 20_000 }).then(() => true, () => false)
+    await page.waitForTimeout(1500)
+    check(ev, `[${slug}] a row opens the evidence drawer`)
     if (first) await page.screenshot({ path: join(OUT, `${mode}-${slug}-drawer.png`) })
     await page.keyboard.press('Escape'); await page.waitForTimeout(500)
   } else check(false, `[${slug}] the list has a row to open`)
@@ -71,7 +86,8 @@ async function tour(page: Page, errors: string[], mode: string) {
   await page.evaluate(() => localStorage.setItem('gc.area', JSON.stringify('ward29')))
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.locator('[aria-label="Key figures (click to filter)"]').getByText(/Buildings? checked/).waitFor({ timeout: 60_000 })
-  await page.waitForTimeout(4000)
+  await ready(page)
+  await page.waitForTimeout(2500)
   await page.getByRole('button', { name: 'Guided tour' }).click()
   const dlg = page.locator('[aria-labelledby="tour-title"]')
   await dlg.waitFor({ timeout: 10_000 })
@@ -108,11 +124,24 @@ async function main() {
     // Ward 29 first (it gets the per-page screenshots), then every other area
     const order = [...areas].sort((a, b) => Number(b.slug === 'ward29') - Number(a.slug === 'ward29'))
     for (const a of order) {
-      try { await area(page, errors, mode, a.slug, a.name, a.slug === 'ward29') } catch (e) { check(false, `[${a.slug}] ${(e as Error).message.split('\n')[0]}`) }
+      // extras F3: one retry per area. If any check of the first attempt failed, the area is loaded again from
+      // scratch and only the second attempt counts; the first attempt's failures are written to the log (never hidden).
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        const got: [boolean, string][] = []
+        const errsBefore = errors.length
+        try { await area(page, errors, mode, a.slug, a.name, a.slug === 'ward29', (ok, what) => { got.push([ok, what]) }) }
+        catch (e) { got.push([false, `[${a.slug}] ${(e as Error).message.split('\n')[0]}`]) }
+        const failed = got.filter(([ok]) => !ok)
+        if (!failed.length || attempt === 2) { for (const [ok, what] of got) check(ok, what + (attempt === 2 ? ' (on retry)' : '')); break }
+        retries++
+        log(`  retry [${a.slug}] once — first attempt: ${failed.map(([, w]) => w).join(' | ')}`)
+        errors.splice(errsBefore)
+      }
     }
     try { await tour(page, errors, mode) } catch (e) { check(false, `tour: ${(e as Error).message.split('\n')[0]}`) }
     await browser.close()
   }
+  log(`${retries} area(s) needed the one retry`)
   log(fails ? `${fails} browser check(s) FAILED` : 'all browser checks passed')
   writeFileSync(join(OUT, 'browser.log'), lines.join('\n') + '\n')
   process.exit(fails ? 1 : 0)

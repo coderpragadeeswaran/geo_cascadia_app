@@ -130,6 +130,7 @@ npx tsx scripts/gate1-shots.ts     # Gate 1 per building in the drawer (dev serv
 npx tsx scripts/p8-shots.ts        # P8 screens (dev server): Routing and cost, photo dates, front wall, dark stretches, Tamil; MODE=daylight for Daylight
 npx tsx scripts/d53-shots.ts       # D53 (dev server): Hood map-data line, map attribution, the 50 m dark-stretch question; MODE=daylight
 npx tsx scripts/lighting-shots.ts  # D54/D55 (dev server): priority list, stretch card, map colours, priority question, report buttons + real downloads; MODE=daylight
+npx tsx scripts/extras-shots.ts    # D58 (dev server): "continues outside this area", GIS downloads, OSM question + map tags, floor confidence, Hood/Trust; MODE=daylight
 backend\.venv\Scripts\python tools\audit_numbers.py    # (repo root) Ward 29 numbers straight from the database
 ```
 
@@ -171,8 +172,31 @@ street's panel (or `GET /areas/{slug}/report.pdf|.xlsx?street=`). The PDF is a s
 the key numbers as the app shows them, a map drawn from our own data with © OpenStreetMap contributors, findings,
 possible dark stretches by priority, review queue, cost, Gate 1, limits); the Excel file has the same tables. No Google
 map or photo is in it: each row links to Google Maps instead. Registers are marked SYNTHETIC throughout. Ward 29 takes
-about 9 s (27 pages). Libraries: fpdf2, openpyxl, uharfbuzz (pip only). `toolsuild_report_fonts.py` rebuilds the
+about 4 s once loaded (19 pages since D58; 27 before). Libraries: fpdf2, openpyxl, uharfbuzz (pip only). `tools\build_report_fonts.py` rebuilds the
 report's fonts from the app's typeface (only needed if the font changes).
+
+## Report v2, GIS export, OpenStreetMap cross-checks, city projection (D58)
+
+**Downloads** (What stands out, or "Report for this street"): **PDF** (all landscape A4: at a glance, charts, map, what to
+do next, method & limits, scale & confidence — then an appendix with the key columns; Ward 29 19 pages), **Excel** (every
+column and row; new columns floor-count confidence, OSM building:levels, "in OpenStreetMap"; a new sheet "OSM shops"),
+**GeoJSON** and **Shapefile** (zipped; buildings with findings as outlines, poles and streetlights, possible dark stretches as
+lines, review items, businesses vs OpenStreetMap; WGS84 with .prj; `fields.csv` maps the 10-character field names to the
+Excel columns). `GET /areas/{slug}/report.pdf|.xlsx|.geojson|.shp.zip?street=`. Render a report to PNG pages:
+`backend\.venv\Scripts\python tools\render_report.py ward29 [--street "Sathy Main Road"]`.
+
+**OpenStreetMap as a real reference** (not an official register; it never changes our results): our businesses vs
+OpenStreetMap's shop points along the analysed streets (Under the Hood, Trust, the question "Businesses not in
+OpenStreetMap", the report), and OpenStreetMap's building:levels next to our floor count in the building card. The names
+and tags come from one OpenStreetMap look-up per area (free, no Google call), saved in `data/areas/<slug>/osm_tags.json`:
+```powershell
+backend\.venv\Scripts\python tools\fetch_osm_tags.py          # areas without the file (new worker areas fetch it themselves)
+backend\.venv\Scripts\python tools\fetch_osm_tags.py --all    # refresh all (e.g. after the monthly map refresh)
+```
+
+**Whole-city projection** (Under the Hood, PDF; `GET /projection`): for each of the four cities, about N km of streets →
+photos, cost at Google's list price, GPU hours, as a low–high range from our completed runs. An estimate: Street View
+coverage is not checked for whole cities.
 
 ## Field check: the review queue as a walking route
 

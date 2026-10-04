@@ -151,15 +151,22 @@ def test_one_street_at_a_time_and_area_cap(online):
     assert online.post("/jobs", json={"polygon": BIG, "name": "pytest big", "test": True}).status_code == 422   # > 1.5 km²
     if busy:
         pytest.skip("a real analysis is active; the one-at-a-time check would touch it")
-    a = online.post("/jobs", json={"polygon": POLY, "name": "pytest real 1"})
+    made = []                                       # extras F1: clean up by the exact ids made here, never by name
+
+    def post(body):
+        r = online.post("/jobs", json=body)
+        if r.status_code == 201:
+            made.append(r.json()["job"]["id"])
+        return r
+    a = post({"polygon": POLY, "name": "pytest real 1"})
     try:
         assert a.status_code == 201
-        b = online.post("/jobs", json={"polygon": POLY, "name": "pytest real 2"})
+        b = post({"polygon": POLY, "name": "pytest real 2"})
         assert b.status_code == 409 and "one street at a time" in b.json()["detail"].lower()
-        assert online.post("/jobs", json={"polygon": POLY, "name": "pytest test", "test": True}).status_code == 201
+        assert post({"polygon": POLY, "name": "pytest test", "test": True}).status_code == 201
     finally:
         with online.app.state.data.pool.connection() as c:
-            c.execute("delete from jobs where input->>'name' like 'pytest %' and created_at > now() - interval '5 minutes'")
+            c.execute("delete from jobs where id = any(%s::uuid[])", (made,))
 
 
 def _upload(online, W, job_id, resumed=True):

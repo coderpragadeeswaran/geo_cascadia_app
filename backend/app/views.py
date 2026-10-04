@@ -9,7 +9,7 @@ from collections import Counter
 
 from geo_cascadia.workspace import QueryEngine, build_dashboard
 
-from . import camonly, lighting, queryparse, spatial
+from . import camonly, lighting, osmref, queryparse, spatial
 from .derived import computed_counts, consistency
 from .streetgeo import gap_consistency
 
@@ -268,7 +268,7 @@ GOOGLE_FLAG = "sign_not_in_google_within_40m"
 
 
 def run_query(bundle, text, explain=True, gaps_at=None, scope_street=None, near_at=None, near_m=None, prio_at=None,
-              priority=None):
+              priority=None, osm_at=None):
     """QueryEngine.run + a uniform response. why_empty: the engine's funnel for building queries; for other intents
     a funnel built the same way (all → filters → 0). Typed questions go through queryparse first (synonyms + what was
     understood / ignored, docs/QUERY.md); chips built by clicking are canonical text and skip that step.
@@ -284,6 +284,12 @@ def run_query(bundle, text, explain=True, gaps_at=None, scope_street=None, near_
     prio_at(rows, display, key) → lighting.for_area(...) (D54): every dark-stretch row carries its lighting priority;
     "high / medium / low priority" is taken out of a typed question the same way and keeps only that level
     (priority = from edited chips)."""
+    if explain and osm_at is not None:
+        mode, o_phrase = osmref.extract_question(text)
+        if mode:                                            # extras 3: our businesses vs OpenStreetMap (not QueryEngine)
+            named = _street_named(bundle, text)
+            return osm_answer(bundle, text, mode, osm_at, named or scope_street, phrase=o_phrase,
+                              scoped=None if named else scope_street)
     qe = engine(bundle)
     und = None
     phrase = None
@@ -533,7 +539,55 @@ def compose_query(f):
     return " ".join(parts)
 
 
-def run_filters(bundle, filters, gaps_at=None, near_at=None, prio_at=None):
+def _street_named(bundle, text):
+    """an analysed street named in the question (its display name, any case), else None"""
+    t = " ".join((text or "").lower().split())
+    hits = [s["name"] for s in bundle["streets"] if s.get("name") and s["name"].lower() in t]
+    return max(hits, key=len) if hits else None
+
+
+def osm_answer(bundle, text, mode, osm_at, street=None, phrase=None, scoped=None, explain=True):
+    """extras 3: "businesses not in OpenStreetMap" (and the other two directions), answered from osmref.shops: the rows,
+    the OpenStreetMap points for the map's markers, and the counts behind an empty answer"""
+    sh = osm_at(street)
+    parsed = {"intent": "osm_businesses", "osm": mode, **({"street": street} if street else {})}
+    und = None
+    if explain:
+        und = {"status": "ok", "understood": [{"phrase": phrase or "OpenStreetMap", "meaning": "businesses " + osmref.OSM_MODES[mode]}],
+               "ignored": [], "synonyms": [], "suggestions": [], "read_as": text, **({"scoped_to": scoped} if scoped else {})}
+    out = {"text": text, "parsed_filters": parsed, "intent": "osm_businesses", "rows": [], "groups": None, "why_empty": [],
+           "understanding": und}
+    if not sh.get("available"):
+        return {**out, "total": None, "note": sh.get("note")}
+    rows = osmref.answer_rows(sh, mode)
+    n = sh["counts"]
+    points = ([{"osm_id": o["osm_id"], "lat": o["lat"], "lon": o["lon"], "name": o.get("name"), "kind": o.get("kind"),
+                "matched": False} for o in sh["osm_only"]]
+              + [{"osm_id": m["osm"]["osm_id"], "lat": m["osm"]["lat"], "lon": m["osm"]["lon"], "name": m["osm"].get("name"),
+                  "kind": m["osm"].get("kind"), "matched": True} for m in sh["matched"]])
+    out.update(rows=rows, total=len(rows),
+               note=(f"Our camera found {n['camera']} businesses here; OpenStreetMap lists {n['osm']} along these streets: "
+                     f"{n['matched']} the same place ({n['matched_same_name']} also the same name), {n['camera_only']} seen by "
+                     f"our camera only, {n['osm_only']} in OpenStreetMap only. {sh['note']}"),
+               osm={"mode": mode, "counts": n, "rule": sh["rule"], "fetched": sh.get("fetched"), "points": points})
+    if not rows:
+        first = (("OpenStreetMap businesses along these streets", n["osm"]) if mode == "osm_only"
+                 else ("businesses our camera found", n["camera"]))
+        out["why_empty"] = [{"step": first[0], "count": first[1]}, {"step": osmref.OSM_MODES[mode], "count": 0}]
+    return out
+
+
+OSM_TEXT = {"camera_only": "Businesses not in OpenStreetMap", "osm_only": "OpenStreetMap businesses not seen by the camera",
+            "matched": "Businesses in OpenStreetMap"}
+
+
+def run_filters(bundle, filters, gaps_at=None, near_at=None, prio_at=None, osm_at=None):
+    if filters.get("intent") == "osm_businesses":                  # extras 3 (not a QueryEngine question)
+        mode = filters.get("osm") if filters.get("osm") in osmref.OSM_MODES else "camera_only"
+        if osm_at is None:
+            raise FilterError("the OpenStreetMap comparison is not available here")
+        text = OSM_TEXT[mode] + (f" on {filters['street']}" if filters.get("street") else "")
+        return osm_answer(bundle, text, mode, osm_at, filters.get("street"), explain=False)
     near_m = int(filters.get("near_dark_m") or 0) or None        # D53: applied after QueryEngine (spatial.py)
     priority = filters.get("priority") if filters.get("priority") in lighting.LEVEL_WORDS else None   # D54
     want = normalize_filters(filters)

@@ -6,7 +6,14 @@ import { useState } from 'react'
 import { API_URL } from '@/api/client'
 import { cn } from '@/lib/utils'
 
-type Kind = 'pdf' | 'xlsx'
+type Kind = 'pdf' | 'xlsx' | 'geojson' | 'shp.zip'
+
+const TITLE: Record<Kind, string> = {
+  pdf: 'Summary for officials, readable in two minutes: key numbers, charts, a map from our own data, what to do next, method and limits',
+  xlsx: 'Every table with every column, one sheet each',
+  geojson: 'For GIS (QGIS, ArcGIS): buildings with findings, poles and streetlights, possible dark stretches, review items, businesses vs OpenStreetMap — the Excel columns, WGS84',
+  'shp.zip': 'The same GIS layers as zipped Shapefiles (WGS84, .prj), with fields.csv: the key from the short field names to the Excel columns',
+}
 
 export function ReportButton({ area, street, className }: { area: string | null; street?: string | null; className?: string }) {
   const [busy, setBusy] = useState<Kind | null>(null)
@@ -36,8 +43,7 @@ export function ReportButton({ area, street, className }: { area: string | null;
   }
   const btn = (kind: Kind, label: string) => (
     <button className="btn h-7" onClick={() => get(kind)} disabled={busy != null} aria-busy={busy === kind}
-      title={kind === 'pdf' ? 'Summary for officials: key numbers, a map from our own data, findings, possible dark stretches by priority, review queue, cost, limits'
-        : 'The same tables as the PDF, one sheet each'}>
+      title={TITLE[kind]}>
       {busy === kind ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}{busy === kind ? 'Preparing…' : label}
     </button>
   )
@@ -46,6 +52,8 @@ export function ReportButton({ area, street, className }: { area: string | null;
       <span className="t-small ink3">{street ? 'Report for this street:' : 'Download report:'}</span>
       {btn('pdf', 'PDF')}
       {btn('xlsx', 'Excel')}
+      {btn('geojson', 'GeoJSON')}
+      {btn('shp.zip', 'Shapefile')}
       {err && <span className="t-small sodium w-full" role="alert">{err}</span>}
     </div>
   )

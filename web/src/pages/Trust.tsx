@@ -9,6 +9,7 @@
  *    limits and how questions are answered. Anchors: #/trust/<id> (results, use, floors, names, streetlights, detector,
  *    positions, gate1, matching, cost, rejected, consistency, gap-checks, limits, questions). */
 import { ArrowRight, CircleCheck, CircleX, Minus } from 'lucide-react'
+import { OsmLevelsSummary, OsmShopsSummary } from '@/components/OsmPanels'
 import { SignBoxNote, SignRule } from '@/components/SignRule'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useConsistency, useRegisterTests, useTrust, type ConsistencyRow, type Experiment, type RegisterTests, type TrustCard, type TrustNum } from '@/api/p5'
@@ -47,7 +48,7 @@ const frac = (x: TrustNum | null) => !x || typeof x.value !== 'number' ? null : 
 const NAV: [string, string][] = [
   ['results', 'What each result is worth'], ['rejected', 'Tried and dropped'], ['detector', 'Detector'], ['positions', 'Pole & light positions'],
   ['gate1', 'Building position (Gate 1)'], ['signs', 'Which building a sign belongs to'], ['register-tests', 'Register tests (planted mistakes)'], ['matching', 'Register matching (notebook)'], ['cost', 'Cost: routed vs all-VLM'],
-  ['consistency', 'Stored vs computed'], ['gap-checks', 'Gap length checks'], ['limits', 'Limits of this data'], ['questions', 'How questions are answered'],
+  ['consistency', 'Stored vs computed'], ['gap-checks', 'Gap length checks'], ['osm', 'OpenStreetMap cross-checks'], ['limits', 'Limits of this data'], ['questions', 'How questions are answered'],
 ]
 
 /** D42/D43: caught / missed / false alarms per planted mistake kind, and pairing by location, per area (computed) */
@@ -231,6 +232,12 @@ export default function Trust() {
                   <span key="c" className="t-small ink2">{g.display_mode === 'check' ? g.note : 'along-road length differs by more than 10 %'}</span>]} />)}
               </tbody></table>
             ) : <p className="t-small ink3">No gap needs a check in this area ({plural(gaps.length, 'dark stretch')}).</p>}
+          </Sec>
+
+          <Sec id="osm" title={`OpenStreetMap cross-checks · ${area ? shortArea(area.name) : ''}`}
+            lead="A real reference next to the synthetic register. OpenStreetMap is crowd-sourced (volunteers), not an official register, so these are cross-checks, not accuracy: nothing here changes our results.">
+            <OsmShopsSummary area={area?.slug ?? null} />
+            <div className="mt-4"><OsmLevelsSummary area={area?.slug ?? null} /></div>
           </Sec>
 
           <Sec id="limits" title="Limits of this data">

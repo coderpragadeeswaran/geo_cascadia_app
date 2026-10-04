@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
 import type { ModelCard } from '@/types/modelCard'
 import { api } from './client'
+import type { FloorConfidence, OsmLevels, OsmReference, Projection } from './types'
 import type { AreaCard, AreaDetail, AreaGeoJSON, Asset, Building, EvidenceViewData, Imagery, Job, PublicConfig, ReviewItem, ReviewRow, UnmappedBusiness, WorkerStatus } from './types'
 
 export const useConfig = () =>
@@ -41,10 +42,18 @@ export const useUnmapped = (slug: string | null) =>
 export const useReviewRows = (slug: string | null) =>
   useQuery({ queryKey: ['review', slug], queryFn: () => api<{ rows: ReviewRow[] }>(`/review${slug ? `?area=${slug}&` : '?'}page_size=500`).then((r) => r.rows), staleTime: 10_000 })
 
+/** extras 3 + 4: our businesses vs OpenStreetMap, and OSM building:levels vs our floor counts (GET /areas/{slug}/osm) */
+export const useOsmReference = (slug: string | null) =>
+  useQuery({ queryKey: ['osm', slug], queryFn: () => api<OsmReference>(`/areas/${slug}/osm`), enabled: !!slug, staleTime: 60_000 })
+/** extras 2: the city-scale projection (an estimate, a range from our runs) */
+export const useProjection = () =>
+  useQuery({ queryKey: ['projection'], queryFn: () => api<Projection>('/projection'), staleTime: 300_000 })
+
 export const useObjectDetail = (area: string | null, kind: 'building' | 'asset' | null, id: string | null) =>
   useQuery({
     queryKey: ['detail', area, kind, id],
-    queryFn: () => api<{ review_item: ReviewItem | null; building?: Building; asset?: Asset; front_wall?: FrontWall | null; position_check?: PositionCheck | null }>(`/${kind === 'building' ? 'buildings' : 'assets'}/${area}/${encodeURIComponent(id!)}`),
+    queryFn: () => api<{ review_item: ReviewItem | null; building?: Building; asset?: Asset; front_wall?: FrontWall | null; position_check?: PositionCheck | null
+      floor_confidence?: FloorConfidence; osm_levels?: OsmLevels }>(`/${kind === 'building' ? 'buildings' : 'assets'}/${area}/${encodeURIComponent(id!)}`),
     enabled: !!(area && kind && id),
   })
 

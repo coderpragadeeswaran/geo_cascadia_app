@@ -1,0 +1,264 @@
+{
+ "fetched": "2026-10-04T08:25:25Z",
+ "source": "OpenStreetMap: point positions from the app's copy (snapshot 2026-10-02); names and tags from the Overpass API on the fetch date",
+ "osm_snapshot": "2026-10-02",
+ "scope_m": 30,
+ "pois": [],
+ "buildings": {
+  "w1251144582": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251630849": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251143766": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251143366": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251626308": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251143996": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251143187": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251630937": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251144622": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251143251": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251143301": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251144027": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251142631": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251143943": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251144280": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251144637": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251144068": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1252506747": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251143945": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251626301": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251143159": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251143411": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251630810": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251144004": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251143308": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1238009026": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251630689": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251142715": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251143976": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251143088": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251626306": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251144690": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251143850": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251143810": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251144408": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251142863": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251144432": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251144149": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251631000": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251143149": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251142749": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251142403": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251143226": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251142401": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251143927": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251144025": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1238009025": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251142400": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251144428": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251144485": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1251143989": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  }
+ }
+}

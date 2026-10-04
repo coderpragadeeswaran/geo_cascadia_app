@@ -99,8 +99,12 @@ export interface WorkerStatus {
 // ------------------------------------------------------------------ P4 responses
 export type { Asset, Building, UnmappedBusiness } from '@/types/export'
 
+/** extras 3: our businesses vs OpenStreetMap — which side of the comparison a question asks for */
+export type OsmMode = 'camera_only' | 'osm_only' | 'matched'
 export interface QueryFilters {
-  intent: 'buildings' | 'streetlight_gaps' | 'assets' | 'review'
+  intent: 'buildings' | 'streetlight_gaps' | 'assets' | 'review' | 'osm_businesses'
+  /** extras 3: osm_businesses questions only */
+  osm?: OsmMode
   street?: string; use?: 'commercial' | 'residential'; floors_op?: '>' | '>=' | '<' | '=='; floors_n?: number
   match_status?: 'no_record' | 'discrepancy'; discrepancy?: string; ref_flag?: string; group_by?: 'street'
   interval_m?: number; asset_type?: 'pole' | 'streetlight'; reason_has?: string
@@ -148,8 +152,34 @@ export interface QueryResponse {
   note?: string | null
   /** D53: the distance rule's numbers (buildings matching the rest of the question → within N m) and how it was computed */
   spatial?: { near_dark_m: number; method: string; before: number; after: number; note: string }
+  /** extras 3: "businesses not in OpenStreetMap": the counts, the rule, and every OpenStreetMap point for the map markers */
+  osm?: { mode: OsmMode; counts: OsmCounts; rule: string; fetched: string | null
+    points: { osm_id: string; lat: number; lon: number; name: string | null; kind: string | null; matched: boolean }[] }
   /** client-side: the person accepted a partly understood question (or built it by clicking) */
   accepted?: boolean
+}
+export interface OsmCounts { camera: number; osm: number; matched: number; matched_same_name: number; camera_only: number; osm_only: number; osm_other_points: number }
+/** extras 4: floor-count confidence in plain words (a fixed rule; the model card's hand check) */
+export interface FloorConfidence { level: 'high' | 'medium' | 'low' | null; word: string; reason: string; check: string | null; rule?: string }
+/** extras 4: OpenStreetMap's building:levels for one building (a crowd-sourced cross-check; never changes our count) */
+export interface OsmLevels { loaded: boolean; osm_levels: string | null; found: boolean; fetched?: string | null }
+export interface OsmShopCamera { kind: 'building' | 'sign'; id: string; street: string | null; lat: number; lon: number; name: string | null; sign_text: string | null; why: string }
+export interface OsmShopPoint { osm_id: string; lat: number; lon: number; name: string | null; kind: string | null; url: string }
+export interface OsmReference {
+  shops: { available: boolean; note: string; rule?: string; scope_m?: number; match_m?: number; fetched?: string; osm_snapshot?: string | null
+    counts?: OsmCounts; matched?: { camera: OsmShopCamera; osm: OsmShopPoint; distance_m: number; same_name: boolean }[]
+    camera_only?: OsmShopCamera[]; osm_only?: OsmShopPoint[] }
+  levels: { available: boolean; note: string; fetched?: string; buildings?: number; tagged?: number; compared?: number; exact?: number
+    within_1?: number; ours_higher?: number; ours_lower?: number
+    rows?: { id: string; street: string | null; osm_levels: string; ours: number | null; status: string | null; diff: number | null }[] }
+  floor_rule: string
+}
+type Range = { low: number; mid: number; high: number }
+export interface Projection {
+  available: boolean; is_estimate?: boolean; note?: string; assumptions?: string[]
+  cities?: { city: string; name: string; osm_snapshot: string | null; km: number; jobs: number; photos: Range; usd: Range; gpu_hours: Range | null; colab_days: Range | null }[]
+  inputs?: { photos_per_km: Range; usd_per_photo: Range; sv_price: number; sec_per_photo: number | null; startup_s: number; job_km: number
+    runs: { slug: string; photos: number; km: number; per_km: number; cloud_per_photo: number | null }[] }
 }
 export interface AreaDetail extends AreaCard {
   meta: { area: string; run?: Record<string, unknown> }
@@ -186,8 +216,11 @@ export interface JobPreview {
   cost_cap_usd: number
   /** hotfix: "ok" when the street was found (a "pending" answer has no street yet) */
   status?: 'ok' | 'partial'
-  /** D57: the same street name continues in pieces that don't connect to the clicked one (not included unless asked) */
-  elsewhere?: { length_m: number; pieces: number; lines: import('geojson').MultiLineString }
+  /** D57: the same street name continues beyond the clicked piece (not included unless asked). extras F4: always measured
+   *  on the OpenStreetMap road (within the 1.2 km a job takes); `pieces` = parts that don't connect, `joins` = the rest
+   *  of the clicked road itself, `outside_area` = most of it lies outside the analysed area the click is in */
+  elsewhere?: { length_m: number; pieces: number; joins?: boolean; measured_on?: string
+    outside_area?: { slug: string; name: string }; lines: import('geojson').MultiLineString }
 }
 /** one evidence photo with every detection box on it (GET /areas/{slug}/evidence/{kind}/{id}) */
 export interface EvidenceBox {
