@@ -13,6 +13,7 @@ import { Fact, HowWeKnow } from './HowWeKnow'
 import { placeLabels } from '@/lib/labelLayout'
 import { CLS_LETTER, CLS_NOUN, LETTER_KEY, tagBoxes } from '@/lib/photoTags'
 import { measureText, useFontsReady } from '@/lib/textWidth'
+import { swapOf } from '@/lib/photoSwap'
 
 /** overlay colours are fixed (they sit on photos, not on the Night / Daylight surface) */
 export const CLS_COLOR: Record<EvidenceBox['cls'], string> = { building: '#cfd6ea', pole: '#ffffff', lamp_head: '#ffc27a', signboard: '#7dcad6' }
@@ -151,28 +152,41 @@ export function EvidenceViews({ kind, id, at, target, maxPhoto = 300 }: {
   if (!v) return <p className="t-small ink3 rounded-[var(--ns-r-control)] p-4" style={{ boxShadow: 'inset 0 0 0 1px var(--ns-line)' }}>No Street View evidence stored for this item.</p>
   const name = target === 'building' && v.boxes.some((x) => x.target && x.cls === 'signboard') ? 'This building’s sign' : TARGET_NAME[target]
   const toggle = (c: string) => setHidden((h) => { const n = new Set(h); if (n.has(c)) n.delete(c); else n.add(c); return n })
+  // D60: the analysis photo is gone from Google: its current photo there (no boxes), or none at all
+  const sw = swapOf(v.served, v.current, v.date)
+  const ok = sw.state === 'served'
+  const live = sw.state === 'swapped' && sw.current ? sw.current : ok ? v : null
   return (
     <div>
       <div style={{ maxWidth: maxPhoto }}>
-        <EvidencePhoto view={v} label={`${v.label} · ${Math.round(v.heading)}°`}>
+        <EvidencePhoto view={v} label={`${v.label} · ${Math.round(v.heading)}°`} swap={{ served: v.served, current: v.current, date: v.date }}>
           <Boxes boxes={v.boxes} all={all} hidden={hidden} hl={hl} setHl={setHl} />
           {v.target === 'crosshair' && <Crosshair />}
         </EvidencePhoto>
       </div>
-      <PhotoKey boxes={v.boxes} all={all} hidden={hidden} targetName={name} hl={hl} setHl={setHl} />
-      {v.target === 'crosshair' && <p className="t-small ink2 mt-1.5">No box was found in the aimed direction: the cross marks where the camera was aimed, not a detection.</p>}
+      {ok && <PhotoKey boxes={v.boxes} all={all} hidden={hidden} targetName={name} hl={hl} setHl={setHl} />}
+      {ok && v.target === 'crosshair' && <p className="t-small ink2 mt-1.5">No box was found in the aimed direction: the cross marks where the camera was aimed, not a detection.</p>}
       {v.user_note ? <p className="t-small ink2 mt-1.5">{v.user_note}</p>
-        : v.target === 'none' && <p className="t-small ink3 mt-1.5">No box for this {kind === 'asset' ? 'object' : 'building'} in this view.</p>}
+        : ok && v.target === 'none' && <p className="t-small ink3 mt-1.5">No box for this {kind === 'asset' ? 'object' : 'building'} in this view.</p>}
       <div className="mt-2 flex flex-wrap items-center gap-1">
-        <PhotoDate date={v.date} />
+        <PhotoDate date={sw.state === 'swapped' ? sw.current?.date : v.date} />
         {(views?.length ?? 0) > 1 && views!.map((x, k) => (
           <button key={x.key} onClick={() => setI(k)} aria-pressed={k === i} className="btn h-7">{x.label}</button>
         ))}
         <div className="flex-1" />
-        {hasMap && <button className={cn('btn', dive ? 'btn-solid' : 'btn-sodium')} onClick={() => setDive(dive ? null : { pano: v.pano_id, heading: v.heading, pitch: v.pitch, fov: v.fov, at })}>
+        {hasMap && (live || dive) && <button className={cn('btn', dive ? 'btn-solid' : 'btn-sodium')} onClick={() => setDive(dive || !live ? null : { pano: live.pano_id, heading: live.heading, pitch: live.pitch, fov: live.fov, at })}>
           <Rotate3d /> {dive ? 'Back to map' : 'Live 360°'}
         </button>}
+        {hasMap && !live && !dive && <LiveNearby camera={v.camera} heading={v.heading} at={at} />}
       </div>
+      {!ok ? (
+        <HowWeKnow label="How do we know? (the analysis photo)" summary={<>The analysis used Google panorama <span className="t-data">{v.pano_id}</span>{monthText(v.date) ? ` (${monthText(v.date)})` : ''}. Google no longer serves it, so the {plural(v.boxes.length, 'box', 'boxes')} the detector found on it can’t be drawn.</>}
+          links={[{ page: 'hood', section: 'overview', label: 'Photos Google no longer serves' }]}>
+          <Fact k="Analysis photo" hint="no longer served by Google"><span className="t-data">{v.pano_id}</span> · facing {Math.round(v.heading)}°, {v.fov}° wide</Fact>
+          {sw.current && <Fact k="Shown instead" hint="Google’s current panorama"><span className="t-data">{sw.current.pano_id}</span> · {monthText(sw.current.date) ?? 'date unknown'} · {sw.current.moved_m} m from the analysis camera · facing {Math.round(sw.current.heading)}° (aimed at this {kind === 'asset' ? 'object' : kind === 'unmapped' ? 'sign' : 'building’s front'})</Fact>}
+          <Fact k="Checked" hint="free Street View metadata, kept 30 days">The app asks Google whether a photo is still served before showing it, and never requests one it knows is gone.</Fact>
+        </HowWeKnow>
+      ) : (
       <HowWeKnow label="How do we know? (everything the detector found)" open={all} onOpenChange={setAll}
         summary={<>The detector marked {plural(v.boxes.length, 'thing')} in this photo, now all drawn. Each box has a short tag (B building, P pole, S sign, L streetlight lamp); hover a tag, a box or its line in the key to see how sure the detector was{v.target === 'box' ? `. The orange box is this ${kind === 'asset' ? 'object' : kind === 'unmapped' ? 'sign' : 'building'}` : ''}.</>}
         links={[{ page: 'hood', section: 'detection', label: 'How detection works' }, { page: 'trust', section: 'detector', label: 'Detector accuracy' }]}>
@@ -193,8 +207,27 @@ export function EvidenceViews({ kind, id, at, target, maxPhoto = 300 }: {
         <Fact k="Taken" hint="panorama capture month (Google)">{monthText(v.date) ?? 'Date not stored for this photo'}</Fact>
         <Fact k="Photo ID" hint="Street View panorama"><span className="t-data">{v.pano_id}</span></Fact>
       </HowWeKnow>
+      )}
     </div>
   )
+}
+
+/** D60: no photo of the analysis' panorama nor a current one within 25 m: offer the live 360° view only if Google's
+ *  own panorama service finds one within 50 m (asked on click; nothing is requested before) */
+function LiveNearby({ camera, heading, at }: { camera?: { lat: number; lon: number } | null; heading: number; at: { lat: number; lng: number } }) {
+  const setDive = useUi((s) => s.setDive)
+  const [none, setNone] = useState(false)
+  if (!camera) return null
+  if (none) return <span className="t-small ink3">No live 360° view here either</span>
+  const open = () => {
+    new google.maps.StreetViewService().getPanorama({ location: { lat: camera.lat, lng: camera.lon }, radius: 50, source: google.maps.StreetViewSource.OUTDOOR },
+      (d, st) => {
+        const id = d?.location?.pano, p = d?.location?.latLng
+        if (st !== google.maps.StreetViewStatus.OK || !id || !p) return setNone(true)
+        setDive({ pano: id, heading: google.maps.geometry?.spherical ? google.maps.geometry.spherical.computeHeading(p, at) : heading, pitch: 0, fov: 90, at })
+      })
+  }
+  return <button className="btn btn-sodium" onClick={open}><Rotate3d /> Live 360°</button>
 }
 
 /** P8: "Photo from Mar 2023": Google's capture month of this panorama (stored by the analysis, nothing fetched). Older

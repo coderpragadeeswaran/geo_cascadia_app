@@ -25,7 +25,7 @@ from .settings import ROOT, Settings
 
 sys.path.insert(0, os.path.join(ROOT, "pipeline"))   # geo_cascadia (import only — never modified)
 
-from . import camonly, drive, evidence, frontwall, gaps, gate1pos, hood, imagery, lighting, loader, mapdata, minimap, namepick, registertest, spatial, trust, views  # noqa: E402
+from . import camonly, drive, evidence, photos, frontwall, gaps, gate1pos, hood, imagery, lighting, loader, mapdata, minimap, namepick, registertest, spatial, trust, views  # noqa: E402
 from . import streetpick as streetpick_mod  # noqa: E402
 from .storage import StorageError  # noqa: E402
 from .store import Data, OfflineError  # noqa: E402
@@ -116,6 +116,9 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     app.state.data = Data(settings)
     app.state.model_card = ModelCard(os.path.join(settings.data_dir, "model_card.json"))
     app.state.detections = evidence.Detections(settings.areas_dir)
+    # D60: which stored Street View photos Google still serves (free metadata, 30-day disk cache)
+    app.state.photometa = photos.PhotoMeta(os.path.join(settings.data_dir, "cache", "streetview_meta.json"),
+                                           settings.google_server_key)
     app.state.plans = drive.Plans(settings.areas_dir)
     app.state.gapcalc = gaps.GapCalc(settings.areas_dir)
     app.state.runfiles = hood.RunFiles(settings.areas_dir)
@@ -371,13 +374,30 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         the object's own box marked. Asset photos are re-aimed views: boxes are projected from the same panorama's views."""
         if kind not in ("building", "asset", "unmapped"):
             raise HTTPException(422, "kind must be building, asset or unmapped")
-        res, off = D.read(lambda s: evidence.evidence(app.state.detections, need(s, slug), kind, obj_id))
+        def fn(s):
+            b = need(s, slug)
+            # D60: + `served` and, for a photo Google no longer serves, `current` (its current photo there, aimed at the object)
+            return photos.annotate(app.state.photometa, b, kind, obj_id, evidence.evidence(app.state.detections, b, kind, obj_id))
+        res, off = D.read(fn)
         if res is None:
             raise HTTPException(404, f"{kind} {obj_id!r} not found in {slug!r}")
         out = {"offline": off, "area": slug, "kind": kind, "id": obj_id, "views": res}
         if kind == "building":
             out["links"] = evidence.building_links(app.state.detections, slug, obj_id)
         return out
+
+    @app.get("/photos/{pano_id}", tags=["evidence"])
+    def photo_status(pano_id: str, heading: float = Query(0.0), pitch: float = Query(0.0), fov: float = Query(90.0),
+                     lat: Optional[float] = Query(None, description="what the photo is aimed at (optional)"),
+                     lon: Optional[float] = Query(None)):
+        """D60: does Google still serve this stored panorama (free metadata, cached 30 days)? If not, Google's current
+        panorama within 25 m of where its camera stood, aimed at (lat, lon) when given (else the same heading)."""
+        cam = photos.camera_of(settings.areas_dir, app.state.detections, pano_id)
+        s = photos.status(app.state.photometa, pano_id, cam)
+        app.state.photometa.save()
+        view = {"heading": heading, "pitch": pitch, "fov": fov}
+        cur = photos.aimed(s["current"], view, (lat, lon) if lat is not None and lon is not None else None) if s["current"] else None
+        return {"pano_id": pano_id, "served": s["served"], "current": cur, "date": (cam or {}).get("date")}
 
     @app.get("/areas/{slug}/drive", tags=["areas"])
     def drive_street(slug: str, street: str = Query(..., description="street display name"), D: Data = Depends(get_data)):
@@ -485,7 +505,9 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         its source in `src`); Sankey, sign funnel, route splits, per-street table, the story with its corrections, and
         timings/cost flagged as resumed-run values (D1)."""
         res, off = D.read(lambda s: {**hood.hood(need(s, slug), app.state.runfiles.get(slug), mc()),
-                                     "map_data": mapdata.area_map_data(need(s, slug), settings.areas_dir)})
+                                     "map_data": mapdata.area_map_data(need(s, slug), settings.areas_dir),
+                                     "photo_check": photos.area_note(settings.areas_dir, slug),
+                                     "billing": photos.billing(settings.data_dir)})
         return {"offline": off, **res}
 
     @app.get("/areas/{slug}/hood/examples", tags=["hood"])

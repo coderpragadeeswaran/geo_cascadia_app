@@ -10,6 +10,7 @@ import { pickedLines, streetKey } from '../src/map/analyse'
 import { gapListOpen, panelOf } from '../src/store/ui'
 import { CLS_LETTER, tagBoxes } from '../src/lib/photoTags'
 import { answerOf, correctable, outcomeLine, reviewerSays, reviewQuestions } from '../src/lib/reviewQuestions'
+import { swapNote, swapOf, swapWhen } from '../src/lib/photoSwap'
 
 let n = 0
 const t = (name: string, fn: () => void) => { fn(); n++; console.log('ok', name) }
@@ -278,6 +279,23 @@ t('ui-polish-2 (D59): one line after deciding says what was saved; the reviewer 
   assert.equal(reviewerSays({ floors: 2, use: 'mixed', name: 'Zinco' }), '2 floors · Shop + home · sign reads “Zinco”')
   assert.equal(reviewerSays(null), null)
   assert.equal(answerOf('approved'), 'Yes'); assert.equal(answerOf('rejected'), 'No')
+})
+
+t('D60: a photo Google no longer serves: current photo, plain label, "newer" only when it is', () => {
+  const cur = { pano_id: 'N', heading: 146, pitch: 0, fov: 90, date: '2026-02', lat: 11, lon: 77, moved_m: 0.2 }
+  assert.equal(swapOf(true, null, '2026-02').state, 'served')
+  assert.equal(swapOf(null, null).state, 'served')                      // unknown: shown as before
+  assert.equal(swapOf(undefined, undefined).state, 'served')
+  const same = swapOf(false, cur, '2026-02')
+  assert.equal(same.state, 'swapped'); assert.equal(swapWhen(same), 'same_month')
+  assert.equal(swapNote(same), 'Current photo (Feb 2026) — Google no longer serves the photo used in the analysis, so its boxes can’t be shown. Same capture month, taken from the same spot: Google now serves it under a new ID.')
+  const newer = swapOf(false, { ...cur, date: '2026-05', moved_m: 3.4 }, '2022-11')
+  assert.equal(swapNote(newer), 'Newer photo (May 2026) — Google no longer serves the photo used in the analysis, so its boxes can’t be shown.')
+  assert.ok(swapNote(swapOf(false, { ...cur, date: '2021-01' }, '2022-11'))!.startsWith('Current photo (Jan 2021)'))
+  assert.ok(swapNote(swapOf(false, { ...cur, moved_m: 4.7 }, '2026-02'))!.includes('taken 5 m away'))
+  const none = swapOf(false, null, '2026-02')
+  assert.equal(none.state, 'none'); assert.ok(swapNote(none)!.startsWith('No Street View photo available here any more'))
+  assert.equal(swapNote(swapOf(true, null)), null)
 })
 
 await (async () => {

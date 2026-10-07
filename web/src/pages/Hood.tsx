@@ -215,7 +215,7 @@ function Story({ h, pick }: { h: HoodData; pick: Pick }) {
         tech="GET /areas/{slug}/street-names (street_name_candidates.json); PUT stores data/street_name_picks.json and reloads the area. Source files unchanged." />}>
         <StreetNames slug={h.area} />
       </Section>
-      {h.routing && <RoutingCost r={h.routing} />}
+      {h.routing && <RoutingCost r={h.routing} billing={h.billing?.line} />}
       <CostTime h={h} />
       <Section id="osm" title="Businesses vs OpenStreetMap" lead={<T plain="A real, outside reference next to the synthetic register: the businesses our camera found against the shop points on OpenStreetMap, the open map volunteers edit. It is not an official register: a shop missing from it says nothing about the street."
         tech="GET /areas/{slug}/osm (osmref.shops): local osm_pois within 30 m of the analysed streets, names by one Overpass id look-up (osm_tags.json); one-to-one within 25 m, a same_business name first, then the nearest." />}>
@@ -305,6 +305,7 @@ function Coverage({ h }: { h: HoodData }) {
             tech={<>Verdict (meta.run.coverage): “{c.verdict ?? '—'}”. plan.json views with footprint == null: {fmt.format(c.views_unmapped)} of {fmt.format(c.views)}.</>} />
         </p>
         <ImageryLine h={h} />
+        <PhotoCheckLine h={h} />
         <MapDataLine h={h} />
       </div>
     </div>
@@ -398,8 +399,12 @@ function StreetsTable({ h }: { h: HoodData }) {
   )
 }
 
-/** P7 R3 (A2): the photo dollars are list price; the cloud-AI (AWS) cost stays as measured */
-const SV_LIST_PRICE = 'Photo cost is at Google’s list price — Google’s free monthly allowance may cover it.'
+/** P7 R3 (A2): the photo dollars are list price; the cloud-AI (AWS) cost stays as measured. D60: plus what Google
+ *  actually billed (data/billing.json, the owner's billing report; account-wide) */
+const SV_LIST_PRICE = 'Photo cost is at Google’s global list price.'
+function BilledLine({ h, extra }: { h: HoodData; extra?: string }) {
+  return <p className="t-small ink2 mt-1" title={h.billing?.source}>{SV_LIST_PRICE} {h.billing?.line ?? 'Google’s free monthly allowance may cover it.'}{extra ? ` ${extra}` : ''}</p>
+}
 
 function CostTime({ h }: { h: HoodData }) {
   const c = h.cost
@@ -408,12 +413,12 @@ function CostTime({ h }: { h: HoodData }) {
   if (c.live) return <LiveCost h={h} />
   const time = c.model_card?.gpu_minutes != null ? `About ${c.model_card.gpu_minutes} min on a Colab GPU` : 'Time: not recorded for this run'
   const svText = sv?.value != null
-    ? `about $${sv.value.toFixed(2)} in Street View photos (${sv.photos != null ? fmt.format(sv.photos) : '—'} photos)` : 'Street View cost not recorded'
+    ? `about $${sv.value.toFixed(2)} in Street View photos (Google; ${sv.photos != null ? fmt.format(sv.photos) : '—'} photos)` : 'Street View cost not recorded'
   return (
     <Section id="cost" title="Time and cost">
       <p className="t-body" title={sv?.source ?? undefined}>{time}; {svText}.</p>
-      {vlm?.value != null && <p className="t-body mt-1" title={vlm.source ?? undefined}>Cloud AI: about {usdText(vlm.value)} ({vlm.detail}).</p>}
-      {sv?.value != null && <p className="t-small ink2 mt-1">{SV_LIST_PRICE}</p>}
+      {vlm?.value != null && <p className="t-body mt-1" title={vlm.source ?? undefined}>Cloud AI (Amazon Nova Lite, AWS): about {usdText(vlm.value)} ({vlm.detail}).</p>}
+      {sv?.value != null && <BilledLine h={h} />}
       {sv?.source && <p className="t-small ink3 mt-1">Where the photo count comes from: {sv.source}.</p>}
     </Section>
   )
@@ -429,15 +434,14 @@ function LiveCost({ h }: { h: HoodData }) {
   const dev = t.device === 'gpu' ? 'a GPU' : t.device === 'cpu' ? 'a CPU' : 'the worker'
   return (
     <Section id="cost" title="Time and cost">
-      <p className="t-body">
-        {t.total_minutes != null ? `Took ${t.total_minutes} min on ${dev}` : 'Time not recorded'}
-        {sv ? `; ${sv.detail.split(' × ')[0]}${money(sv.value) ? `, about ${money(sv.value)}` : ''}` : ''}
-        {vlm ? `; ${vlm.detail} to the cloud model${money(vlm.value) ? `, ${money(vlm.value)}` : ''}` : ''}
-        {pl ? `; ${pl.detail.replace(' (price not in the model card)', '')} on Google (price not recorded)` : ''}.
-      </p>
+      <p className="t-body">{t.total_minutes != null ? `Took ${t.total_minutes} min on ${dev}` : 'Time not recorded'}.</p>
+      {/* D60: Street View (Google) and the cloud model (Amazon Nova, AWS) on separate lines */}
+      {sv && <p className="t-body mt-1">Street View (Google): {sv.detail.split(' × ')[0]}{money(sv.value) ? `, about ${money(sv.value)} at list price` : ''}.</p>}
+      {vlm && <p className="t-body mt-1">Cloud AI (Amazon Nova Lite, AWS): {vlm.detail}{money(vlm.value) ? `, ${money(vlm.value)}` : ''}.</p>}
+      {pl && <p className="t-body mt-1">Google business look-ups: {pl.detail.replace(' (price not in the model card)', '')} (price not recorded).</p>}
       {t.badge ? <p className="t-small mt-1" style={{ color: 'var(--ns-sodium)' }}>This analysis was {t.badge}.</p>
         : <p className="t-small ink3 mt-1">Measured during this analysis. Photo prices from the team’s model card.</p>}
-      {sv && <p className="t-small ink2 mt-1">{SV_LIST_PRICE} The cloud-AI cost is as measured.</p>}
+      {sv && <BilledLine h={h} extra="The cloud-AI cost is as measured." />}
       <div className="mt-4"><StageTimeline stages={t.stage_seconds} badge={t.badge} total={t.total_minutes} live /></div>
     </Section>
   )
@@ -462,6 +466,18 @@ function MapDataLine({ h }: { h: HoodData }) {
   )
 }
 
+/** D60: how many of the analysis photos Google still serves (tools/check_photos.py, free metadata calls) */
+function PhotoCheckLine({ h }: { h: HoodData }) {
+  const c = h.photo_check
+  if (!c) return null
+  return (
+    <p className="t-small ink2 mt-2" aria-label="Photos Google still serves"
+      title={`${c.panoramas_gone} of ${c.panoramas} panoramas. A photo reference is one evidence photo of one object; a panorama can serve several.`}>
+      {c.gone ? <span className="sodium">{c.text}</span> : c.text}
+    </p>
+  )
+}
+
 /** P8: when the photos were taken (panos.json capture month of each camera stop; nothing fetched) */
 function ImageryLine({ h }: { h: HoodData }) {
   const im = h.imagery
@@ -482,12 +498,11 @@ const usdText = (v: number | null | undefined) => (v == null ? '—' : usd(v, v 
 
 /** P8: which model handled what (small local models first; the cloud model, Nova Lite, only for what they can't do or
  *  aren't sure of) with count, latency and $ per route, from this run's own saved cloud calls (backend/app/routing.py). */
-function RoutingCost({ r }: { r: RoutingData }) {
+function RoutingCost({ r, billing }: { r: RoutingData; billing?: string }) {
   const ev = r.every_view, ac = r.all_cloud, chk = r.model_card_check
   const det = r.tasks.find((t) => t.key === 'detect')?.routes[0]
   // P8 fix: the run's whole cost, photos vs cloud AI, in one plain line; and which AI task costs most
   const sv = r.street_view, ai = r.totals.usd
-  const total = sv.usd != null && ai != null ? sv.usd + ai : null
   const cloudRoutes = r.tasks.flatMap((t) => t.routes.filter((x) => x.route === 'cloud' && x.usd != null).map((x) => ({ task: t.key, usd: x.usd! })))
   const top = cloudRoutes.sort((a, b) => b.usd - a.usd)[0]
   const totalRows = [
@@ -497,11 +512,14 @@ function RoutingCost({ r }: { r: RoutingData }) {
   ]
   return (
     <Section id="routing" title="Routing and cost" lead={<>Small models on the analysis computer handle everything first: the detector (YOLO) finds objects, OCR reads signs, a CLIP model decides building use. Only what they can’t do, or aren’t sure of, goes to the cloud model (Amazon Nova Lite), which is billed per call. Counts, times and dollars come from this run’s own saved calls.</>}>
-      {total != null && (
-        <p className="t-body mb-4" title={`Photos: ${fmt.format(sv.photos)} × $${sv.usd_per_photo} (Google list price, model card). Cloud AI: ${r.totals.status}, from this run's saved calls.`}>
-          This run cost about <b>{usdText(total)}</b>: Street View photos <b>{usdText(sv.usd)}</b> ({fmt.format(sv.photos)} at Google’s list price, {Math.round((100 * sv.usd!) / total)}%) and cloud AI (Nova Lite) <b>{usdText(ai)}</b> ({((100 * ai!) / total).toFixed(1)}%).
-          {top?.task === 'floors' && <> Floor counting is the largest AI cost; it isn’t routed yet.</>}
-        </p>
+      {/* D60: Google and AWS on separate lines, no combined total: the photo dollars are Google's global list price,
+          while Google billed ₹0 (India pricing, free monthly allowance) */}
+      {(sv.usd != null || ai != null) && (
+        <div className="mb-4 space-y-1" aria-label="Cost of this run">
+          {sv.usd != null && <p className="t-body" title={`${fmt.format(sv.photos)} × $${sv.usd_per_photo} (Google list price, model card)`}>Street View photos (Google): <b>{usdText(sv.usd)}</b> — {fmt.format(sv.photos)} photos at Google’s global list price.</p>}
+          {sv.usd != null && billing && <p className="t-small ink2">{billing}</p>}
+          {ai != null && <p className="t-body" title={`${r.totals.status}, from this run's saved calls`}>Cloud AI (Amazon Nova Lite, AWS): <b>{usdText(ai)}</b>.{top?.task === 'floors' && <> Floor counting is the largest AI cost; it isn’t routed yet.</>}</p>}
+        </div>
       )}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[720px]">

@@ -237,7 +237,14 @@ export interface EvidenceViewData {
   camera?: { lat: number; lon: number } | null
   /** P8: the panorama's capture month ("YYYY-MM", panos.json), null when unknown */
   date?: string | null
+  /** D60: does Google still serve this panorama (free metadata, cached 30 days)? null = not known (shown as before) */
+  served?: boolean | null
+  /** D60: when it is gone: Google's current panorama near the original camera, aimed at the object (no boxes), or null */
+  current?: CurrentPhoto | null
 }
+/** D60: the photo shown instead of a stored one Google no longer serves */
+export interface CurrentPhoto { pano_id: string; heading: number; pitch: number; fov: number; date: string | null; lat: number; lon: number; moved_m: number }
+export interface PhotoStatus { pano_id: string; served: boolean | null; current: CurrentPhoto | null; date: string | null }
 /** P8: photo ages (GET /areas/{slug}/imagery), from the capture months the pipeline stored; nothing fetched */
 export interface ImageryObject { date: string | null; newest: string | null; oldest: string | null; outdated: boolean }
 export interface ImagerySummary {

@@ -2299,3 +2299,54 @@ Gandhi Nagar): those photos show "No Street View image for this view". The befor
 (`w1252503923`, Sathy Main Road, 17 boxes, 11 linked signs) whose panorama still loads.
 
 **Checks (7 Oct).** Backend 469 passed / 1 skipped (457 − the removed projection test + 13 new in `test_ui_polish2.py`; `test_p5` note rule updated, intended); typecheck, build, test:ui 22 (4 new), check:data, audit (both themes) pass; fresh 3.12 venv: install from the repo root and `backend\` exit 0, 8 pure tests pass in it. Live: API round trip (No + `{"floors": 3}` + note → undo → row identical except `updated_at`; bad values 422), Excel Review cell, Ward 29 PDF 19 pages with no projection / "same place"; screenshots `web/scripts/ui-polish2-shots.ts` → `docs/screenshots/ui-polish-2/` (before / after, both themes; report pages in `report/`). Regression (production preview, output to a file): run 1 ALL PASSED, 291 checks, 0 retries (`run-2026-10-07_1754.log`); run 2 one FAIL — "no console errors" on Vadakku Masi Veethi: `ERR_CONNECTION_CLOSED`, then `ERR_HTTP2_PROTOCOL_ERROR` on the retry (an external host's connection dropping; every functional check passed, 289 ok, `run-2026-10-07_1812.log`); run 3 ALL PASSED, 291 checks, 0 retries (`run-2026-10-07_1833.log`). Expected answers: none changed; added (intended) section B's No + corrected value + undo (history +4 instead of +2; the snapshot now includes `corrected`) and the question "Businesses near an OpenStreetMap point" → 9.
+
+## 2026-10-07 — photo fallback (branch photo-fallback)
+
+### D60. Photos Google no longer serves → its current photo there, without boxes; ask before requesting; the India bill; change log moves to 07
+**0. Docs rule.** Every change is now logged in `docs/explainer/07_updates_2.md` (same format as 06). The D59 entry moved
+there; `06_updates.md` is byte-for-byte its pre-D59 state (`git show f1735bb:docs/explainer/06_updates.md`); 00–06 are not
+edited. CLAUDE.md's standing rule names 07. Lines in 00–06 that go out of date are listed in the 07 entry instead.
+
+**1. Retired panoramas.** Google re-issues panorama ids. Free metadata check by `pano` (7 Oct 2026, `tools/check_photos.py`
+over every evidence view the API returns, 9 areas, 463 calls): Ward 29 303 of 852 photo references gone (69 of 201
+panoramas), Trichy 2 of 223 (1 of 91), the other 7 areas 0. Every gone panorama has a current one by `location` (the old
+camera, `radius=25`, `source=outdoor`) 0.0–5.0 m away with the **same capture month** (67 Feb 2026, 2 Nov 2022, 1 May 2025):
+the same imagery under new ids.
+- `app/photos.py`: `PhotoMeta` = the 30-day disk cache `data/cache/streetview_meta.json` (git-ignored, like every cache).
+  Only OK / ZERO_RESULTS / NOT_FOUND are kept; REQUEST_DENIED, quota, network errors = "not known" (never cached; the stored
+  photo is shown as before). No server key → cache only (tests). IPv4-only HTTPS (IPv6 to Google times out on the laptop).
+- Evidence views get `served` + `current` {pano_id, heading, pitch, fov, date, lat, lon, moved_m}. Heading = bearing from the
+  current panorama to: a building's front-wall centre (`frontwall.road_edge` midpoint; else its point), an asset's or
+  business's position; a building **Sign** view aims at the sign = the point on the stored sight line at the front-centre
+  distance (aiming at the wall centre swung transport india's sign view 19° off the sign; now 1.8°). Stored pitch / fov kept.
+  `GET /photos/{pano_id}?heading&pitch&fov[&lat&lon]` for any stored panorama (camera from any area's `panos.json`); no
+  target → same heading (Drive, Hood step examples, Trust spot-check).
+- Wording (deviation from the brief, said to the owner): the brief's label was "Newer photo (<month>)". Because every
+  replacement has the same capture month, the app says **"Current photo (Feb 2026) — Google no longer serves the photo used
+  in the analysis, so its boxes can't be shown."** plus "Same capture month, taken from the same spot / N m away: Google now
+  serves it under a new ID." "Newer photo" only when the month really is later; "It is older than the analysis photo." when
+  earlier (`lib/photoSwap.ts`). No old boxes, no photo key, chip "Current photo · no boxes", date badge = the current month,
+  Live 360° = the current panorama. No current one → "No Street View photo available here any more", no request; Live 360°
+  then asks `StreetViewService.getPanorama` (50 m, outdoor) on click, else "No live 360° view here either". (No stored
+  photo is in that case today.)
+- Everywhere: `EvidencePhoto` asks first (evidence API answer when given, else `GET /photos/{pano}`), so the drawer
+  (building / asset / business), Review, Hood examples (`ExampleSheet`, key hidden when swapped) and Trust's spot-check all
+  follow; Drive (`DrivePanel.Frame`) uses the current panorama with the drive heading and prefetches only served / current
+  ones. Not changed: `/design-preview` (reference route, not linked).
+- Hood: `photo_check` from `data/areas/<slug>/photo_check.json` (committed), one line in the coverage card, orange when
+  something is gone.
+
+**2. Failing requests.** Sources: the browser's Static requests for retired panoramas (404 with `return_error_code=true`,
+Chrome `ERR_BLOCKED_BY_ORB`) and every script that walks the browser through them (regression E, audit, shot scripts). The
+worker / pipeline fetch only freshly found panoramas; metadata calls answer HTTP 200 even for ZERO_RESULTS. Same Ward 29 click
+path (`web/scripts/photo-browse.ts`): before 17 / 33 failed (52%; all 13 failing panoramas are metadata-gone) → after 0 / 34.
+
+**3. Cost lines.** `data/billing.json` (owner, Google Cloud billing report 7 Oct 2026, account-wide): India pricing, ₹0, 17,747
+photos, 7 Sep – 6 Oct 2026. Hood Routing and cost: "Street View photos (Google): $9.94 — 1,420 photos at Google's global list
+price." / the billing line / "Cloud AI (Amazon Nova Lite, AWS): $0.070." — **no combined total or percentages** any more
+(also the PDF; `test_report` updated, intended). Time and cost: list price + billing line replace the old "free monthly
+allowance may cover it" caption; a live run's sentence split into Street View / Cloud AI / business look-up lines. Analyse
+estimate: "Cloud AI (Amazon Nova, AWS) ≈ $…" instead of "Total ≈ … (photos + cloud AI …)" (the cost cap still compares the
+sum); Jobs card: Street View / Cloud AI / Cost cap lines instead of "Total".
+
+**Checks (7 Oct).** Backend 484 passed / 1 skipped (13 new in `test_photo_fallback.py`; `test_report` cost assertion updated, intended; a one-off `test_p6` delete failure in the first full run did not recur alone, in its file or in a second full run); typecheck, build, test:ui 23 (1 new), check:data, audit (both themes) pass. Regression: run 1 lost the internet (E `ERR_INTERNET_DISCONNECTED`, F stopped: API in offline data mode; A–D pass, `run-2026-10-07_2018.log`); run 2 ALL PASSED, 291 checks, 0 retries (`run-2026-10-07_2132.log`). Expected answers: none changed. Screenshots `web/scripts/photo-fallback-shots.ts` → `docs/screenshots/photo-fallback/` (before from main's frontend in a worktree on :5173, after; both themes).

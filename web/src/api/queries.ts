@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react'
 import type { ModelCard } from '@/types/modelCard'
 import { api } from './client'
 import type { FloorConfidence, OsmLevels, OsmReference } from './types'
-import type { AreaCard, AreaDetail, AreaGeoJSON, Asset, Building, EvidenceViewData, Imagery, Job, PublicConfig, ReviewItem, ReviewRow, UnmappedBusiness, WorkerStatus } from './types'
+import type { AreaCard, AreaDetail, AreaGeoJSON, Asset, Building, EvidenceViewData, Imagery, Job, PhotoStatus, PublicConfig, ReviewItem, ReviewRow, UnmappedBusiness, WorkerStatus } from './types'
 
 export const useConfig = () =>
   useQuery({ queryKey: ['config'], queryFn: () => api<PublicConfig>('/config/public'), staleTime: Infinity, retry: 1 })
@@ -76,6 +76,16 @@ export const useEvidence = (area: string | null, kind: 'building' | 'asset' | 'u
   useQuery({ ...evidenceQuery(area, kind, id), select: (r: EvidenceResponse) => r.views })
 export const useBuildingLinks = (area: string | null, id: string) =>
   useQuery({ ...evidenceQuery(area, 'building', id), select: (r: EvidenceResponse) => r.links ?? null })
+
+/** D60: does Google still serve a stored panorama, and if not, its current one there (aimed at `aim` when given, else
+ *  the same heading). The backend answers from its 30-day cache of free metadata calls; no photo is requested. */
+export const usePhotoStatus = (v: { pano_id: string; heading: number; pitch?: number | null; fov?: number | null } | null,
+  aim?: { lat: number; lon: number } | null, enabled = true) => {
+  const q = v ? new URLSearchParams({ heading: String(v.heading), pitch: String(v.pitch ?? 0), fov: String(v.fov ?? 90),
+    ...(aim ? { lat: String(aim.lat), lon: String(aim.lon) } : {}) }).toString() : ''
+  return useQuery({ queryKey: ['photo', v?.pano_id, q], queryFn: () => api<PhotoStatus>(`/photos/${encodeURIComponent(v!.pano_id)}?${q}`),
+    enabled: !!v && enabled, staleTime: Infinity, retry: 0 })
+}
 
 /** P8: when the photos were taken; `objects` keyed "building:<id>", "asset:<id>", "gap:<id>", "missing:<asset_no>" */
 export const useImagery = (area: string | null) =>

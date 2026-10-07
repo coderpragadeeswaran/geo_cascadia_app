@@ -1,6 +1,6 @@
 > **Read docs/DECISIONS.md before any work.**
 
-> **Every future change is documented as a new dated entry in docs/explainer/06_updates.md (what, why, how, files, numbers, limits).**
+> **Every future change is documented as a new dated entry in docs/explainer/07_updates_2.md (what, why, how, files, numbers, limits).**
 
 > **Before saying a change is done, verify it live: real API calls against the running backend and Playwright screenshots of every changed screen, checked by eye. Unit tests alone are not enough.** (`web/scripts/screenshots.ts`, dev server on :5173 + API on :8000)
 

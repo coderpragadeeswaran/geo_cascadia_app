@@ -1,0 +1,15 @@
+{
+ "checked": "2026-10-07",
+ "photo_refs": 36,
+ "served": 36,
+ "gone": 0,
+ "gone_current_available": 0,
+ "gone_current_newer": 0,
+ "gone_current_same_month": 0,
+ "unknown": 0,
+ "panoramas": 23,
+ "panoramas_gone": 0,
+ "panoramas_gone_current_available": 0,
+ "max_moved_m": null,
+ "source": "Google Street View metadata (free), by panorama id; for a gone one, by location within 25 m of its camera (outdoor)"
+}

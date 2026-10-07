@@ -41,6 +41,11 @@ export interface Hood {
   imagery: import('./types').ImagerySummary
   /** D53: where the roads and building outlines come from: the covered city's snapshot, and what this area's run used */
   map_data?: MapDataInfo
+  /** D60: how many of this area's analysis photos Google still serves (tools/check_photos.py), with the plain line */
+  photo_check?: { text: string; checked: string; photo_refs: number; served: number; gone: number; gone_current_available: number
+    gone_current_newer: number; gone_current_same_month: number; panoramas: number; panoramas_gone: number } | null
+  /** D60: what Google actually billed for Street View (data/billing.json, the owner's billing report; account-wide) */
+  billing?: { line: string; billed_inr: number; photos_billed: number; source: string } | null
 }
 /** P8: routing and cost, computed from the run's cloud-call files (backend/app/routing.py) */
 export interface RouteRow { route: 'local' | 'cloud'; model: string; label: string; n: number; unit: string; usd: number | null
