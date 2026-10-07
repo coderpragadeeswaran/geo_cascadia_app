@@ -3,7 +3,7 @@
  *  "How do we know?". Rows are virtualised; a row click opens the evidence and flies the map there. */
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useMap } from '@vis.gl/react-google-maps'
-import { ArrowDown, ArrowUp } from 'lucide-react'
+import { ArrowDown, ArrowUp, Maximize2 } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import type { Asset, Building, UnmappedBusiness } from '@/api/types'
 import { assetRegLabel, ASSET_REG, floorsText, matchLabel, reviewLabel, useLabel } from '@/lib/labels'
@@ -62,7 +62,8 @@ const tip = (kind: Kind, x: Building | Asset | UnmappedBusiness) => {
   return base
 }
 
-export function FindingsTable({ kind, rows, empty = 'Nothing matches.' }: { kind: Kind; rows: (Building | Asset | UnmappedBusiness)[]; empty?: string }) {
+/** onExpand (ui-polish-2): the footer offers "Open the full list" (the street panel's larger view) */
+export function FindingsTable({ kind, rows, empty = 'Nothing matches.', onExpand }: { kind: Kind; rows: (Building | Asset | UnmappedBusiness)[]; empty?: string; onExpand?: () => void }) {
   const cols = COLS[kind] as Col<Building | Asset | UnmappedBusiness>[]
   const [sort, setSort] = useState<{ id: string; desc: boolean } | null>(null)
   const sorted = useMemo(() => {
@@ -121,7 +122,10 @@ export function FindingsTable({ kind, rows, empty = 'Nothing matches.' }: { kind
           })}
         </div>
       </div>
-      <div className="t-data ink3 rule-t px-5 py-1.5">{fmt.format(sorted.length)} {kind === 'building' ? 'buildings' : kind === 'asset' ? 'poles & streetlights' : 'businesses'}</div>
+      <div className="t-data ink3 rule-t flex items-center justify-between gap-2 px-5 py-1.5">
+        <span>{fmt.format(sorted.length)} {kind === 'building' ? 'buildings' : kind === 'asset' ? 'poles & streetlights' : 'businesses'}</span>
+        {onExpand && <button className="link t-small inline-flex items-center gap-1 font-sans" onClick={onExpand}><Maximize2 className="size-3.5" /> Open the full list</button>}
+      </div>
     </div>
   )
 }

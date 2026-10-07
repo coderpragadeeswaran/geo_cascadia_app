@@ -32,7 +32,7 @@ LAYER_TABLES = {  # layer -> (table, key column, geometry expression)
     "streets": ("streets", "name", "geom"),
 }
 REVIEW_KEYS = ("id", "item_type", "ref_id", "building_id", "asset_cls", "street", "lat", "lon", "priority", "reasons",
-               "discrepancies", "status", "reviewer", "note", "appeal_photo_path", "updated_at")
+               "discrepancies", "status", "reviewer", "note", "appeal_photo_path", "updated_at", "corrected")
 
 
 class OfflineError(RuntimeError):
@@ -71,6 +71,7 @@ def assemble(slug, name, polygon_source, polygon, bbox, meta, dashboard, run_rep
             q = by_ref.get((kind, r["id"]))
             rv = dict(r.get("review") or {})
             rv["status"] = q["status"] if q else None
+            rv["corrected"] = q.get("corrected") if q else None            # D59: the reviewer's value, never over ours
             if kind == "building":
                 rv["appeal_note"] = q["note"] if q and q["status"] == "appealed" else rv.get("appeal_note")
                 rv["appeal_photo_path"] = q["appeal_photo_path"] if q else rv.get("appeal_photo_path")
@@ -207,12 +208,13 @@ class DbStore:
         if q is None:
             self.invalidate(slug)
             return None
-        q.update({k: item[k] for k in ("status", "reviewer", "note", "appeal_photo_path", "updated_at")})
+        q.update({k: item.get(k) for k in ("status", "reviewer", "note", "appeal_photo_path", "updated_at", "corrected")})
         recs = b["buildings"] if q["item_type"] == "building" else b["assets"]
         r = next((x for x in recs if x["id"] == q["ref_id"]), None)
         if r is not None:
             rv = dict(r.get("review") or {})
             rv["status"] = q["status"]
+            rv["corrected"] = q.get("corrected")
             if q["item_type"] == "building":
                 rv["appeal_note"] = q["note"] if q["status"] == "appealed" else rv.get("appeal_note")
                 rv["appeal_photo_path"] = q["appeal_photo_path"]
@@ -268,9 +270,9 @@ class DbStore:
                          asset_cls=asset_type.get(r[2]) if r[1] == "asset" else None, street=r[3], lat=r[4], lon=r[5],
                          priority=r[6], reasons=list(r[7] or []), discrepancies=list(r[8] or []), status=r[9],
                          reviewer=r[10], note=r[11], appeal_photo_path=r[12],
-                         updated_at=r[13].isoformat() if r[13] else None)
+                         updated_at=r[13].isoformat() if r[13] else None, corrected=r[14])
              for r in c.execute("""select id, item_type, ref_id, street, ST_Y(geom), ST_X(geom), priority, reasons, discrepancies,
-                                          status, reviewer, note, appeal_photo_url, updated_at
+                                          status, reviewer, note, appeal_photo_url, updated_at, corrected
                                    from review_items where area_id = %s order by ord nulls last, id""", (area_id,))]
         b = assemble(slug, a[0], a[1], a[2], [round(x, 7) for x in a[3]], a[4], a[5], a[6], S, B, A, G, U, M, Q, GD, "db")
         b["live"] = bool(a[7])                                # P6: made by a worker job (a fresh, non-resumed run)

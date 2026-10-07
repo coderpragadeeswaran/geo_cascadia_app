@@ -22,7 +22,7 @@ const SETTLE_MS = 350
 
 export function DriveButton({ street }: { street: string }) {
   const setDrive = useUi((s) => s.setDrive)
-  return <button className="btn btn-sodium" onClick={() => setDrive({ street, branch: 0, i: 0, view: 'forward' })}><Play /> Drive this street</button>
+  return <button className="btn btn-sodium whitespace-nowrap" title="Drive along the street through the real camera stops" onClick={() => setDrive({ street, branch: 0, i: 0, view: 'forward' })}><Play /> Drive this street</button>
 }
 
 const step = (d: number) => {

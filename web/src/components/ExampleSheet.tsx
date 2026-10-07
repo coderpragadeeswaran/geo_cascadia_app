@@ -11,12 +11,14 @@ import { propsFor, useAreaData } from '@/lib/useAreaData'
 import { cn, fmt1 } from '@/lib/utils'
 import { useUi } from '@/store/ui'
 import { EvidencePhoto } from './EvidencePhoto'
-import { Boxes, EvidenceViews } from './EvidenceViews'
+import { Boxes, EvidenceViews, PhotoKey } from './EvidenceViews'
 import { GeoMini, metres, type MiniLine, type MiniPolygon, type MiniStreet } from './GeoMini'
 import { ObjectMini } from './ObjectMini'
 import { Fact } from './HowWeKnow'
 import { PositionMini } from './PositionMini'
 import { useDetail } from './Detail'
+
+const NONE = new Set<string>()
 
 export function ExampleSheet({ area, exKey, label, onClose }: { area: string; exKey: string; label: string; onClose: () => void }) {
   const { data, isPending, isError } = useHoodExamples(area, exKey)
@@ -66,6 +68,7 @@ function Example({ ex, exKey, onClose }: { ex: HoodExample; exKey: string; onClo
   const { records, streets, props, area, gaps } = useAreaData()
   const detail = useDetail()
   const [photo, setPhoto] = useState(false)
+  const [hl, setHl] = useState<number | null>(null)          // ui-polish-2: box <-> key highlight
   const mini = useMemo(() => miniStreets(streets), [streets])
   const b = ex.kind === 'building' ? records?.buildings.find((x) => x.id === ex.id) : undefined
   const a = ex.kind === 'asset' ? records?.assets.find((x) => x.id === ex.id) : undefined
@@ -99,10 +102,13 @@ function Example({ ex, exKey, onClose }: { ex: HoodExample; exKey: string; onClo
       <div className="[&_figure.aspect-square]:mx-auto [&_figure.aspect-square]:max-w-[min(100%,calc(94vh-250px))]">
         {ex.kind === 'photo' && ex.view && (
           <div className={cn('grid items-start gap-4', ex.rays?.length ? 'grid-cols-[minmax(0,1fr)_300px]' : 'grid-cols-1')}>
-            <EvidencePhoto view={ex.view} label={`${ex.title} · ${Math.round(ex.view.heading)}°`}>
-              <Boxes boxes={(ex.boxes ?? []) as EvidenceBox[]} all={(ex.boxes?.length ?? 0) <= 4} hidden={new Set()}
+            <div>
+              <EvidencePhoto view={ex.view} label={`${ex.title} · ${Math.round(ex.view.heading)}°`}>
+                <Boxes boxes={(ex.boxes ?? []) as EvidenceBox[]} all={(ex.boxes?.length ?? 0) <= 4} hidden={NONE} hl={hl} setHl={setHl} />
+              </EvidencePhoto>
+              <PhotoKey boxes={(ex.boxes ?? []) as EvidenceBox[]} all={(ex.boxes?.length ?? 0) <= 4} hidden={NONE} hl={hl} setHl={setHl}
                 targetName={exKey.startsWith('signs') ? 'This sign' : exKey.startsWith('bld') ? 'This building' : 'This box'} />
-            </EvidencePhoto>
+            </div>
             {!!ex.rays?.length && <PhotoMini area={area} mini={mini} ray={ex.rays[0]} faced={keyOutlines} records={records} />}
           </div>
         )}

@@ -197,27 +197,6 @@ def test_rathinapuri_real_data(online):
     assert a["elsewhere"]["measured_on"] == o["elsewhere"]["measured_on"] == "OpenStreetMap"
 
 
-# ------------------------------------------------------------------------------------------------ extras 2: projection
-def test_city_projection_is_a_range_from_our_runs(online):
-    from app import projection
-    p = online.get("/projection").json()
-    assert p["available"] and p["is_estimate"] and {c["name"] for c in p["cities"]} == {"Coimbatore", "Tiruchirappalli", "Tiruppur", "Madurai"}
-    runs = p["inputs"]["runs"]
-    lo, hi = min(r["per_km"] for r in runs), max(r["per_km"] for r in runs)
-    assert p["inputs"]["photos_per_km"]["low"] == lo and p["inputs"]["photos_per_km"]["high"] == hi
-    for c in p["cities"]:
-        assert c["km"] > 100
-        assert c["photos"]["low"] == pytest.approx(c["km"] * lo) and c["photos"]["high"] == pytest.approx(c["km"] * hi)
-        assert c["photos"]["low"] <= c["photos"]["mid"] <= c["photos"]["high"]
-        assert c["usd"]["low"] <= c["usd"]["mid"] <= c["usd"]["high"]
-        assert c["gpu_hours"]["low"] < c["gpu_hours"]["high"]
-    assert any("list price" in a for a in p["assumptions"]) and any("Not checked" in a for a in p["assumptions"])
-    # the road filter is the area stage's own (no service lanes, no bridges / tunnels)
-    from geo_cascadia.area import ROAD_TYPES
-    assert "service" not in ROAD_TYPES and "residential" in ROAD_TYPES
-    assert projection.TTL_S > 0
-
-
 # ------------------------------------------------------------------------------------------------ extras 3: OSM shops
 def _shop_bundle():
     ring = lambda x0, y0: [list(F.ll(x, y)) for x, y in [(x0, y0), (x0 + 10, y0), (x0 + 10, y0 + 10), (x0, y0 + 10), (x0, y0)]]

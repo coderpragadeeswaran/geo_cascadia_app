@@ -76,13 +76,17 @@ def test_history_lists_who_what_when_and_undone(online, review_area):
 
 
 def test_note_and_photo_only_with_an_appeal(online, review_area):
+    """D59 (ui-polish-2, intended change): a No (reject) may carry its own note; a Yes may not; a photo only with an appeal"""
     iid = _pending(online, review_area)[0]["id"]
+    r = online.patch(f"/review/{iid}", data={"action": "approve", "reviewer": TEST_REVIEWER, "note": "typed in the appeal box"})
+    assert r.status_code == 422 and "not with a Yes" in r.json()["detail"]
     for action in ("approve", "reject"):
-        r = online.patch(f"/review/{iid}", data={"action": action, "reviewer": TEST_REVIEWER, "note": "typed in the appeal box"})
-        assert r.status_code == 422 and "only with an appeal" in r.json()["detail"]
         r = online.patch(f"/review/{iid}", data={"action": action, "reviewer": TEST_REVIEWER},
                          files={"photo": ("x.png", _png(), "image/png")})
-        assert r.status_code == 422
+        assert r.status_code == 422 and "only with an appeal" in r.json()["detail"]
+    no = online.patch(f"/review/{iid}", data={"action": "reject", "reviewer": TEST_REVIEWER, "note": "no: the roof is hidden"}).json()
+    assert no["status"] == "rejected" and no["note"] == "no: the roof is hidden"
+    assert _undo(online, iid, no["event_id"])["note"] is None
     assert online.patch(f"/review/{iid}", data={"action": "appeal", "reviewer": TEST_REVIEWER}).status_code == 422
     ap = online.patch(f"/review/{iid}", data={"action": "appeal", "reviewer": TEST_REVIEWER, "note": "pytest appeal"}).json()
     ok = online.patch(f"/review/{iid}", data={"action": "approve", "reviewer": TEST_REVIEWER}).json()

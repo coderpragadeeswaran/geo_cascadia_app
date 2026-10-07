@@ -99,7 +99,9 @@ Not tested: the laptop with no internet at all (Google's map script and Supabase
 
 ## First-time setup
 
-- Python 3.12 venv for the API: `py -3.12 -m venv backend\.venv; backend\.venv\Scripts\pip install -r backend\requirements.txt`
+- Python 3.12 venv for the API (repo root; also works from `backend\` with `requirements.txt`):
+  `py -3.12 -m venv backend\.venv; backend\.venv\Scripts\pip install -r backend\requirements.txt`. The pipeline package
+  (`pipeline/geo_cascadia`) is not pip-installed: the API puts `pipeline/` on its import path (D59).
 - Web: `cd web; npm install` (Node 24)
 - `backend/.env` (git-ignored; never commit keys): `DATABASE_URL` (Supabase session pooler URI), `SUPABASE_URL`,
   `SUPABASE_SERVICE_ROLE_KEY`, `GOOGLE_MAPS_BROWSER_KEY` (referrer-restricted to `http://localhost:5173/*`),
@@ -131,6 +133,7 @@ npx tsx scripts/p8-shots.ts        # P8 screens (dev server): Routing and cost, 
 npx tsx scripts/d53-shots.ts       # D53 (dev server): Hood map-data line, map attribution, the 50 m dark-stretch question; MODE=daylight
 npx tsx scripts/lighting-shots.ts  # D54/D55 (dev server): priority list, stretch card, map colours, priority question, report buttons + real downloads; MODE=daylight
 npx tsx scripts/extras-shots.ts    # D58 (dev server): "continues outside this area", GIS downloads, OSM question + map tags, floor confidence, Hood/Trust; MODE=daylight
+npx tsx scripts/ui-polish2-shots.ts  # D59 (dev server): street list + full list, photo tags + key, Review questions, a No with a value (undone), OSM; MODE=daylight, TAG=before|after
 backend\.venv\Scripts\python tools\audit_numbers.py    # (repo root) Ward 29 numbers straight from the database
 ```
 
@@ -167,18 +170,18 @@ dark bands get a brighter / wider edge for higher priority, and you can ask "Hig
 *possible* dark stretches (the lamp detector finds about 43% of lamp heads), so the priority ranks candidates. It needs
 the database (not available in offline data mode). Ward 29's table: DECISIONS D54.
 
-**Download report.** "Download report: PDF · Excel" on the area's *What stands out* panel, "Report for this street" on a
-street's panel (or `GET /areas/{slug}/report.pdf|.xlsx?street=`). The PDF is a summary for officials (sources with dates,
+**Download report.** "Download report: PDF · Excel" on the area's *What stands out* panel, the "Street report" button on a
+street's panel (it opens PDF · Excel · GeoJSON · Shapefile; or `GET /areas/{slug}/report.pdf|.xlsx?street=`). The PDF is a summary for officials (sources with dates,
 the key numbers as the app shows them, a map drawn from our own data with © OpenStreetMap contributors, findings,
 possible dark stretches by priority, review queue, cost, Gate 1, limits); the Excel file has the same tables. No Google
 map or photo is in it: each row links to Google Maps instead. Registers are marked SYNTHETIC throughout. Ward 29 takes
 about 4 s once loaded (19 pages since D58; 27 before). Libraries: fpdf2, openpyxl, uharfbuzz (pip only). `tools\build_report_fonts.py` rebuilds the
 report's fonts from the app's typeface (only needed if the font changes).
 
-## Report v2, GIS export, OpenStreetMap cross-checks, city projection (D58)
+## Report v2, GIS export, OpenStreetMap cross-checks (D58)
 
-**Downloads** (What stands out, or "Report for this street"): **PDF** (all landscape A4: at a glance, charts, map, what to
-do next, method & limits, scale & confidence — then an appendix with the key columns; Ward 29 19 pages), **Excel** (every
+**Downloads** (What stands out, or "Street report" on a street): **PDF** (all landscape A4: at a glance, charts, map, what to
+do next, method & limits, how sure the counts are — then an appendix with the key columns; Ward 29 19 pages), **Excel** (every
 column and row; new columns floor-count confidence, OSM building:levels, "in OpenStreetMap"; a new sheet "OSM shops"),
 **GeoJSON** and **Shapefile** (zipped; buildings with findings as outlines, poles and streetlights, possible dark stretches as
 lines, review items, businesses vs OpenStreetMap; WGS84 with .prj; `fields.csv` maps the 10-character field names to the
@@ -187,16 +190,25 @@ Excel columns). `GET /areas/{slug}/report.pdf|.xlsx|.geojson|.shp.zip?street=`. 
 
 **OpenStreetMap as a real reference** (not an official register; it never changes our results): our businesses vs
 OpenStreetMap's shop points along the analysed streets (Under the Hood, Trust, the question "Businesses not in
-OpenStreetMap", the report), and OpenStreetMap's building:levels next to our floor count in the building card. The names
+OpenStreetMap", the report). Pairs within 25 m are "near each other (location only)": Ward 29's 9 pairs share no name
+(D59). OpenStreetMap's building:levels shows in the building card only where the building has the tag (Ward 29: 2 of 381). The names
 and tags come from one OpenStreetMap look-up per area (free, no Google call), saved in `data/areas/<slug>/osm_tags.json`:
 ```powershell
 backend\.venv\Scripts\python tools\fetch_osm_tags.py          # areas without the file (new worker areas fetch it themselves)
 backend\.venv\Scripts\python tools\fetch_osm_tags.py --all    # refresh all (e.g. after the monthly map refresh)
 ```
 
-**Whole-city projection** (Under the Hood, PDF; `GET /projection`): for each of the four cities, about N km of streets →
-photos, cost at Google's list price, GPU hours, as a low–high range from our completed runs. An estimate: Street View
-coverage is not checked for whole cities.
+## Review: how to answer (D59)
+
+Each item asks one question in plain words, e.g. "Is there a building here that's missing from the register?", "The register
+says 1 floor, the photo suggests 2 floors. Is the photo right?", "Does this building have 2 floors?", "Does the orange box show
+this building?". Answer **Yes** (key **A**) or **No** (key **R**). Yes = the finding is right (stored as approved); No = it is
+not (rejected). After a No on a question about a value (floors, use, a sign's name), a box asks for the right value and an
+optional note (**Enter** saves). The value is saved with your answer as "Reviewer says: …" in the drawer, the report, Excel
+and GIS; the AI's value and the register are never changed. **E** = not sure: send back with a note (and a photo).
+**U** = undo (it also removes a corrected value). One line under the buttons says what was saved.
+The photo: the orange box is the item; small tags mark the other boxes (B building, P pole, S sign, L streetlight;
+light-orange = part of this building); the key under the photo lists them; hover a tag or a key line for the confidence.
 
 ## Field check: the review queue as a walking route
 

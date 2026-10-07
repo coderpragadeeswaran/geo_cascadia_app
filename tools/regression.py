@@ -7,7 +7,8 @@ r"""Regression pass before the demo (D56). One command, run from the repo root w
 Sections (each prints ok / FAIL lines; the run ends with a PASS / FAIL table and exit code 1 on any FAIL):
   A  questions: the four spec questions + the extra ones (Tamil, "high priority dark stretches", the 50 m question, poles on
      a street, 100 m interval, "possible dark stretches") return the expected filters and row counts (Ward 29 baseline);
-  B  review round trip: one Ward 29 decision (approve) and its Undo through the API; the review tables are snapshotted
+  B  review round trip: one Ward 29 decision (approve) and its Undo, then a No with a corrected value + note and its Undo
+     (D59), through the API; the review tables (incl. the corrected value) are snapshotted
      before and after and must be identical (the item's updated_at and the two append-only history rows are the only
      traces, by design, D24);
   C  Analyse up to the estimate only: a street inside the local map data (Coimbatore) and one outside (Erode): street
@@ -56,6 +57,8 @@ QUESTIONS = [
     ("Show possible dark stretches", {"intent": "streetlight_gaps", "interval_m": 60}, 11, None),
     # extras (added with the OpenStreetMap comparison, an intended addition): our businesses not on OpenStreetMap
     ("Businesses not in OpenStreetMap", {"intent": "osm_businesses", "osm": "camera_only"}, 138, None),
+    # ui-polish-2 (D59, an intended addition): the 9 pairs, renamed "near each other (location only)"; no name matches
+    ("Businesses near an OpenStreetMap point", {"intent": "osm_businesses", "osm": "matched"}, 9, None),
 ]
 INSIDE = ("Sakthi Main Road (Coimbatore, local map data)", 11.042553, 76.9841361)
 OUTSIDE = ("a road in Erode (outside the four cities: OpenStreetMap's public servers)", 11.3410, 77.7172)
@@ -117,8 +120,9 @@ def section_a():
 # ---------------------------------------------------------------- B review round trip
 def _snapshot(pool):
     with pool.connection() as c:
-        items = {r[0]: r[1:] for r in c.execute(
-            "select id, status, reviewer, note, appeal_photo_url, updated_at from review_items")}
+        # D59: the reviewer's corrected value is part of the state that must come back exactly (kept before updated_at)
+        items = {r[0]: (r[1], r[2], r[3], r[4], json.dumps(r[6], sort_keys=True), r[5]) for r in c.execute(
+            "select id, status, reviewer, note, appeal_photo_url, updated_at, corrected from review_items")}
         objs = sorted(c.execute("select 'b', area_id, id, review_status from buildings union all "
                                 "select 'a', area_id, id, review_status from assets").fetchall())
         events = c.execute("select count(*) from review_events").fetchone()[0]
@@ -143,14 +147,25 @@ def section_b():
                 f"item #{iid} ({item.get('ref_id')}) approved (event {ev})")
         u = requests.post(f"{API}/review/{iid}/undo", json={"item_id": iid, "event_id": ev, "reviewer": "regression check"}, timeout=60)
         s.check(u.status_code == 200 and get(f"/review/{iid}").json()["status"] == "pending", "Undo puts it back to waiting")
+        # D59: a No with the reviewer's corrected value and a note, then its Undo
+        r = requests.patch(f"{API}/review/{iid}", data={"action": "reject", "reviewer": "regression check", "note": "regression: no",
+                                                       "corrected": json.dumps({"floors": 3})}, timeout=60)
+        ev2 = r.json().get("event_id")
+        got = get(f"/review/{iid}").json()
+        s.check(r.status_code == 200 and got["status"] == "rejected" and got.get("corrected") == {"floors": 3} and got.get("note") == "regression: no",
+                f"item #{iid} answered No with a corrected value {{'floors': 3}} and a note (event {ev2})")
+        u = requests.post(f"{API}/review/{iid}/undo", json={"item_id": iid, "event_id": ev2, "reviewer": "regression check"}, timeout=60)
+        got = get(f"/review/{iid}").json()
+        s.check(u.status_code == 200 and got["status"] == "pending" and got.get("corrected") is None and got.get("note") is None,
+                "Undo puts it back to waiting, with no corrected value and no note")
         after = _snapshot(pool)
         bi, ai = before[0], after[0]
-        same_state = {k: v[:4] for k, v in bi.items()} == {k: v[:4] for k, v in ai.items()}
-        other_times = all(bi[k][4] == ai[k][4] for k in bi if k != iid)
-        s.check(same_state, f"every review item's status / reviewer / note / photo is exactly as before ({len(bi)} items)")
+        same_state = {k: v[:5] for k, v in bi.items()} == {k: v[:5] for k, v in ai.items()}
+        other_times = all(bi[k][5] == ai[k][5] for k in bi if k != iid)
+        s.check(same_state, f"every review item's status / reviewer / note / photo / corrected value is exactly as before ({len(bi)} items)")
         s.check(other_times, "no other item was touched (updated_at unchanged)")
         s.check(before[1] == after[1], f"every building's and asset's review status is exactly as before ({len(before[1])} objects)")
-        s.check(after[2] - before[2] == 2, f"history: +{after[2] - before[2]} append-only rows (the decision and its undo, by design)")
+        s.check(after[2] - before[2] == 4, f"history: +{after[2] - before[2]} append-only rows (two decisions and their undos, by design)")
     finally:
         pool.close()
     s.done()

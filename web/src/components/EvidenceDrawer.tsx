@@ -3,17 +3,19 @@
  *  model_card accuracy, confidences, positions, register ids, costs) is behind "How do we know?" (D16). */
 import { useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, CircleSlash, Flag, Loader2, X } from 'lucide-react'
+import { Check, Flag, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { ApiError } from '@/api/client'
 import { useBuildingLinks, useImagery, useModelCard, useObjectDetail, type PositionCheck } from '@/api/queries'
 import type { AnyProps, Asset, Building, CameraBuildingProps, FloorConfidence, GapProps, MissingProps, OsmLevels, ReviewItem, UnmappedBusiness } from '@/api/types'
-import { assetRegLabel, ASSET_REG, diffLabel, onMapSeenIn, floorsStatusPlain, floorsText, googleFlagPlain, matchLabel, nameQualityPlain, reviewLabel, reviewReasons, useLabel, useNoun } from '@/lib/labels'
+import { assetRegLabel, ASSET_REG, diffLabel, onMapSeenIn, floorsStatusPlain, floorsText, googleFlagPlain, matchLabel, nameQualityPlain, reviewLabel, useLabel, useNoun } from '@/lib/labels'
 import { RouteLine } from '@/lib/routes'
 import { miniStreets } from '@/lib/mini'
 import { useAreaData } from '@/lib/useAreaData'
 import { cn, costText, fmt, fmt1, monthText, plural, withArticle } from '@/lib/utils'
-import { DONE_LABEL, patchReviewCaches, PHOTO_TYPES, photoProblem, saveDecision, undoDecision, type Decision } from '@/lib/review'
+import { patchReviewCaches, PHOTO_TYPES, photoProblem, saveDecision, undoDecision, type Decision } from '@/lib/review'
+import { answerOf, correctable, outcomeLine, reviewQuestions, type Corrected, type QAsset, type QBuilding } from '@/lib/reviewQuestions'
+import { AnswerButtons, NoBox, QuestionBlock, ReviewerSays } from './ReviewAsk'
 import { useUi } from '@/store/ui'
 import { EvidenceViews } from './EvidenceViews'
 import { GeoMini } from './GeoMini'
@@ -147,6 +149,8 @@ function BuildingBody({ b }: { b: Building }) {
   const frontage = b.footprint?.frontage_m ?? fw?.length_m ?? null
   const longest = b.footprint?.longest_side_m ?? fw?.longest_side_m ?? null
   const title = name?.quality === 'good' && name.value ? name.value : `${useLabel(use) === 'Use not known' ? 'Building' : useLabel(use)} on ${b.street}`
+  // D59: the reviewer's own value, saved with the decision (never over ours); the live item first, then the record
+  const fix = (detail.data?.review_item?.corrected ?? (b.review as { corrected?: Corrected | null } | null | undefined)?.corrected) ?? null
   return (
     <>
       <PanelHead eyebrow="Building" title={title} sub={<StatusDot s={b.match_status} label={matchLabel(b.match_status, true, !!b.attributes?.use?.value)} />} />
@@ -155,12 +159,15 @@ function BuildingBody({ b }: { b: Building }) {
         <EvidenceViews kind="building" id={b.id} at={{ lat: b.lat, lng: b.lon }} target="building" />
         <LinkedLine area={area} id={b.id} />
         <Section title="What we saw">
-          <Row k="Use">{use ? <>{useLabel(use)}</> : <span className="ink3">Not known: no clear photo of the front</span>}</Row>
+          <Row k="Use">{use ? <>{useLabel(use)}</> : <span className="ink3">Not known: no clear photo of the front</span>}
+            {fix?.use && <ReviewerSays corrected={{ use: fix.use }} />}</Row>
           <Row k="Floors">{at?.floors?.value != null ? floorsText(at.floors.value, at.floors.status) : <span className="ink3">Not known</span>}
+            {fix?.floors != null && <ReviewerSays corrected={{ floors: fix.floors }} />}
             <FloorConfidenceLine fc={detail.data?.floor_confidence} osm={detail.data?.osm_levels} /></Row>
           <Row k="Frontage">{frontage != null ? <>{fmt1.format(frontage)} m <span className="ink3">along the street, from the map outline</span></> : <span className="ink3">{detail.isPending ? '…' : 'Not known'}</span>}</Row>
           <Row k="Position"><PositionLine pc={detail.data?.position_check} pending={detail.isPending} /></Row>
-          <Row k="Sign">{name?.value ? <>{name.value}{name.quality !== 'good' && <span className="ink3"> (hard to read, to double-check)</span>}</> : <span className="ink3">No sign read</span>}</Row>
+          <Row k="Sign">{name?.value ? <>{name.value}{name.quality !== 'good' && <span className="ink3"> (hard to read, to double-check)</span>}</> : <span className="ink3">No sign read</span>}
+            {fix?.name && <ReviewerSays corrected={{ name: fix.name }} />}</Row>
           {name?.google_confirmed && name.google_place_id && <Row k="Google Maps"><PlaceName id={name.google_place_id} /></Row>}
           <HowWeKnow summary={buildingSummary(b)} links={[{ page: 'trust', section: 'use', label: 'Use accuracy' }, { page: 'trust', section: 'floors', label: 'Floors accuracy' },
             { page: 'trust', section: 'names', label: 'Names accuracy' }, { page: 'trust', section: 'gate1', label: 'Position accuracy (Gate 1)' },
@@ -168,10 +175,8 @@ function BuildingBody({ b }: { b: Building }) {
             <Fact k="Use"><RouteLine route={at?.use?.route} /></Fact>
             <Fact k="Floors"><RouteLine route={at?.floors?.route} />{at?.floors?.status && <span className="ink3"> Result: {floorsStatusPlain(at.floors.status)}.</span>}</Fact>
             {detail.data?.floor_confidence && <Fact k="Floor confidence" hint="a fixed rule">{detail.data.floor_confidence.rule}{detail.data.floor_confidence.check && <span className="ink3"> The AI floor count was {detail.data.floor_confidence.check}.</span>}</Fact>}
-            {detail.data?.osm_levels && <Fact k="OpenStreetMap floors" hint="building:levels">{detail.data.osm_levels.osm_levels != null
-              ? <>OpenStreetMap gives this building {detail.data.osm_levels.osm_levels} {detail.data.osm_levels.osm_levels === '1' ? 'level' : 'levels'} (looked up {detail.data.osm_levels.fetched?.slice(0, 10)}). Volunteers add this tag for few buildings; it is a cross-check only and never changes our count.</>
-              : detail.data.osm_levels.loaded ? <span className="ink3">OpenStreetMap has no floor count (building:levels) for this building.</span>
-              : <span className="ink3">OpenStreetMap's floor counts are not loaded for this area yet.</span>}</Fact>}
+            {/* ui-polish-2: only on buildings that carry the tag (Ward 29: 2 of 381); nothing elsewhere */}
+            {detail.data?.osm_levels?.osm_levels != null && <Fact k="OpenStreetMap floors" hint="building:levels">OpenStreetMap gives this building {detail.data.osm_levels.osm_levels} {detail.data.osm_levels.osm_levels === '1' ? 'level' : 'levels'} (looked up {detail.data.osm_levels.fetched?.slice(0, 10)}). Volunteers add this tag for few buildings; it is a cross-check only and never changes our count.</Fact>}
             <Fact k="Sign / name"><RouteLine route={name?.route} />{name?.quality && <span className="ink3"> The sign was {nameQualityPlain(name.quality)}.</span>}</Fact>
             {b.evidence?.sign_view?.ocr_text && <Fact k="Sign text read" hint={b.evidence.sign_view.ocr_conf != null ? `OCR confidence ${fmt1.format(b.evidence.sign_view.ocr_conf)}` : 'OCR'}>“{b.evidence.sign_view.ocr_text}”{b.evidence.sign_view.ocr_conf != null && <span className="ink2">, the text reader was {Math.round(b.evidence.sign_view.ocr_conf * 100)}% sure</span>}</Fact>}
             {!!at?.property_identifiers?.length && <Fact k="Door numbers">{at.property_identifiers.join(', ')} <span className="ink3">(not confirmed)</span></Fact>}
@@ -201,7 +206,7 @@ function BuildingBody({ b }: { b: Building }) {
             <Fact k="Register" hint={reg?.source ?? 'SYNTHETIC'}>{reg?.source === 'IMPORTED' ? 'An imported property register' : 'Made-up demo data: it copies what the photos show, except a few planted mistakes (no open property records were available)'}</Fact>
           </HowWeKnow>
         </Section>
-        <ReviewActions item={detail.data?.review_item ?? null} loading={detail.isPending} finding={b.match_status} />
+        <ReviewActions item={detail.data?.review_item ?? null} loading={detail.isPending} b={b as QBuilding} />
       </Body>
     </>
   )
@@ -247,7 +252,7 @@ function AssetBody({ a }: { a: Asset }) {
             <Fact k="Register entry">{reg?.asset_no ? <>{reg.asset_no}, listed as {reg.record_type ?? '—'}</> : 'No entry in the register'}</Fact>
           </HowWeKnow>
         </Section>
-        <ReviewActions item={detail.data?.review_item ?? null} loading={detail.isPending} />
+        <ReviewActions item={detail.data?.review_item ?? null} loading={detail.isPending} a={a as QAsset} />
       </Body>
     </>
   )
@@ -337,11 +342,12 @@ function PlaceName({ id }: { id: string }) {
   return name ? <span>{name} <span className="t-small ink3">· Google Maps</span></span> : <span className="ink3">looking up…</span>
 }
 
-function ReviewActions({ item, loading, finding }: { item: ReviewItem | null; loading: boolean; finding?: string | null }) {
+/** D59: the review as a question (lib/reviewQuestions) with Yes / No; a No on a value question asks for the right value */
+function ReviewActions({ item, loading, b, a }: { item: ReviewItem | null; loading: boolean; b?: QBuilding; a?: QAsset }) {
   const offline = useUi((s) => s.offline)
   const reviewer = useUi((s) => s.reviewer)
   const qc = useQueryClient()
-  const [mode, setMode] = useState<'idle' | 'appeal'>('idle')
+  const [mode, setMode] = useState<'idle' | 'appeal' | 'no'>('idle')
   const [note, setNote] = useState('')
   const [photo, setPhoto] = useState<File | null>(null)
   const [busy, setBusy] = useState<Decision | 'undo' | null>(null)
@@ -349,18 +355,19 @@ function ReviewActions({ item, loading, finding }: { item: ReviewItem | null; lo
   const [msg, setMsg] = useState<string | null>(null)
   if (loading) return null
   if (!item) return <Section title="Review"><p className="t-small ink3">Not waiting for review.</p></Section>
-  const send = async (action: Decision) => {
+  const asked = reviewQuestions(item, b, a)
+  const send = async (action: Decision, opts: { corrected?: Corrected | null; noNote?: string } = {}) => {
     if (!item.id || busy || !reviewer) return
     const bad = action === 'appeal' ? photoProblem(photo) : null
     if (bad) { setMsg(bad); return }
     setBusy(action); setMsg(null); setLast(null)
     try {
-      // a note / photo belongs to an appeal only (P5 fix); saveDecision drops them for approve / reject
-      const row = await saveDecision(item.id, action, { reviewer, note, photo })
+      // the appeal box's note / photo go only with "send back" (P5 fix); a No sends its own note + the right value (D59)
+      const row = await saveDecision(item.id, action, { reviewer, note, photo, ...opts })
       patchReviewCaches(qc, row)
       setMode('idle'); setNote(''); setPhoto(null)
       setLast({ id: item.id, eventId: row.event_id })               // Undo = exactly this item + this decision (D24)
-      setMsg(`${DONE_LABEL[action]} ✓`)
+      setMsg(`${outcomeLine(asked, action === 'approve' ? 'yes' : action === 'reject' ? 'no' : 'appeal', row.corrected)} ✓`)
     } catch (e) { setMsg(e instanceof ApiError ? (e.status === 503 ? 'Offline — read-only. Nothing was saved.' : e.message) : 'Could not save') } finally { setBusy(null) }
   }
   const undo = async () => {
@@ -372,8 +379,10 @@ function ReviewActions({ item, loading, finding }: { item: ReviewItem | null; lo
     } catch (e) { setMsg(e instanceof ApiError ? e.message : 'Could not undo') } finally { setBusy(null) }
   }
   return (
-    <Section title="Review" right={<span className={cn('t-small', item.status === 'pending' ? 'sodium' : 'ink3')}>{reviewLabel(item.status)}</span>}>
-      <p className="t-small ink2">A person should check this because: {reviewReasons(item.reasons, { match_status: finding, discrepancies: item.discrepancies }).map((r) => r.charAt(0).toLowerCase() + r.slice(1)).join('; ')}.</p>
+    <Section title="Review" right={<span className={cn('t-small', item.status === 'pending' ? 'sodium' : 'ink3')}>{item.status === 'pending' ? reviewLabel(item.status) : `Answered ${answerOf(item.status)}`}</span>}>
+      <QuestionBlock q={asked} compact />
+      {item.status !== 'pending' && <p className="t-small ink2 mt-1">Answered {answerOf(item.status)}{item.reviewer ? ` by ${item.reviewer}` : ''}.</p>}
+      <ReviewerSays corrected={item.corrected} className="mt-0.5" />
       {item.note && <p className="t-small ink3 mt-1">Note: {item.note}</p>}
       {offline || item.id == null ? (
         <p className="t-small mt-2" style={{ color: 'var(--ns-sodium)' }}>Offline — read-only. Decisions can’t be saved until the database is back.</p>
@@ -381,10 +390,11 @@ function ReviewActions({ item, loading, finding }: { item: ReviewItem | null; lo
         <div className="mt-2"><p className="t-small ink2 mb-1.5">Your name is saved with each decision (asked once, no login).</p><ReviewerForm compact /></div>
       ) : (
         <>
-          <div className="mt-2 flex gap-1.5">
-            <button className="btn btn-line" disabled={!!busy} onClick={() => send('approve')}>{busy === 'approve' ? <Loader2 className="animate-spin" /> : <Check />} {busy === 'approve' ? 'Saving…' : 'Approve'}</button>
-            <button className="btn btn-line" disabled={!!busy} onClick={() => send('reject')}>{busy === 'reject' ? <Loader2 className="animate-spin" /> : <CircleSlash />} {busy === 'reject' ? 'Saving…' : 'Reject'}</button>
-            <button className="btn btn-line" disabled={!!busy} aria-pressed={mode === 'appeal'} onClick={() => setMode(mode === 'appeal' ? 'idle' : 'appeal')}><Flag /> Appeal</button>
+          <div className="mt-2 grid gap-1.5">
+            <AnswerButtons busy={busy === 'approve' ? 'yes' : busy === 'reject' ? 'no' : null} disabled={!!busy} onYes={() => send('approve')}
+              onNo={() => (correctable(asked).length ? setMode('no') : send('reject'))} />
+            {mode === 'no' && <NoBox q={asked} saving={busy === 'reject'} disabled={!!busy} onCancel={() => setMode('idle')} onSave={(corrected, noNote) => send('reject', { corrected, noNote })} />}
+            <button className="btn btn-line justify-start" disabled={!!busy} aria-pressed={mode === 'appeal'} onClick={() => setMode(mode === 'appeal' ? 'idle' : 'appeal')}><Flag /> Not sure? Send back with a note</button>
           </div>
           <AnimatePresence>
             {mode === 'appeal' && (

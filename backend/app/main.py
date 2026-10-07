@@ -451,14 +451,6 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         fields.csv = the key from the 10-character field names to the Excel column names, and README.txt."""
         return _report(slug, street, "zip")
 
-    @app.get("/projection", tags=["areas"])
-    def city_projection(D: Data = Depends(get_data)):
-        """extras 2: "Whole <city>: about N km of streets -> about X photos, $Y, Z hours" for each city in the local map
-        data, as a low-high range from our completed runs (an ESTIMATE; Street View coverage not checked; list price)."""
-        from . import projection
-        pool = D.pool if D.db_online else None
-        return {"offline": not D.db_online, **projection.project(pool, settings.areas_dir, mc())}
-
     @app.get("/areas/{slug}/osm", tags=["areas"])
     def area_osm(slug: str, street: Optional[str] = None, D: Data = Depends(get_data)):
         """extras 3 + 4: OpenStreetMap as a real (crowd-sourced) reference: our businesses vs OSM shop / office / business
