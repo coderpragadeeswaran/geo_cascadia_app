@@ -38,7 +38,9 @@ web (React, :5173) ──> API (FastAPI, :8000) ──> Supabase Postgres + Post
    ```powershell
    backend\.venv\Scripts\python tools\check_photos.py          # all areas; prints refs / served / gone per area
    ```
-   Commit the updated `data/areas/*/photo_check.json` (Under the Hood's one-line note per area).
+   With the detector set up (below, D61) it also re-runs the detector on Google's replacement for each newly retired panorama
+   (one Street View photo each, sometimes up to 3; earlier verdicts are re-used) and only then lets the app draw the saved boxes
+   on it. Commit the updated `data/areas/*/photo_check.json` (Under the Hood's one-line note per area).
 3. Run the checks below (Tests) once.
 
 ### On the day, in this order
@@ -142,6 +144,7 @@ npx tsx scripts/extras-shots.ts    # D58 (dev server): "continues outside this a
 npx tsx scripts/ui-polish2-shots.ts  # D59 (dev server): street list + full list, photo tags + key, Review questions, a No with a value (undone), OSM; MODE=daylight, TAG=before|after
 npx tsx scripts/photo-fallback-shots.ts  # D60 (dev server): retired panoramas → current photo (drawer, pole, sign, Review, Drive), Hood note + cost lines; MODE=daylight, TAG=before|after
 npx tsx scripts/photo-browse.ts [label]  # D60 (dev server): one fixed Ward 29 click path; counts Street View photo requests and failures
+npx tsx scripts/box-restore-shots.ts     # D61 (dev server): retired photos (transport india, w1236978077), the "sign boxes" line, Hood note; MODE=daylight, TAG=before|after
 backend\.venv\Scripts\python tools\audit_numbers.py    # (repo root) Ward 29 numbers straight from the database
 ```
 
@@ -237,6 +240,21 @@ panoramas) and 2 of Trichy's 223 were no longer served. Before showing a stored 
 still serves that panorama (free metadata, cached 30 days). If not, it shows Google's current photo from the same spot
 (within 25 m, aimed at the same building front, pole or sign) without the analysis' boxes, and says so; with no photo
 nearby it says "No Street View photo available here any more" and requests nothing. Re-run `tools\check_photos.py` monthly.
+
+**Are the replacements the same photo? (D61): no.** Re-running the production detector on 40 replacements at the stored view
+found the saved boxes shifted (median overlap 0.49, 0 of 34 judged photos passed; still-served photos: 1.00): they are
+neighbouring frames of the same drive, a few metres away. So no saved box is drawn on a replacement. The monthly check
+repeats this test for every new retirement and would restore the boxes only for an area where ≥ 90 % of the retired
+panoramas really are the same image. It needs a separate CPU venv with the detector (never the API's venv):
+```powershell
+py -3.12 -m venv C:\projects\gc-detector\.venv
+C:\projects\gc-detector\.venv\Scripts\pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+C:\projects\gc-detector\.venv\Scripts\pip install ultralytics
+# copy training_runs/v8s_640_s2/weights/best.pt from the Drive folder to C:\projects\gc-detector\best.pt, then in backend/.env:
+#   DETECTOR_PYTHON=C:/projects/gc-detector/.venv/Scripts/python.exe
+#   DETECTOR_WEIGHTS=C:/projects/gc-detector/best.pt
+```
+Photos are fetched into memory only (`tools\detect_photos.py`), never written to disk.
 
 Registers are synthetic demo data. Prototype — imagery © Google. Map data © OpenStreetMap contributors (ODbL);
 building footprints © Microsoft (Global ML Building Footprints, ODbL).

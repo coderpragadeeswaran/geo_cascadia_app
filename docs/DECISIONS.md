@@ -2350,3 +2350,71 @@ estimate: "Cloud AI (Amazon Nova, AWS) ≈ $…" instead of "Total ≈ … (phot
 sum); Jobs card: Street View / Cloud AI / Cost cap lines instead of "Total".
 
 **Checks (7 Oct).** Backend 484 passed / 1 skipped (13 new in `test_photo_fallback.py`; `test_report` cost assertion updated, intended; a one-off `test_p6` delete failure in the first full run did not recur alone, in its file or in a second full run); typecheck, build, test:ui 23 (1 new), check:data, audit (both themes) pass. Regression: run 1 lost the internet (E `ERR_INTERNET_DISCONNECTED`, F stopped: API in offline data mode; A–D pass, `run-2026-10-07_2018.log`); run 2 ALL PASSED, 291 checks, 0 retries (`run-2026-10-07_2132.log`). Expected answers: none changed. Screenshots `web/scripts/photo-fallback-shots.ts` → `docs/screenshots/photo-fallback/` (before from main's frontend in a worktree on :5173, after; both themes).
+
+## 2026-10-07 — box restore (branch box-restore)
+
+### D61. Re-issued panoramas are NOT the same photo: no boxes restored; the check is automatic; wording corrected; "sign boxes"; /design-preview removed
+**Question.** D60 found 303 Ward 29 photo references (69 panoramas) + 2 Trichy (1) whose panorama ids Google retired, each with a
+replacement 0–5 m away and the same capture month, and assumed "the same imagery under a new id". Owner: verify before drawing
+the saved boxes on the replacements.
+
+**Rule, fixed before any replacement photo was fetched** (`backend/app/sameimage.py`; written to a file first):
+- The production detector (YOLOv8s `v8s_640_s2`, owner's `best.pt`, laptop CPU) is re-run on the replacement photo at the
+  STORED heading / pitch / fov with the pipeline's own call (`predict(conf 0.20, imgsz 640, iou 0.45, agnostic NMS)` + the
+  per-class thresholds). Per class one-to-one Hungarian assignment on IoU; a pair needs IoU ≥ 0.10.
+- A photo is "same image" when: ≥ 2 saved boxes of confidence ≥ 0.5 (else "can't tell"), median IoU of matched pairs ≥ 0.80,
+  ≥ 80 % of those strong boxes found again at IoU ≥ 0.5, and |median dx|, |median dy| ≤ 6 px.
+- A panorama is "same image" when the replacement has the same month, is ≤ 5 m away and its spot-check photo passes (the
+  planned view with the most strong saved boxes; next one if "can't tell"; ≤ 3).
+- Go / no-go: restore only if ≥ 90 % of the judged retired photos pass AND the retired median IoU is ≤ 0.05 below the
+  still-served control's; otherwise nothing anywhere.
+
+**Step 1a study** (`tools/verify_same_image.py` + `tools/detect_photos.py`; photos kept in memory only, never written):
+40 retired references (Ward 29 38 stratified by street × kind with seed 2026, + both Trichy ones; 7 streets, 26 panoramas;
+poles / lights 10, building sign 9, front 8, best photo 6, nearest camera 4, business sign 3; 0.4–4.9 m from the old camera)
+and 10 still-served controls.
+
+| | photos | same / different / can't tell | saved boxes matched | median IoU (p10–p90) | per-photo shift \|dx\| median | strong boxes found again (median) | the object's own box, median IoU |
+|---|---|---|---|---|---|---|---|
+| retired → replacement | 40 | 0 / 34 / 6 | 120 of 233 (113 extra) | 0.491 (0.210–0.787) | 20.4 px (−88.8 … +64.3, n = 29) | 0.29 | 0.171 (n = 35; ≥ 0.5: 10) |
+| control, still served | 10 | 8 / 1 / 1 | 63 of 63 (3 extra) | 1.000 (0.999–1.000) | 0.0 px | 1.00 | 1.000 (n = 10) |
+
+Pass rate 0 of 34 judged (needs ≥ 90 %), IoU gap 0.509 (needs ≤ 0.05) → **NO-GO: nothing is restored.** The control shows the
+CPU re-run reproduces the stored GPU boxes exactly (its one "different" is a pole's aimed view, whose boxes are projected from
+other views: 0.73). **The replacements are neighbouring frames of the same drive, not the old photo under a new id** — even
+0.4 m away the boxes sit 20 px off. D60's wording "taken from the same spot: Google now serves it under a new ID" was wrong.
+
+**Step 1c — the monthly check does this by itself** (`tools/check_photos.py`): after the metadata pass, every retired
+panorama whose replacement meets the month / distance half gets the detector spot-check (one photo, sometimes up to 3), and the
+area gate (≥ 90 % of its judged retired panoramas pass, else none) decides. Verdicts are kept in `photo_check.json`
+(`same_image`, `same_image_restore`, one `references` row per gone photo reference with old → new id and `same_image`) and are
+re-used while the replacement id stays the same, so a re-run costs no photo. The detector runs in its own venv
+(`DETECTOR_PYTHON`, `DETECTOR_WEIGHTS` in backend/.env, or `--detector-python / --weights`); without it new re-issues stay
+"not checked" (no boxes). Run on 7 Oct: **Ward 29 69 retired panoramas: 65 different, 3 same, 1 can't tell → gate 3 of 68 = 4 %,
+no restore; Trichy 1: different.** The 3 that pass alone are 0.1 / 0.4 / 1.2 m away with median IoU 0.83 / 0.88 / 0.83 and
+shifts ≤ 5.3 px — close neighbouring frames, not the 1.00 of an identical photo; the gate keeps them without boxes.
+- The API (`photos.same_images`) reads only verdicts "same" in areas whose gate passed; such a view's `current` gets
+  `same_image: true` and the stored heading / pitch / fov; the browser (`photoSwap` state `same`) then requests it under the
+  new id and draws the saved boxes and tags with the note "Same photo under a new Google ID". **Today no view is in that state.**
+- Not tuned after seeing results. Owner option (not applied): a stricter photo rule (e.g. median IoU ≥ 0.95) would separate an
+  identical re-issue (control 1.00) from a close neighbouring frame (0.83–0.88) more clearly.
+
+**Wording corrected (D60).** Under a replaced photo: "… Taken on the same drive, less than 1 m / N m from the analysis camera:
+a neighbouring photo, not the one the analysis used." Hood note: "… Google's current photos taken near the same spots are shown
+instead, without boxes (taken on the same drive, up to 5 m from the analysis cameras: neighbouring photos, not the ones the
+analysis used; re-running the detector, the saved boxes came back on 3 of 68 checked panoramas)." Drive's tooltip likewise.
+
+**1d.** Building drawer: "1 building · N sign boxes in M photos linked to it (light-orange S tags on the photos; the same sign
+is often boxed in several photos, and some boxes aren't shop signs)". Grouping boxes of one sign was measured and is not
+reliable: by the spot each box's sight line meets the outline, 26 % (Ward 29) / 13 % (Trichy) of box pairs from ONE photo —
+different signs by definition — lie within 1 m (44 % / 22 % within 2 m); identical read text joins only 103 cross-photo pairs in
+Ward 29. So no "about N different signs" count. The outdated "marked 'part of this building'" text is gone.
+**/design-preview removed** (nothing linked or tested it; it requested retired panoramas directly): `DesignPreview.tsx` and its
+only users `NsDrive / NsShell / NsStory / NsParts / nsLayers` + `data/ward29-sathy-drive.json`. D15's "stays as the reference
+route" no longer holds; DESIGN.md / tokens are unchanged.
+
+**Cost.** Street View Static photos fetched by the checks: 50 (study) + 72 (spot-check) = 122, $0.85 at Google's list price
+(billed under India pricing, see D60's billing line); Amazon Nova (AWS): 0. Metadata calls: 0 (cache). No photo was written to
+disk by the checks.
+
+**Checks (7 Oct).** Backend 496 passed, 1 skipped (12 new in `test_box_restore.py`); typecheck, build, test:ui 24 (1 new; the D60 wording test updated, intended), check:data and the audit (both themes) pass. Regression (production preview, output to a file): ALL PASSED, 291 checks, 0 retries (`run-2026-10-07_2302.log`); no expected answer changed. Live: the evidence API, `GET /photos/{id}` and the Hood note called against the running API (no `same_image` anywhere, the new note). Screenshots `web/scripts/box-restore-shots.ts` → `docs/screenshots/box-restore/` (before = main's frontend and API from a worktree on :5173 / :8000; after; both themes).

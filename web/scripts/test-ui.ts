@@ -10,7 +10,7 @@ import { pickedLines, streetKey } from '../src/map/analyse'
 import { gapListOpen, panelOf } from '../src/store/ui'
 import { CLS_LETTER, tagBoxes } from '../src/lib/photoTags'
 import { answerOf, correctable, outcomeLine, reviewerSays, reviewQuestions } from '../src/lib/reviewQuestions'
-import { swapNote, swapOf, swapWhen } from '../src/lib/photoSwap'
+import { swapNote, swapOf, swapWhen, showsBoxes, shownView, SAME_NOTE } from '../src/lib/photoSwap'
 
 let n = 0
 const t = (name: string, fn: () => void) => { fn(); n++; console.log('ok', name) }
@@ -288,14 +288,25 @@ t('D60: a photo Google no longer serves: current photo, plain label, "newer" onl
   assert.equal(swapOf(undefined, undefined).state, 'served')
   const same = swapOf(false, cur, '2026-02')
   assert.equal(same.state, 'swapped'); assert.equal(swapWhen(same), 'same_month')
-  assert.equal(swapNote(same), 'Current photo (Feb 2026) — Google no longer serves the photo used in the analysis, so its boxes can’t be shown. Same capture month, taken from the same spot: Google now serves it under a new ID.')
+  assert.equal(swapNote(same), 'Current photo (Feb 2026) — Google no longer serves the photo used in the analysis, so its boxes can’t be shown. Taken on the same drive, less than 1 m from the analysis camera: a neighbouring photo, not the one the analysis used.')
   const newer = swapOf(false, { ...cur, date: '2026-05', moved_m: 3.4 }, '2022-11')
   assert.equal(swapNote(newer), 'Newer photo (May 2026) — Google no longer serves the photo used in the analysis, so its boxes can’t be shown.')
   assert.ok(swapNote(swapOf(false, { ...cur, date: '2021-01' }, '2022-11'))!.startsWith('Current photo (Jan 2021)'))
-  assert.ok(swapNote(swapOf(false, { ...cur, moved_m: 4.7 }, '2026-02'))!.includes('taken 5 m away'))
+  assert.ok(swapNote(swapOf(false, { ...cur, moved_m: 4.7 }, '2026-02'))!.includes('same drive, 5 m from the analysis camera'))
   const none = swapOf(false, null, '2026-02')
   assert.equal(none.state, 'none'); assert.ok(swapNote(none)!.startsWith('No Street View photo available here any more'))
   assert.equal(swapNote(swapOf(true, null)), null)
+})
+
+t('D61: only a verified re-issue (same image) keeps the stored view and its boxes', () => {
+  const cur = { pano_id: 'N', heading: 10, pitch: 0, fov: 90, date: '2026-02', lat: 11, lon: 77, moved_m: 0.1 }
+  const view = { pano_id: 'OLD', heading: 146, pitch: 22, fov: 60 }
+  const same = swapOf(false, { ...cur, same_image: true }, '2026-02')
+  assert.equal(same.state, 'same'); assert.ok(showsBoxes(same)); assert.equal(swapNote(same), SAME_NOTE)
+  assert.deepEqual(shownView(same, view), { ...view, pano_id: 'N' })      // new id, stored heading / pitch / fov
+  const near = swapOf(false, cur, '2026-02')
+  assert.equal(near.state, 'swapped'); assert.ok(!showsBoxes(near)); assert.equal(shownView(near, view), near.current)
+  assert.ok(showsBoxes(swapOf(true, null))); assert.equal(shownView(swapOf(true, null), view), view)
 })
 
 await (async () => {

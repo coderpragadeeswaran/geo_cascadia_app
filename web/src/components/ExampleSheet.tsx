@@ -11,6 +11,7 @@ import { propsFor, useAreaData } from '@/lib/useAreaData'
 import { cn, fmt1 } from '@/lib/utils'
 import { useUi } from '@/store/ui'
 import { EvidencePhoto, usePhotoSwap } from './EvidencePhoto'
+import { showsBoxes } from '@/lib/photoSwap'
 import { Boxes, EvidenceViews, PhotoKey } from './EvidenceViews'
 import { GeoMini, metres, type MiniLine, type MiniPolygon, type MiniStreet } from './GeoMini'
 import { ObjectMini } from './ObjectMini'
@@ -107,7 +108,7 @@ function Example({ ex, exKey, onClose }: { ex: HoodExample; exKey: string; onClo
               <EvidencePhoto view={ex.view} label={`${ex.title} · ${Math.round(ex.view.heading)}°`}>
                 <Boxes boxes={(ex.boxes ?? []) as EvidenceBox[]} all={(ex.boxes?.length ?? 0) <= 4} hidden={NONE} hl={hl} setHl={setHl} />
               </EvidencePhoto>
-              {sw.state === 'served' && <PhotoKey boxes={(ex.boxes ?? []) as EvidenceBox[]} all={(ex.boxes?.length ?? 0) <= 4} hidden={NONE} hl={hl} setHl={setHl}
+              {showsBoxes(sw) && <PhotoKey boxes={(ex.boxes ?? []) as EvidenceBox[]} all={(ex.boxes?.length ?? 0) <= 4} hidden={NONE} hl={hl} setHl={setHl}
                 targetName={exKey.startsWith('signs') ? 'This sign' : exKey.startsWith('bld') ? 'This building' : 'This box'} />}
             </div>
             {!!ex.rays?.length && <PhotoMini area={area} mini={mini} ray={ex.rays[0]} faced={keyOutlines} records={records} />}

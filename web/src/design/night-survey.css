@@ -1,4 +1,4 @@
-/* NIGHT SURVEY base styles, scoped to .ns (the app puts .ns on <body>; /design-preview sets it on its own root).
+/* NIGHT SURVEY base styles, scoped to .ns (the app puts .ns on <body>).
    Fonts are self-hosted from node_modules (@fontsource-variable): no Google Fonts requests. */
 @import "@fontsource-variable/anek-tamil/standard.css";     /* Latin + Tamil, weight 100–800, width 75–125 % */
 @import "@fontsource-variable/martian-mono/standard.css";   /* weight 100–800, width 75–112.5 % */

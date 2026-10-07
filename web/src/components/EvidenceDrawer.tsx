@@ -111,16 +111,18 @@ function assetSummary(a: Asset) {
     : `The detector found this ${what} ${times} in the street photos, but from one camera position only, so its position is approximate.`
 }
 
-/** P7.3: "1 building · N shop signs": the sign boxes linked to this outline by their own line of sight (one shop can be in
- *  several photos, so N counts sign boxes, not distinct shops). 0 linked is said plainly. */
+/** P7.3: "1 building · N sign boxes in M photos": the sign boxes linked to this outline by their own line of sight.
+ *  D61: N counts BOXES, not different signs (one sign is boxed in several photos; some boxes aren't shop signs). Grouping
+ *  boxes of one sign was tested and is not reliable (by spot: 26% of box pairs in one photo, i.e. different signs,
+ *  land within 1 m of each other in Ward 29; same read text: too few), so no "different signs" count is given. */
 function LinkedLine({ area, id }: { area: string | null; id: string }) {
   const { data: l } = useBuildingLinks(area, id)
   if (!l) return null
   return (
     <p className="t-small ink2 mt-2" title={l.source}>
       <span className="t-data">1</span> building · {l.sign_boxes
-        ? <><span className="t-data">{fmt.format(l.sign_boxes)}</span> shop {l.sign_boxes === 1 ? 'sign' : 'signs'} linked to it, in {plural(l.photos, 'photo')} <span className="ink3">(one shop can appear in several photos; marked “part of this building” on the photos)</span></>
-        : <>no shop sign in the photos is linked to it</>}
+        ? <><span className="t-data">{fmt.format(l.sign_boxes)}</span> sign {l.sign_boxes === 1 ? 'box' : 'boxes'} in {plural(l.photos, 'photo')} linked to it <span className="ink3">(light-orange S tags on the photos; the same sign is often boxed in several photos, and some boxes aren’t shop signs)</span></>
+        : <>no sign box in the photos is linked to it</>}
     </p>
   )
 }

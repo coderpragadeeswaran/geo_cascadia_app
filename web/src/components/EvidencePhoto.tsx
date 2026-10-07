@@ -4,12 +4,13 @@
  *  D60: before asking Google for the photo, the app asks its own API whether Google still serves that panorama (free
  *  metadata, cached 30 days). A gone one is never requested: Google's current photo from (almost) the same spot is shown
  *  instead, aimed at the same target, WITHOUT the boxes (they belong to the old photo), with a plain note; with no
- *  current photo nearby, a plain "no photo" message and no request at all. */
+ *  current photo nearby, a plain "no photo" message and no request at all.
+ *  D61: a verified re-issue (the same photo under a new id) is requested at the stored view and keeps its boxes. */
 import { ImageOff } from 'lucide-react'
 import { createContext, useEffect, useRef, useState } from 'react'
 import { useConfig, usePhotoStatus } from '@/api/queries'
 import type { CurrentPhoto } from '@/api/types'
-import { swapNote, swapOf, type Swap } from '@/lib/photoSwap'
+import { shownView, showsBoxes, swapNote, swapOf, type Swap } from '@/lib/photoSwap'
 import { cn } from '@/lib/utils'
 
 export interface EvidenceView { pano_id: string; heading: number; pitch?: number | null; fov?: number | null; x1?: number | null; y1?: number | null; x2?: number | null; y2?: number | null }
@@ -42,7 +43,7 @@ export function EvidencePhoto({ view, label, crosshair, className, children, swa
   aim?: { lat: number; lon: number } | null }) {
   const { data: cfg } = useConfig()
   const sw = usePhotoSwap(view, aim, swap)
-  const shown: EvidenceView = sw.state === 'swapped' && sw.current ? sw.current : view
+  const shown: EvidenceView = shownView(sw, view)
   const note = swapNote(sw)
   const fig = useRef<HTMLElement>(null)
   const [w, setW] = useState(640)
@@ -54,10 +55,10 @@ export function EvidencePhoto({ view, label, crosshair, className, children, swa
     return () => ro.disconnect()
   }, [])
   const [state, setState] = useState<{ src: string; s: 'ok' | 'error' } | null>(null)
-  const src = cfg?.maps_js_key && (sw.state === 'served' || sw.state === 'swapped') ? staticUrl(cfg.maps_js_key, shown) : null
+  const src = cfg?.maps_js_key && (showsBoxes(sw) || sw.state === 'swapped') ? staticUrl(cfg.maps_js_key, shown) : null
   const noKey = !!cfg && !cfg.maps_js_key
   const s = noKey ? 'nokey' : sw.state === 'none' ? 'gone' : state && state.src === src ? state.s : 'loading'
-  const hasBox = sw.state === 'served' && [view.x1, view.y1, view.x2, view.y2].every((v) => typeof v === 'number')
+  const hasBox = showsBoxes(sw) && [view.x1, view.y1, view.x2, view.y2].every((v) => typeof v === 'number')
   const photo = (
     <figure ref={fig} className={cn('relative aspect-square w-full overflow-hidden rounded-[var(--ns-r-control)] bg-black', className)}>
       {src && (
@@ -71,7 +72,7 @@ export function EvidencePhoto({ view, label, crosshair, className, children, swa
       {s === 'ok' && sw.state === 'swapped' && (
         <span className="t-small absolute left-2 top-2 rounded-[var(--ns-r-control)] px-1.5 py-0.5 text-[12.5px] text-white" style={{ background: 'rgb(0 0 0 / 0.72)' }}>Current photo · no boxes</span>
       )}
-      {s === 'ok' && sw.state === 'served' && (
+      {s === 'ok' && showsBoxes(sw) && (
         <svg viewBox="0 0 640 640" className="pointer-events-none absolute inset-0 size-full" aria-hidden>
           <PhotoScale.Provider value={640 / w}>
           {children ?? (hasBox ? (

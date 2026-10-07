@@ -377,7 +377,8 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         def fn(s):
             b = need(s, slug)
             # D60: + `served` and, for a photo Google no longer serves, `current` (its current photo there, aimed at the object)
-            return photos.annotate(app.state.photometa, b, kind, obj_id, evidence.evidence(app.state.detections, b, kind, obj_id))
+            return photos.annotate(app.state.photometa, b, kind, obj_id, evidence.evidence(app.state.detections, b, kind, obj_id),
+                                   same=photos.same_images(settings.areas_dir))   # D61: verified re-issues keep their boxes
         res, off = D.read(fn)
         if res is None:
             raise HTTPException(404, f"{kind} {obj_id!r} not found in {slug!r}")
@@ -393,7 +394,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         """D60: does Google still serve this stored panorama (free metadata, cached 30 days)? If not, Google's current
         panorama within 25 m of where its camera stood, aimed at (lat, lon) when given (else the same heading)."""
         cam = photos.camera_of(settings.areas_dir, app.state.detections, pano_id)
-        s = photos.status(app.state.photometa, pano_id, cam)
+        s = photos.status(app.state.photometa, pano_id, cam, same=photos.same_images(settings.areas_dir))   # D61
         app.state.photometa.save()
         view = {"heading": heading, "pitch": pitch, "fov": fov}
         cur = photos.aimed(s["current"], view, (lat, lon) if lat is not None and lon is not None else None) if s["current"] else None
