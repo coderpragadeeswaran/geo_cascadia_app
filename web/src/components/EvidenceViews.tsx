@@ -3,14 +3,15 @@
  *  the photo (building, pole, lamp head, sign) with its class and confidence, a toggle per class, the object's box
  *  highlighted, and says where the boxes come from. "Live 360°" dives into the panorama with pins on the objects. */
 import { Rotate3d } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useContext, useEffect, useMemo, useState } from 'react'
 import { useConfig, useEvidence } from '@/api/queries'
 import type { EvidenceBox, EvidenceViewData } from '@/api/types'
 import { cn, monthText, monthsAgo, OLD_PHOTO_MONTHS, plural } from '@/lib/utils'
 import { useUi } from '@/store/ui'
-import { Crosshair, EvidencePhoto } from './EvidencePhoto'
+import { Crosshair, EvidencePhoto, PhotoScale } from './EvidencePhoto'
 import { Fact, HowWeKnow } from './HowWeKnow'
 import { placeLabels } from '@/lib/labelLayout'
+import { CLS_LETTER, CLS_NOUN, LETTER_KEY, tagBoxes } from '@/lib/photoTags'
 import { measureText, useFontsReady } from '@/lib/textWidth'
 
 /** overlay colours are fixed (they sit on photos, not on the Night / Daylight surface) */
@@ -20,76 +21,145 @@ const TARGET = '#ffa23a'
 const LINKED = '#ffd29a'          // P7.3: boxes linked to the selected building ("part of this building")
 export const LINKED_TEXT = 'part of this building'
 const TARGET_NAME = { building: 'This building', pole: 'This pole', lamp: 'This streetlight', sign: 'This sign' } as const
+const TAG_PX = 11                 // ui-polish-2: tag font size on screen, whatever size the photo is shown at
+const pct = (c: number) => `${Math.round(c * 100)}%`
 
-export function Boxes({ boxes, all, hidden, targetName }: { boxes: EvidenceBox[]; all: boolean; hidden: Set<string>; targetName: string }) {
-  // targets last so they sit on top
-  const shown = boxes.filter((b) => b.target || b.linked || (all && !hidden.has(b.cls))).sort((a, b) => Number(a.target) - Number(b.target))
-  // "building 43%": how sure the detector was (confidence 0.43)
-  const texts = shown.map((b) => (b.target ? (all ? `${targetName.toLowerCase()} · ${CLS_LABEL[b.cls]} ${Math.round(b.conf * 100)}%` : targetName)
-    : b.linked ? (all ? `${LINKED_TEXT} · ${CLS_LABEL[b.cls]} ${Math.round(b.conf * 100)}%` : LINKED_TEXT) : `${CLS_LABEL[b.cls]} ${Math.round(b.conf * 100)}%`))
-  const labelled = shown.map((b) => all || b.target || !!b.linked)
-  // only labelled boxes take label space; spots[i] lines up with shown[i]
-  const idx = shown.map((_, i) => i).filter((i) => labelled[i])
-  const fonts = useFontsReady()          // re-measure once Martian Mono has loaded
-  const placedAt = useMemo(() => placeLabels(idx.map((i) => ({ ...shown[i], text: texts[i], priority: shown[i].target ? 2 : 1 })), measureText),
-    [fonts, texts.join('|'), shown.map((b) => `${b.x1},${b.y1},${b.x2},${b.y2}`).join('|')]) // eslint-disable-line react-hooks/exhaustive-deps
-  const spots = shown.map((_, i) => (labelled[i] ? placedAt[idx.indexOf(i)] : null))
+/** ui-polish-2: the boxes with short tags (B / P / S / L, numbered when several): no long labels on the photo. The orange
+ *  box alone is "this building" (or pole …); boxes linked to it get a light-orange tag. Confidence only on hover / tap.
+ *  `hl` = the highlighted box (index into `boxes`), shared with the key under the photo (PhotoKey). */
+export function Boxes({ boxes, all, hidden, hl, setHl }: { boxes: EvidenceBox[]; all: boolean; hidden: Set<string>; targetName?: string
+  hl?: number | null; setHl?: (i: number | null) => void }) {
+  const [own, setOwn] = useState<number | null>(null)
+  const H = setHl ? hl ?? null : own
+  const S = setHl ?? setOwn
+  const k = useContext(PhotoScale)                       // photo units per screen px
+  const shown = useMemo(() => tagBoxes(boxes, all, hidden), [boxes, all, hidden])
+  const fonts = useFontsReady()
+  const tagH = 15 * k, pad = 8 * k, fs = TAG_PX * k
+  const tagged = shown.filter((b) => b.tag)
+  const spots = useMemo(() => placeLabels(tagged.map((b) => ({ ...b, text: b.tag!, priority: b.linked ? 2 : 1 })), (t) => measureText(t, TAG_PX) * k, tagH, pad),
+    [fonts, k, tagged.map((b) => `${b.tag}:${b.x1},${b.y1},${b.x2},${b.y2}`).join('|')]) // eslint-disable-line react-hooks/exhaustive-deps
+  const spotOf = new Map(tagged.map((b, n) => [b.i, spots[n]]))
+  const hov = H != null ? shown.find((b) => b.i === H) : undefined
+  const tip = hov ? `${hov.tag ? `${hov.tag} · ` : ''}${hov.target ? 'this one · ' : hov.linked ? `${LINKED_TEXT} · ` : ''}${CLS_LABEL[hov.cls]} ${pct(hov.conf)}` : ''
+  const tipAt = hov ? (spotOf.get(hov.i) ?? { x: hov.x1, y: Math.max(3, hov.y1 - tagH - 2), w: 0, h: tagH }) : null
+  const tipW = tip ? measureText(tip, TAG_PX) * k + pad : 0
+  const tipX = tipAt ? Math.max(3, Math.min(tipAt.x, 637 - tipW)) : 0
+  const enter = (i: number) => () => S(i)
+  const leave = () => S(null)
+  const tap = (i: number) => (e: React.MouseEvent) => { e.stopPropagation(); S(H === i ? null : i) }
   return (
     <>
-      {shown.map((b, i) => {
+      {shown.map((b) => {
         const c = b.target ? TARGET : b.linked ? LINKED : CLS_COLOR[b.cls]
+        const on = H === b.i, dim = H != null && !on
         return (
-          <g key={`b${i}`}>
-            <rect x={b.x1} y={b.y1} width={b.x2 - b.x1} height={b.y2 - b.y1} fill="none" stroke="#000" strokeOpacity=".5" strokeWidth={b.target ? 8 : 5} rx="3" />
-            <rect x={b.x1} y={b.y1} width={b.x2 - b.x1} height={b.y2 - b.y1} fill={b.target ? 'rgb(255 162 58 / 0.08)' : 'none'} stroke={c} strokeWidth={b.target ? 4 : 2.2} rx="3"
+          <g key={`b${b.i}`} opacity={dim ? 0.35 : 1} data-hl={on ? '1' : undefined}>
+            <rect x={b.x1} y={b.y1} width={b.x2 - b.x1} height={b.y2 - b.y1} fill="none" stroke={on ? '#fff' : '#000'} strokeOpacity={on ? 0.95 : 0.5} strokeWidth={(b.target ? 8 : 5) + (on ? 3 : 0)} rx="3" />
+            <rect x={b.x1} y={b.y1} width={b.x2 - b.x1} height={b.y2 - b.y1} fill={b.target ? 'rgb(255 162 58 / 0.08)' : 'none'} stroke={c} strokeWidth={b.target ? 4 : on ? 3.4 : 2.2} rx="3"
               strokeDasharray={b.geom_ok || b.target ? undefined : '6 5'} />
+            {/* a wide invisible edge: hover / tap the box itself */}
+            <rect x={b.x1} y={b.y1} width={b.x2 - b.x1} height={b.y2 - b.y1} fill="none" stroke="transparent" strokeWidth={10 * k} style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+              onMouseEnter={enter(b.i)} onMouseLeave={leave} onClick={tap(b.i)} />
           </g>
         )
       })}
-      {/* labels after every box, so no box line crosses a label */}
-      {shown.map((b, i) => {
-        const r = labelled[i] ? spots[i] : null
+      {/* tags after every box, so no box line crosses a tag */}
+      {tagged.map((b) => {
+        const r = spotOf.get(b.i)
         if (!r) return null
+        const on = H === b.i, dim = H != null && !on
         return (
-          <g key={`l${i}`}>
-            <rect x={r.x} y={r.y} width={r.w} height={r.h} rx="3" fill="#000" fillOpacity=".72" />
-            <text x={r.x + 6} y={r.y + 17} fill={b.target ? TARGET : b.linked ? LINKED : CLS_COLOR[b.cls]} fontSize="18" fontFamily="var(--ns-mono)">{texts[i]}</text>
+          <g key={`t${b.i}`} opacity={dim ? 0.45 : 1} style={{ pointerEvents: 'all', cursor: 'pointer' }} onMouseEnter={enter(b.i)} onMouseLeave={leave} onClick={tap(b.i)}>
+            <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={2 * k} fill={b.linked ? LINKED : '#000'} fillOpacity={b.linked ? 0.95 : 0.74} stroke={on ? '#fff' : 'none'} strokeWidth={1.5 * k} />
+            <text x={r.x + pad / 2} y={r.y + r.h - 4 * k} fill={b.linked ? '#1d1204' : CLS_COLOR[b.cls]} fontSize={fs} fontWeight={600} fontFamily="var(--ns-mono)">{b.tag}</text>
           </g>
         )
       })}
+      {hov && tipAt && (
+        <g style={{ pointerEvents: 'none' }}>
+          <rect x={tipX} y={tipAt.y} width={tipW} height={tagH} rx={2 * k} fill="#000" fillOpacity=".9" stroke="#fff" strokeWidth={1.2 * k} />
+          <text x={tipX + pad / 2} y={tipAt.y + tagH - 4 * k} fill="#fff" fontSize={fs} fontFamily="var(--ns-mono)">{tip}</text>
+        </g>
+      )}
     </>
   )
 }
 
-export function EvidenceViews({ kind, id, at, target }: {
-  kind: 'building' | 'asset' | 'unmapped'; id: string; at: { lat: number; lng: number }; target: keyof typeof TARGET_NAME }) {
+/** ui-polish-2: the key directly under the photo. "Orange = this building · B building · P pole · S sign · L streetlight",
+ *  then the tagged boxes ("S1 = shop sign 'Transport India Pvt Ltd' · 88%"). Hovering an entry highlights its box and
+ *  hovering a box highlights its entry (shared `hl`). */
+export function PhotoKey({ boxes, all, hidden, targetName, hl, setHl }: { boxes: EvidenceBox[]; all: boolean; hidden: Set<string>; targetName: string
+  hl: number | null; setHl: (i: number | null) => void }) {
+  const shown = useMemo(() => tagBoxes(boxes, all, hidden), [boxes, all, hidden])
+  const target = shown.find((b) => b.target)
+  const items = shown.filter((b) => b.tag)
+  // keyboard focus highlights too, but not a focus that only follows a click elsewhere (focus-visible)
+  const on = (i: number) => ({ onMouseEnter: () => setHl(i), onMouseLeave: () => setHl(null), onBlur: () => setHl(null),
+    onFocus: (e: React.FocusEvent<HTMLElement>) => { if (e.currentTarget.matches(':focus-visible')) setHl(i) } })
+  return (
+    <div className="t-small mt-1.5" aria-label="Photo key">
+      <div className="ink2 flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+        {target && (
+          <button type="button" data-box={target.i} {...on(target.i)} className={cn('inline-flex items-center gap-1.5', hl === target.i && 'text-ink underline')}>
+            <span className="inline-block h-2.5 w-3.5 rounded-[2px]" style={{ boxShadow: `inset 0 0 0 2px ${TARGET}` }} aria-hidden />Orange = {targetName.toLowerCase()}
+          </button>
+        )}
+        {items.some((b) => b.linked) && <span className="inline-flex items-center gap-1"><span className="t-data rounded-[2px] px-1 text-[11px] font-[600]" style={{ background: LINKED, color: '#1d1204' }} aria-hidden>S</span> = {LINKED_TEXT}</span>}
+        <span className="ink3">{LETTER_KEY.map(([l, w]) => `${l} ${w}`).join(' · ')}</span>
+      </div>
+      {items.length > 0 && (
+        <ul className="mt-1 flex max-h-[64px] flex-wrap gap-x-3 gap-y-0.5 overflow-y-auto" aria-label="Boxes on the photo">
+          {items.map((b) => (
+            <li key={b.i}>
+              <button type="button" data-box={b.i} {...on(b.i)} className={cn('ink2 text-left', hl === b.i && 'text-ink underline')}>
+                <span className="t-data rounded-[2px] px-1 text-[11px] font-[600]" style={b.linked ? { background: LINKED, color: '#1d1204' } : { background: '#000', color: CLS_COLOR[b.cls] }}>{b.tag}</span>
+                {' '}= {CLS_NOUN[b.cls]}{b.text ? <> “{b.text.length > 28 ? `${b.text.slice(0, 27)}…` : b.text}”</> : null}{b.linked ? `, ${LINKED_TEXT}` : ''} <span className="t-data ink3">· {pct(b.conf)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+/** ui-polish-2: the photo's largest width (px), so photo + key + the date / Front / Sign / Live 360° row fit at 1366×768
+ *  and the next sections come into view: 300 in the Explore drawer, 400 in Review's wider middle column */
+export function EvidenceViews({ kind, id, at, target, maxPhoto = 300 }: {
+  kind: 'building' | 'asset' | 'unmapped'; id: string; at: { lat: number; lng: number }; target: keyof typeof TARGET_NAME; maxPhoto?: number }) {
   const area = useUi((s) => s.area)
   const { data: views, isPending, isError, refetch } = useEvidence(area, kind, id)
   const [i, setI] = useState(0)
   const [hidden, setHidden] = useState<Set<string>>(new Set())
   // this photo's own "How do we know?": open = draw everything the detector found (it never opens other sections)
   const [all, setAll] = useState(false)
+  const [hl, setHl] = useState<number | null>(null)       // the box highlighted from the photo or its key
   const dive = useUi((s) => s.dive)
   const setDive = useUi((s) => s.setDive)
   const hasMap = !!useConfig().data?.maps_js_key            // Live 360° needs the map (no browser key: no photos either)
   useEffect(() => { setI(0) }, [id])
+  useEffect(() => { setHl(null) }, [id, i, all])
   const v: EvidenceViewData | undefined = views?.[Math.min(i, (views?.length ?? 1) - 1)]
   const counts = useMemo(() => {
     const m: Record<string, number> = {}
     for (const b of v?.boxes ?? []) m[b.cls] = (m[b.cls] ?? 0) + 1
     return m
   }, [v])
-  if (isPending) return <div className="t-small ink3 flex aspect-square w-full animate-pulse items-center justify-center rounded-[var(--ns-r-control)] bg-line" role="status">Loading the evidence photos…</div>
+  if (isPending) return <div style={{ maxWidth: maxPhoto }} className="t-small ink3 flex aspect-square w-full animate-pulse items-center justify-center rounded-[var(--ns-r-control)] bg-line" role="status">Loading the evidence photos…</div>
   if (isError) return <p className="t-small ink2 rounded-[var(--ns-r-control)] p-4" style={{ boxShadow: 'inset 0 0 0 1px var(--ns-line)' }}>Couldn’t load the evidence photos: the API didn’t answer. <button className="link" onClick={() => refetch()}>Try again</button></p>
   if (!v) return <p className="t-small ink3 rounded-[var(--ns-r-control)] p-4" style={{ boxShadow: 'inset 0 0 0 1px var(--ns-line)' }}>No Street View evidence stored for this item.</p>
-  const name = TARGET_NAME[target]
+  const name = target === 'building' && v.boxes.some((x) => x.target && x.cls === 'signboard') ? 'This building’s sign' : TARGET_NAME[target]
   const toggle = (c: string) => setHidden((h) => { const n = new Set(h); if (n.has(c)) n.delete(c); else n.add(c); return n })
   return (
     <div>
-      <EvidencePhoto view={v} label={`${v.label} · ${Math.round(v.heading)}°`}>
-        <Boxes boxes={v.boxes} all={all} hidden={hidden} targetName={target === 'building' && v.boxes.some((x) => x.target && x.cls === 'signboard') ? 'This building’s sign' : name} />
-        {v.target === 'crosshair' && <Crosshair />}
-      </EvidencePhoto>
+      <div style={{ maxWidth: maxPhoto }}>
+        <EvidencePhoto view={v} label={`${v.label} · ${Math.round(v.heading)}°`}>
+          <Boxes boxes={v.boxes} all={all} hidden={hidden} hl={hl} setHl={setHl} />
+          {v.target === 'crosshair' && <Crosshair />}
+        </EvidencePhoto>
+      </div>
+      <PhotoKey boxes={v.boxes} all={all} hidden={hidden} targetName={name} hl={hl} setHl={setHl} />
       {v.target === 'crosshair' && <p className="t-small ink2 mt-1.5">No box was found in the aimed direction: the cross marks where the camera was aimed, not a detection.</p>}
       {v.user_note ? <p className="t-small ink2 mt-1.5">{v.user_note}</p>
         : v.target === 'none' && <p className="t-small ink3 mt-1.5">No box for this {kind === 'asset' ? 'object' : 'building'} in this view.</p>}
@@ -104,17 +174,17 @@ export function EvidenceViews({ kind, id, at, target }: {
         </button>}
       </div>
       <HowWeKnow label="How do we know? (everything the detector found)" open={all} onOpenChange={setAll}
-        summary={<>The detector marked {plural(v.boxes.length, 'thing')} in this photo. Each box says what it is and how sure the detector was{v.target === 'box' ? `; the orange box is this ${kind === 'asset' ? 'object' : kind === 'unmapped' ? 'sign' : 'building'}` : ''}.</>}
+        summary={<>The detector marked {plural(v.boxes.length, 'thing')} in this photo, now all drawn. Each box has a short tag (B building, P pole, S sign, L streetlight lamp); hover a tag, a box or its line in the key to see how sure the detector was{v.target === 'box' ? `. The orange box is this ${kind === 'asset' ? 'object' : kind === 'unmapped' ? 'sign' : 'building'}` : ''}.</>}
         links={[{ page: 'hood', section: 'detection', label: 'How detection works' }, { page: 'trust', section: 'detector', label: 'Detector accuracy' }]}>
         <div className="flex flex-wrap gap-1.5 pb-1" role="group" aria-label="Show detections by class">
           {(Object.keys(CLS_LABEL) as EvidenceBox['cls'][]).filter((c) => counts[c]).map((c) => (
             <button key={c} onClick={() => toggle(c)} aria-pressed={!hidden.has(c)} className="chip px-2 text-[14.5px]"
               style={{ opacity: hidden.has(c) ? 0.45 : 1 }}>
-              <span className="size-2.5 rounded-[2px]" style={{ boxShadow: `inset 0 0 0 2px ${CLS_COLOR[c]}` }} /> {CLS_LABEL[c]} <span className="t-data ink3">{counts[c]}</span>
+              <span className="size-2.5 rounded-[2px]" style={{ boxShadow: `inset 0 0 0 2px ${CLS_COLOR[c]}` }} /> <span className="t-data">{CLS_LETTER[c]}</span> {CLS_LABEL[c]} <span className="t-data ink3">{counts[c]}</span>
             </button>
           ))}
         </div>
-        <Fact k="Boxes" hint={`${plural(v.boxes.length, 'YOLO detection')}, confidence`}>Solid boxes were used to work out positions; dashed boxes were not (tilted photos, or photos uploaded by the public). The percentage is how sure the detector was.</Fact>
+        <Fact k="Boxes" hint={`${plural(v.boxes.length, 'YOLO detection')}, confidence`}>Solid boxes were used to work out positions; dashed boxes were not (tilted photos, or photos uploaded by the public). The percentage (on hover, and in the key) is how sure the detector was.</Fact>
         <Fact k="This photo" hint={v.source === 'exact' ? `heading ${Math.round(v.heading)}°, pitch ${v.pitch}°, fov ${v.fov}°` : v.source === 'projected' ? `fov ${v.fov}°, projected` : undefined}>{v.source === 'exact' ? `The same photo the analysis used: facing ${Math.round(v.heading)}°, tilted ${v.pitch}°, ${v.fov}° wide.`
           : v.source === 'projected' ? `Pointed at the object (${v.fov}° wide). The boxes come from the analysis photos taken from the same spot, facing ${v.projected_from?.map((h) => `${Math.round(h)}°`).join(', ')}, redrawn into this view.`
             : 'No detector results are stored for this photo.'}</Fact>

@@ -4,7 +4,7 @@
  *  rep: the report buttons (PDF · Excel · GeoJSON · Shapefile) and real downloads of the two GIS files;
  *  q: "Businesses not in OpenStreetMap" and "OpenStreetMap shops not seen by the camera" (list + square map tags);
  *  d: the building drawer — floor confidence and OpenStreetMap's levels (w1247745270), a Medium and a Low count;
- *  h / t: Under the Hood › Businesses vs OpenStreetMap + Whole-city projection; Trust › OpenStreetMap cross-checks.
+ *  h / t: Under the Hood › Businesses vs OpenStreetMap (the projection was removed in ui-polish-2); Trust › OpenStreetMap cross-checks.
  *  Each step prints the text it checked. MODE=daylight for Daylight; ONLY=f4,rep,q,d,h,t picks steps. Reads only (no job,
  *  no review decision). */
 import { chromium, type Page } from 'playwright'
@@ -119,7 +119,7 @@ async function main() {
 
   if (ONLY.includes('h')) {
     await page.getByRole('button', { name: 'Under the hood', exact: true }).click(); await page.waitForTimeout(7000)
-    for (const id of ['osm', 'projection']) {
+    for (const id of ['osm']) {
       await page.evaluate((x) => document.getElementById(x)?.scrollIntoView({ block: 'start' }), id); await page.waitForTimeout(2500)
       await shot(page, `h-${id}`)
       console.log(`    hood ${id}:`, (await text(page, `#${id}`)).slice(0, 420))

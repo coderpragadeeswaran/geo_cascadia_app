@@ -15,7 +15,7 @@ import io
 import math
 import os
 
-from . import camonly, lighting, mapdata, osmref, projection
+from . import camonly, lighting, mapdata, osmref
 from .hood import hood as hood_view
 from .imagery import imagery as imagery_view
 
@@ -98,6 +98,25 @@ DIFF = {"extra_floor": "more floors than recorded", "use_change": "used differen
 GAP_TYPE = {"poles present, no lamp detected": "poles, but no streetlight seen",
             "no pole or lamp detected": "no pole or streetlight seen"}
 REVIEW = {"pending": "Waiting for review", "approved": "Approved", "rejected": "Rejected", "appealed": "Appealed"}
+
+
+def reviewer_says(c):
+    """D59: the reviewer's corrected value in words ("2 floors · Shop + home"); never replaces our value or the register"""
+    if not c:
+        return None
+    parts = (([floors_text(c["floors"])] if c.get("floors") is not None else []) + ([use_label(c["use"])] if c.get("use") else [])
+             + ([f"sign reads “{c['name']}”"] if c.get("name") else []))
+    return " · ".join(parts) or None
+
+
+def review_cell(rv, missing="Not queued"):
+    """the Review column: status, plus "reviewer says: 2 floors" when the reviewer gave a value (D59)"""
+    rv = rv or {}
+    st = REVIEW.get(rv.get("status"), pretty(rv.get("status")) if rv.get("status") else missing)
+    says = reviewer_says(rv.get("corrected"))
+    return f"{st} — reviewer says: {says}" if says else st
+
+
 REASON_DIFF = {"missing_record": "Not in the register", "extra_floor": "Extra floor vs register",
                "use_change": "Use differs from register", "location_shift": "Register pin in the wrong place",
                "area_understated": "Bigger than recorded", "type_mismatch": "Recorded as a different type"}
@@ -268,12 +287,12 @@ def _building_rows(bundle, street, mc=None, tags=None, shop_status=None):
             record = "No record"
         fc = osmref.floor_confidence(fl, mc)
         lv = osmref.building_levels(tags, b["id"])
-        osm_lv = ("not loaded" if not lv["loaded"] else lv["osm_levels"] if lv["osm_levels"] is not None else "not tagged")
+        osm_lv = lv["osm_levels"] or ""      # ui-polish-2: blank unless OpenStreetMap carries the tag (Ward 29: 2 of 381)
         shop = (shop_status or {}).get(b["id"], "—" if shop_status else "not loaded")
         rows.append([b["id"], b.get("street") or "—", loc(b["lat"], b["lon"]), use_label(use.get("value")),
                      floors_text(fl.get("value"), fl.get("status")), f"{fc['word']}: {fc['reason']}", osm_lv, sign, shop,
                      " · ".join(conf), finding, record,
-                     REVIEW.get((b.get("review") or {}).get("status"), "Not queued"), "View in Google Maps"])
+                     review_cell(b.get("review")), "View in Google Maps"])
         links.append(maps_url(b["lat"], b["lon"]))
     return rows, links
 
@@ -299,7 +318,7 @@ def _asset_rows(bundle, street, everything=False):
             or "No record"
         rows.append([a["id"], "Streetlight" if a.get("type") == "streetlight" else "Pole, no lamp seen", a.get("street") or "—",
                      loc(a["lat"], a["lon"]), pos, finding, record,
-                     REVIEW.get((a.get("review") or {}).get("status"), "Not queued"), "View in Google Maps"])
+                     review_cell(a.get("review")), "View in Google Maps"])
         links.append(maps_url(a["lat"], a["lon"]))
     return rows, links
 
@@ -346,7 +365,7 @@ def _review_rows(bundle, street):
             what = f"{'Streetlight' if kind == 'streetlight' else 'Pole'} {ref or ''}".strip()
             why = review_reasons(q.get("reasons"))
         rows.append([q.get("priority"), what, q.get("street") or "—", loc(q["lat"], q["lon"]), "; ".join(why) or "—",
-                     REVIEW.get(q.get("status"), pretty(q.get("status"))), "View in Google Maps"])
+                     review_cell(q), "View in Google Maps"])
         links.append(maps_url(q["lat"], q["lon"]))
     return rows, links
 
@@ -447,7 +466,7 @@ def _shop_rows(sh):
     rows, links = [], []
     for m in sh["matched"]:
         c, o = m["camera"], m["osm"]
-        rows.append(["Matched (same place)", c["id"], c.get("name") or c.get("sign_text") or c["why"], c.get("street") or "—",
+        rows.append(["Near each other (location only)", c["id"], c.get("name") or c.get("sign_text") or c["why"], c.get("street") or "—",
                      o["osm_id"], o.get("name") or "—", o.get("kind"), m["distance_m"], "yes" if m["same_name"] else "no",
                      "View in Google Maps"])
         links.append(maps_url(c["lat"], c["lon"]))
@@ -460,13 +479,6 @@ def _shop_rows(sh):
                      None, "—", "View in Google Maps"])
         links.append(maps_url(o["lat"], o["lon"]))
     return rows, links
-
-
-def _projection(store, areas_dir, mc):
-    try:
-        return projection.project(getattr(store, "pool", None), areas_dir, mc)
-    except Exception as e:                                     # noqa: BLE001 - a report never fails on the projection
-        return {"available": False, "note": f"not available ({type(e).__name__})"}
 
 
 def _count(xs):
@@ -498,7 +510,7 @@ def _charts(bundle, street, sh):
         "floors_left_out": len(B) - len(measured),
         "match": [(match_label(m_), n) for m_, n in _count([b.get("match_status") for b in B])],
         "by_street": [(st, r[0], r[1], r[2]) for st, r in streets],
-        "shops": ([("Matched (same place)", sh["counts"]["matched"]), ("Seen by our camera only", sh["counts"]["camera_only"]),
+        "shops": ([("Near each other (location only)", sh["counts"]["matched"]), ("Seen by our camera only", sh["counts"]["camera_only"]),
                    ("In OpenStreetMap only", sh["counts"]["osm_only"])] if sh.get("available") else None),
     }
 
@@ -672,7 +684,6 @@ def content(store, bundle, F, model_card, areas_dir, street=None, today=None):
     tags = osmref.load(bundle["slug"], areas_dir)
     shops = osmref.shops(bundle, tags, street)
     lv = osmref.levels(bundle, tags)
-    proj = _projection(store, areas_dir, mc)
     b_rows, b_links = _building_rows(bundle, street, mc, tags, osmref.shop_status_by_id(shops))
     a_rows, a_links = _asset_rows(bundle, street)
     aa_rows, aa_links = _asset_rows(bundle, street, everything=True)
@@ -703,9 +714,8 @@ def content(store, bundle, F, model_card, areas_dir, street=None, today=None):
         },
         "cost": cost, "cost_scope": "for the whole analysed area’s run" if street else None,
         "gate1": gate1, "limits": limits, "map": _map(store, bundle, street, prio),
-        "shops": shops, "levels": lv, "projection": proj, "charts": charts, "floor_rule": osmref.FLOOR_RULE,
+        "shops": shops, "levels": lv, "charts": charts, "floor_rule": osmref.FLOOR_RULE,
         "floor_check": osmref.floor_confidence({"value": 1, "status": "measured"}, mc)["check"],
-        "city": (md.get("city") or {}).get("name") if md.get("city") else None,
         "headline": _headline(k, charts, s_rows, prio["available"], shops, street),
         "actions": _actions(bundle, street, s_rows, shops, k, recall, r_rows),
         "priority_counts": pcounts,
@@ -1215,9 +1225,8 @@ def _shops_chart(doc, c, x, y, cw):
                    f"our camera found {fmt(sh['counts']['camera'])}; OpenStreetMap lists {fmt(sh['counts']['osm'])} along "
                    f"these streets (≤ {sh['scope_m']} m)", ch["shops"], label_w=46)
         doc.set_xy(x, yb + 2)
-        _text(doc, f"Same place = within {sh['match_m']} m; {fmt(sh['counts']['matched_same_name'])} of the "
-                   f"{fmt(sh['counts']['matched'])} matched also have the same name. OpenStreetMap is crowd-sourced, not an "
-                   "official register.", size=SMALL, color=INK3, w=cw)
+        _text(doc, f"Near each other = within {sh['match_m']} m, by location only; {_names_line(sh['counts'])}. OpenStreetMap "
+                   "is crowd-sourced, not an official register.", size=SMALL, color=INK3, w=cw)
     else:
         doc.set_xy(x, y)
         _text(doc, "Businesses vs OpenStreetMap: " + c["shops"].get("note", "not available"), size=SMALL, color=INK3, w=cw)
@@ -1332,7 +1341,7 @@ def _page_method(doc, c, W):
         _section(doc, "Cost of this run" + (" (whole area)" if c["street"] else ""))
         _text(doc, c["cost"]["line"], size=10)
     yl = doc.get_y()
-    # right column: limits, Gate 1, projection
+    # right column: limits, Gate 1
     x2 = M + cw + gap
     _in_column(doc, x2, cw)
     doc.set_y(y0)
@@ -1346,16 +1355,24 @@ def _page_method(doc, c, W):
     _page_scale(doc, c, W)
 
 
+def _names_line(n):
+    """ui-polish-2: whether the pairs share a name, in words (Ward 29: none of the 9 do)"""
+    if not n["matched"]:
+        return "no pairs"
+    if not n["matched_same_name"]:
+        return "the names didn't match for any of them"
+    return f"{fmt(n['matched_same_name'])} of the {fmt(n['matched'])} also share a name"
+
+
 def _are(n):
     return "is" if n == 1 else "are"
 
 
 def _page_scale(doc, c, W):
-    """page 6: the city-scale projection, then floor-count confidence and the OpenStreetMap cross-checks"""
+    """page 6: floor-count confidence and the OpenStreetMap cross-checks"""
     doc.add_page()
-    _kicker(doc, "Method & limits · scale and confidence")
-    _title(doc, "What a whole city would take, and how sure the counts are", 18, after=2)
-    _projection_block(doc, c, W)
+    _kicker(doc, "Method & limits · confidence")
+    _title(doc, "How sure the counts are", 18, after=2)
     gap = 10
     cw = (W - gap) / 2
     y0 = doc.get_y() + 2
@@ -1377,54 +1394,13 @@ def _page_scale(doc, c, W):
         n = sh["counts"]
         _text(doc, f"Our camera found {plural(n['camera'], 'shop or business', 'shops and businesses')}; OpenStreetMap lists "
                    f"{fmt(n['osm'])} along {'this street' if c['street'] else 'these streets'}. {fmt(n['matched'])} "
-                   f"{_are(n['matched'])} the same place (within {sh['match_m']} m; {fmt(n['matched_same_name'])} also with the same "
-                   f"name), {fmt(n['camera_only'])} {_are(n['camera_only'])} seen by our camera only and {fmt(n['osm_only'])} "
+                   f"{_are(n['matched'])} near each other (within {sh['match_m']} m, location only; {_names_line(n)}), {fmt(n['camera_only'])} {_are(n['camera_only'])} seen by our camera only and {fmt(n['osm_only'])} "
                    f"{_are(n['osm_only'])} in OpenStreetMap only.", size=10)
         _text(doc, sh["rule"], size=9.5, color=INK3)
         _text(doc, sh["note"], size=9.5, color=INK3)
     else:
         _text(doc, sh.get("note", "Not available."), size=10)
     _reset_columns(doc)
-
-
-def _projection_block(doc, c, W):
-    p = c["projection"]
-    _section(doc, "City-scale projection — an estimate, as a range from our runs")
-    if not p.get("available"):
-        _text(doc, "Not available: " + p.get("note", ""), size=10)
-        return
-    rows = []
-    for r in p["cities"]:
-        lo, hi = r["photos"], r["usd"]
-        h = r["gpu_hours"]
-        rows.append([("» " if c.get("city") == r["name"] else "") + f"Whole {r['name']}", f"about {fmt(r['km'])} km",
-                     _range(lo["low"], lo["high"], million_from=1e5), _range(hi["low"], hi["high"], "$"),
-                     f"{fmt(h['low'])} – {fmt(h['high'])} h" if h else "—",
-                     f"{fmt(r['colab_days']['low'])} – {fmt(r['colab_days']['high'])}" if r.get("colab_days") else "—"])
-    _table(doc, {"columns": ["City (local map data)", "Streets", "Street View photos", "Cost (list price)", "GPU time",
-                             "Colab days (2.5 h/day)"], "rows": rows, "links": [None] * len(rows)},
-           (62, 34, 46, 46, 40, 41), size=TABLE, link_col=False)
-    for a in p["assumptions"]:
-        _text(doc, "• " + a, size=9.5, color=INK2, after=0.4)
-
-
-def _sig2(v):
-    """two significant figures: 4,426 → 4,400; 18,265 → 18,000"""
-    if v <= 0:
-        return 0
-    d = int(math.floor(math.log10(v))) - 1
-    return round(v, -d) if d > 0 else round(v)
-
-
-def _range(lo, hi, unit="", million_from=1e6):
-    """a projection range in one unit, two significant figures: 0.63 – 2.6 million · $4,400 – $18,000"""
-    if hi >= million_from:
-        return f"{unit}{_sig2(lo) / 1e6:g} – {unit}{_sig2(hi) / 1e6:g} million"
-    return f"{unit}{fmt(_sig2(lo))} – {unit}{fmt(_sig2(hi))}"
-
-
-def _k(v):
-    return f"{_sig2(v) / 1e6:g} million" if v >= 1e6 else fmt(_sig2(v))
 
 
 APPENDIX = {  # key columns per table (indexes into the full row); the Excel file keeps every column
@@ -1506,7 +1482,7 @@ def xlsx(c):
         n = sh["counts"]
         ws.append(["Businesses found by our camera", n["camera"]])
         ws.append(["OpenStreetMap businesses along these streets", n["osm"]])
-        ws.append(["Matched (same place)", n["matched"], f"{n['matched_same_name']} also with the same name"])
+        ws.append(["Near each other (location only)", n["matched"], _names_line(n)])
         ws.append(["Seen by our camera, not in OpenStreetMap", n["camera_only"]])
         ws.append(["In OpenStreetMap, not seen by our camera", n["osm_only"]])
         ws.append(["How they are compared", sh["rule"]])
@@ -1519,27 +1495,13 @@ def xlsx(c):
         ws.append(["Note", lv["note"]])
     ws.append(["Floor-count confidence", c["floor_rule"]])
     ws.append([])
-    p = c["projection"]
-    ws.append(["City-scale projection (an ESTIMATE)", "low – high, from our completed runs"])
-    if p.get("available"):
-        for r in p["cities"]:
-            h = r["gpu_hours"]
-            ws.append([f"Whole {r['name']}", f"about {fmt(r['km'])} km of streets → {_k(r['photos']['low'])} – {_k(r['photos']['high'])} "
-                                             f"photos, ${_k(r['usd']['low'])} – ${_k(r['usd']['high'])}"
-                                             + (f", {fmt(h['low'])} – {fmt(h['high'])} GPU hours" if h else "")])
-        for a in p["assumptions"]:
-            ws.append(["", a])
-    else:
-        ws.append(["", p.get("note")])
-    ws.append([])
     ws.append(["Limits", ""])
     for t in c["limits"]:
         ws.append(["", t])
     ws.append([])
     ws.append(["Footer", FOOTER])
     for row in ws.iter_rows():
-        if row[0].value in ("GEO-CASCADIA report", "Key number", "Data source", "Limits", "OpenStreetMap cross-checks",
-                            "City-scale projection (an ESTIMATE)"):
+        if row[0].value in ("GEO-CASCADIA report", "Key number", "Data source", "Limits", "OpenStreetMap cross-checks"):
             for cell in row:
                 cell.font = bold
     ws.column_dimensions["A"].width = 44

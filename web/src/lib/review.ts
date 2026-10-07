@@ -4,14 +4,16 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import type { AreaGeoJSON, ReviewRow } from '@/api/types'
+import type { Corrected } from './reviewQuestions'
 
 export type Decision = 'approve' | 'reject' | 'appeal'
-export const DONE_LABEL: Record<Decision, string> = { approve: 'Approved', reject: 'Rejected', appeal: 'Appealed' }
+export const DONE_LABEL: Record<Decision, string> = { approve: 'Answered Yes', reject: 'Answered No', appeal: 'Sent back' }
 export type Saved = ReviewRow & { offline: boolean; event_id: number }
 
-/** One decision, saved with the reviewer's name. A note and a photo belong to an APPEAL only (P5 fix: text typed in the
- *  appeal box is never sent with Approve / Reject; the API refuses it too). */
-export async function saveDecision(id: number, action: Decision, extra: { reviewer: string; note?: string; photo?: File | null }) {
+/** One decision, saved with the reviewer's name: approve = Yes, reject = No (D59). A photo belongs to an APPEAL only
+ *  (P5 fix: text typed in the appeal box is never sent with Yes / No; the API refuses it too). A No may carry its own
+ *  optional note (`noNote`, typed in the No box) and the reviewer's corrected value (floors / use / sign name), which is saved with the decision. */
+export async function saveDecision(id: number, action: Decision, extra: { reviewer: string; note?: string; photo?: File | null; noNote?: string; corrected?: Corrected | null }) {
   const fd = new FormData()
   fd.set('action', action)
   fd.set('reviewer', extra.reviewer)
@@ -19,6 +21,8 @@ export async function saveDecision(id: number, action: Decision, extra: { review
     if (extra.note?.trim()) fd.set('note', extra.note.trim())
     if (extra.photo) fd.set('photo', extra.photo)
   }
+  if (action === 'reject' && extra.noNote?.trim()) fd.set('note', extra.noNote.trim())        // the No box's own note, never the appeal box's
+  if (action !== 'appeal' && extra.corrected && Object.keys(extra.corrected).length) fd.set('corrected', JSON.stringify(extra.corrected))
   return api<Saved>(`/review/${id}`, { method: 'PATCH', body: fd })
 }
 
@@ -42,6 +46,8 @@ export interface ReviewEvent {
   id: number; action: Decision | 'undo'; status: string; previous_status: string; reviewer: string | null
   previous_reviewer: string | null; note: string | null; previous_note: string | null; undoes: number | null
   undone_by: number | null; created_at: string | null; has_photo: boolean
+  /** D59: the reviewer's corrected value after this event / before it */
+  corrected?: Corrected | null; previous_corrected?: Corrected | null
 }
 
 type Rec = { id: string; review?: Record<string, unknown> | null }
@@ -52,7 +58,7 @@ export function patchReviewCaches(qc: QueryClient, row: ReviewRow) {
     qc.setQueryData<ReviewRow[]>(key, (xs) => xs?.map((x) => (x.id === row.id ? { ...x, ...row, object: x.object } : x)))
   }
   qc.setQueryData<Rec[]>([row.item_type === 'building' ? 'buildings' : 'assets', area],
-    (xs) => xs?.map((x) => (x.id === ref_id ? { ...x, review: { ...(x.review ?? {}), status } } : x)))
+    (xs) => xs?.map((x) => (x.id === ref_id ? { ...x, review: { ...(x.review ?? {}), status, corrected: row.corrected ?? null } } : x)))
   qc.setQueryData<AreaGeoJSON>(['geo', area], (g) => g && {
     ...g, features: g.features.map((f) => (f.properties?.id === ref_id && f.properties?.kind !== 'streetlight_gap'
       ? { ...f, properties: { ...f.properties, review_status: status } } : f)),

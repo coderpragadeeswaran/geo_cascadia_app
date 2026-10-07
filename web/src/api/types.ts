@@ -126,6 +126,8 @@ export interface ReviewItem {
   street: string | null; lat: number; lon: number; priority: number | null; reasons: string[]; discrepancies: string[]
   status: 'pending' | 'approved' | 'rejected' | 'appealed'; reviewer: string | null; note: string | null
   appeal_photo_path: string | null; updated_at: string | null
+  /** D59: the reviewer's corrected value saved with the decision (never over our value or the register) */
+  corrected?: { floors?: number; use?: string; name?: string } | null
 }
 export type ReviewRow = ReviewItem & { area: string; object: Record<string, string | number | null> }
 /** How the rule-based parser read a question (docs/QUERY.md): what it understood, what it ignored, synonyms applied */
@@ -174,13 +176,6 @@ export interface OsmReference {
     rows?: { id: string; street: string | null; osm_levels: string; ours: number | null; status: string | null; diff: number | null }[] }
   floor_rule: string
 }
-type Range = { low: number; mid: number; high: number }
-export interface Projection {
-  available: boolean; is_estimate?: boolean; note?: string; assumptions?: string[]
-  cities?: { city: string; name: string; osm_snapshot: string | null; km: number; jobs: number; photos: Range; usd: Range; gpu_hours: Range | null; colab_days: Range | null }[]
-  inputs?: { photos_per_km: Range; usd_per_photo: Range; sv_price: number; sec_per_photo: number | null; startup_s: number; job_km: number
-    runs: { slug: string; photos: number; km: number; per_km: number; cloud_per_photo: number | null }[] }
-}
 export interface AreaDetail extends AreaCard {
   meta: { area: string; run?: Record<string, unknown> }
   dashboard: {
@@ -228,6 +223,8 @@ export interface EvidenceBox {
   geom_ok: boolean; target: boolean; from_heading?: number
   /** P7.3: a sign box linked to the selected building (its own line of sight hits the outline): "part of this building" */
   linked?: boolean
+  /** ui-polish-2: the text read from a sign box (OCR), for the photo key; display only */
+  text?: string
 }
 export interface EvidenceViewData {
   key: string; label: string; pano_id: string; heading: number; pitch: number; fov: number

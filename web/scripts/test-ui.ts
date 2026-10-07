@@ -8,6 +8,8 @@ import { article, costText, noun, plural, usd, withArticle } from '../src/lib/ut
 import { mainLine, pointAt, project, separate, slice } from '../src/map/trim'
 import { pickedLines, streetKey } from '../src/map/analyse'
 import { gapListOpen, panelOf } from '../src/store/ui'
+import { CLS_LETTER, tagBoxes } from '../src/lib/photoTags'
+import { answerOf, correctable, outcomeLine, reviewerSays, reviewQuestions } from '../src/lib/reviewQuestions'
 
 let n = 0
 const t = (name: string, fn: () => void) => { fn(); n++; console.log('ok', name) }
@@ -219,5 +221,74 @@ t('D57: two pieces of one street name are two streets; "include it" adds the oth
   assert.equal(pickedLines(a, true)!.coordinates.length, 2)
   assert.equal(pickedLines(one, true)!.coordinates.length, 1)
 })
+
+t('ui-polish-2: photo tags are short letters, numbered per kind left to right; the orange box has none', () => {
+  const box = (cls: 'building' | 'pole' | 'lamp_head' | 'signboard', x1: number, extra: object = {}) => ({ cls, x1, y1: 100, target: false, ...extra })
+  const boxes = [box('building', 300, { target: true }), box('signboard', 400, { linked: true }), box('signboard', 100, { linked: true }),
+    box('pole', 50), box('building', 500), box('lamp_head', 20)]
+  const plain = tagBoxes(boxes, false)
+  assert.deepEqual(plain.map((b) => [b.cls, b.tag]), [['signboard', 'S1'], ['signboard', 'S2'], ['building', null]])   // target last, no tag
+  assert.equal(plain.find((b) => b.tag === 'S1')!.x1, 100)                         // numbered left to right
+  const all = tagBoxes(boxes, true)
+  assert.deepEqual(all.filter((b) => b.tag).map((b) => b.tag), ['B', 'L', 'P', 'S1', 'S2'])   // a single box of its kind: no number
+  assert.deepEqual(tagBoxes(boxes, true, new Set(['pole'])).filter((b) => b.tag).map((b) => b.tag), ['B', 'L', 'S1', 'S2'])
+  assert.equal(CLS_LETTER.lamp_head, 'L')
+})
+
+t('ui-polish-2 (D59): every review reason in the data has a plain question; Yes = the finding is right', () => {
+  const B = (o: object = {}) => ({ attributes: { use: { value: 'commercial' }, floors: { value: 2, status: 'measured' }, name: { value: 'zinco' } },
+    register: { record_use: 'residential', record_floors: 1, record_area_m2: 80, record_dist_m: 26 }, footprint: { area_m2: 140 }, ...o })
+  const ask = (reasons: string[], b: object | null, discrepancies: string[] = [], item_type: 'building' | 'asset' = 'building', asset_cls: string | null = null) =>
+    reviewQuestions({ item_type, reasons, discrepancies, asset_cls }, b as never, item_type === 'asset' ? { type: asset_cls } : null)
+  const HS = 'high-severity discrepancy', AD = 'attribute discrepancy � verify on imagery', ONE = 'building seen from one view only'
+  const FL = 'floor count low confidence (roofline not visible)', VLM = 'name read by VLM only (not supported by OCR)', SD = 'single-detection asset'
+  let q = ask([HS], B({ match_status: 'no_record' }), ['missing_record'])
+  assert.equal(q.main.text, 'Is there a building here that’s missing from the register?'); assert.deepEqual(q.main.values, [])
+  q = ask([HS, FL], B({ match_status: 'no_record' }), ['missing_record'])
+  assert.equal(q.main.kind, 'missing'); assert.equal(q.also[0].text, 'Does this building have 2 floors?'); assert.deepEqual(correctable(q).map((v) => v.kind), ['floors'])
+  q = ask([AD], B({ match_status: 'discrepancy' }), ['extra_floor'])
+  assert.equal(q.main.text, 'The register says 1 floor, the photo suggests 2 floors. Is the photo right?'); assert.equal(q.main.values[0].kind, 'floors')
+  q = ask([AD, ONE], B({ match_status: 'discrepancy' }), ['use_change'])
+  assert.equal(q.main.text, 'The register says residential, the photo suggests commercial. Is the photo right?')
+  assert.equal(q.hint, 'Seen from one camera position only, so look closely.')
+  q = ask([HS, AD, ONE], B({ match_status: 'discrepancy' }), ['location_shift', 'use_change'])
+  assert.equal(q.main.text, 'The photo and the register differ. Is the photo right?')
+  assert.deepEqual(q.main.lines, ['The register’s pin for this building is 26 m away from it.', 'The register says residential, the photo suggests commercial.'])
+  q = ask([HS], B({ match_status: 'discrepancy' }), ['location_shift'])
+  assert.equal(q.main.text, 'The register’s pin for this building is 26 m away from it. Is the pin in the wrong place?')
+  q = ask([HS], B({ match_status: 'discrepancy' }), ['area_understated'])
+  assert.equal(q.main.text, 'The register says 80 m², the map outline is 140 m². Is the building bigger than recorded?')
+  assert.equal(ask([FL], B({ match_status: 'matched' })).main.text, 'Does this building have 2 floors?')
+  assert.equal(ask([VLM], B({ match_status: 'matched' })).main.text, 'Does the sign say “zinco”?')
+  assert.equal(ask([ONE], B({ match_status: 'discrepancy' }), ['area_understated']).main.text, 'Does the orange box show this building?')
+  assert.equal(ask([SD], null, [], 'asset', 'streetlight').main.text, 'Is there a streetlight in the orange box?')
+  assert.equal(ask([SD], null, [], 'asset', 'pole').main.text, 'Is there a pole in the orange box?')
+  assert.equal(ask(['use low confidence'], B()).main.text, 'Is this building commercial?')
+  assert.equal(ask(['something new'], B()).main.text, 'Something new. Is that right?')
+})
+
+t('ui-polish-2 (D59): one line after deciding says what was saved; the reviewer value is words, not a code', () => {
+  const fl = reviewQuestions({ item_type: 'building', reasons: ['floor count low confidence (roofline not visible)'] }, { attributes: { floors: { value: 2 } } })
+  assert.equal(outcomeLine(fl, 'yes'), 'Saved: reviewer confirmed 2 floors.')
+  assert.equal(outcomeLine(fl, 'no', { floors: 3 }), 'Saved: reviewer says it has 3 floors, not 2.')
+  assert.equal(outcomeLine(fl, 'no'), 'Saved: reviewer says it doesn’t have 2 floors.')
+  const miss = reviewQuestions({ item_type: 'building', reasons: ['high-severity discrepancy'], discrepancies: ['missing_record'] }, { match_status: 'no_record' })
+  assert.equal(outcomeLine(miss, 'yes'), 'Saved: reviewer confirmed it’s missing from the register.')
+  assert.equal(outcomeLine(miss, 'no', { floors: 1 }), 'Saved: reviewer says it’s not a building missing from the register. Reviewer says: 1 floor.')
+  assert.equal(reviewerSays({ floors: 2, use: 'mixed', name: 'Zinco' }), '2 floors · Shop + home · sign reads “Zinco”')
+  assert.equal(reviewerSays(null), null)
+  assert.equal(answerOf('approved'), 'Yes'); assert.equal(answerOf('rejected'), 'No')
+})
+
+await (async () => {
+  let body: FormData | null = null
+  globalThis.fetch = (async (_u: string, init: RequestInit) => { body = init.body as FormData; return new Response('{"offline":false}', { status: 200 }) }) as typeof fetch
+  await saveDecision(1, 'reject', { reviewer: 'test', note: 'typed in the appeal box', photo: new File(['x'], 'p.png', { type: 'image/png' }), noNote: 'roof behind tree', corrected: { floors: 3 } })
+  const fd = body! as FormData
+  assert.equal(fd.get('note'), 'roof behind tree'); assert.equal(fd.get('photo'), null); assert.equal(fd.get('corrected'), '{"floors":3}')
+  await saveDecision(1, 'approve', { reviewer: 'test', noNote: 'x', corrected: null })
+  assert.equal((body! as FormData).get('note'), null); assert.equal((body! as FormData).get('corrected'), null)
+})()
+n++; console.log('ok ui-polish-2 (D59): a No sends its own note and the right value; the appeal box text still never goes with Yes / No')
 
 console.log(`${n} UI tests passed`)

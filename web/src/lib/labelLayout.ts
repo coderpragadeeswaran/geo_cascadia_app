@@ -11,22 +11,23 @@ const hit = (a: Rect, b: Rect) => a.x < b.x + b.w + 2 && b.x < a.x + a.w + 2 && 
 export const estimateWidth = (text: string) => text.length * 13
 
 export function placeLabels(items: { x1: number; y1: number; x2: number; y2: number; text: string; priority: number }[],
-  width: (text: string) => number = estimateWidth) {
+  width: (text: string) => number = estimateWidth, labelH = LABEL_H, pad = 12) {
+  const LABEL_H_ = labelH
   const placed: Rect[] = []
   const out: (Rect | null)[] = items.map(() => null)
   const order = items.map((_, i) => i).sort((a, b) => items[b].priority - items[a].priority || items[a].y1 - items[b].y1)
-  const maxY = 640 - CAPTION - LABEL_H
+  const maxY = 640 - CAPTION - LABEL_H_
   for (const i of order) {
     const it = items[i]
-    const w = Math.min(640 - 2 * EDGE, Math.ceil(width(it.text)) + 12)      // 6 px padding each side
+    const w = Math.min(640 - 2 * EDGE, Math.ceil(width(it.text)) + pad)     // padding each side (default 6 px)
     const x = Math.max(EDGE, Math.min(it.x1, 640 - EDGE - w))
-    const starts = [it.y1 - LABEL_H - 2, it.y1 + 2, it.y2 + 2, it.y2 - LABEL_H - 2]
+    const starts = [it.y1 - LABEL_H_ - 2, it.y1 + 2, it.y2 + 2, it.y2 - LABEL_H_ - 2]
     let best: Rect | null = null
     for (let step = 0; step < 8 && !best; step++) {
       for (const [k, y0] of starts.entries()) {
         const dir = k === 0 || k === 3 ? -1 : 1                         // above / inside-bottom stack upward, the others down
-        const y = Math.max(EDGE, Math.min(maxY, y0 + dir * step * (LABEL_H + 2)))
-        const r = { x, y, w, h: LABEL_H }
+        const y = Math.max(EDGE, Math.min(maxY, y0 + dir * step * (LABEL_H_ + 2)))
+        const r = { x, y, w, h: LABEL_H_ }
         if (!placed.some((p) => hit(p, r))) { best = r; break }
       }
     }

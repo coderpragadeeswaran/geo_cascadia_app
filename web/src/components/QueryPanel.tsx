@@ -30,7 +30,7 @@ const SHOW: { v: string; label: string; f: QueryFilters }[] = [
 const showOf = (f: QueryFilters) => (f.intent === 'streetlight_gaps' ? 'gaps' : f.intent === 'osm_businesses' ? 'osm'
   : f.intent === 'assets' ? (f.asset_type === 'streetlight' ? 'streetlights' : 'poles') : f.intent)
 /** extras 3: which side of the comparison (OpenStreetMap is crowd-sourced, not an official register) */
-const OSM_MODE: Record<OsmMode, string> = { camera_only: 'not in OpenStreetMap', osm_only: 'in OpenStreetMap only', matched: 'also in OpenStreetMap' }
+const OSM_MODE: Record<OsmMode, string> = { camera_only: 'not in OpenStreetMap', osm_only: 'in OpenStreetMap only', matched: 'near an OpenStreetMap point (location only)' }
 const ALLOWED: Record<QueryFilters['intent'], Key[]> = {
   buildings: ['street', 'use', 'floors', 'match_status', 'discrepancy', 'ref_flag', 'near_dark_m', 'group_by'],
   streetlight_gaps: ['street', 'interval_m', 'priority'], assets: ['street'], review: ['street', 'reason_has'],
@@ -316,7 +316,7 @@ function OsmRows({ q }: { q: QueryResponse }) {
               <span className="block truncate">{r.name || (r.kind === 'osm' ? r.osm_kind : 'Business') || 'Business'}</span>
               <span className="t-small ink3 block truncate">
                 {r.kind === 'osm' ? <>On OpenStreetMap{r.osm_kind ? ` (${r.osm_kind})` : ''} · not seen by our camera</>
-                  : <>{r.street ?? '—'} · {r.why}{r.osm_name !== undefined ? <> · OpenStreetMap: {r.osm_name ?? r.osm_kind}, {fmt.format(Math.round(r.distance_m ?? 0))} m{r.same_name ? ', same name' : ''}</> : null}</>}
+                  : <>{r.street ?? '—'} · {r.why}{r.osm_name !== undefined ? <> · OpenStreetMap: {r.osm_name ?? r.osm_kind}, {fmt.format(Math.round(r.distance_m ?? 0))} m{r.same_name ? ', same name' : ', names don’t match'}</> : null}</>}
               </span>
             </button>
           </li>

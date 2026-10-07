@@ -1,13 +1,16 @@
 /** Review (USER screen, plain language; P5 / D29): queue | the evidence photo with its box | the decision.
  *  - Who is reviewing: asked once, remembered in this browser, saved with every decision and undo (no login).
  *  - Queue filters (street, reason, priority, status) combine; every option shows its live count.
- *  - Keys: J / K next / previous, A approve, R reject, E appeal, U undo, ? shortcuts. A note and a photo belong to an
- *    appeal only. Decisions persist via PATCH /review/{id}, update the map, and are logged in review_events.
+ *  - ui-polish-2 (D59): each item is a plain question (lib/reviewQuestions) answered Yes (A, stored as approved) or No
+ *    (R, rejected). A No on a value question (floors, use, sign name) opens a field for the right value + an optional
+ *    note, saved with the decision; one line then says what was saved.
+ *  - Keys: J / K next / previous, A yes, R no, E send back, U undo, ? shortcuts. A photo belongs to "send back" only.
+ *    Decisions persist via PATCH /review/{id}, update the map, and are logged in review_events.
  *  - After a decision: a short confirmation and a flash on the mini-map where it changed; the history panel lists every
  *    decision on the item (who, what, when, undone) with its appeal photo (signed URL, private bucket).
  *  - Live 360°: the panorama shows through the middle column (the map stays one instance, D3). */
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Check, CircleSlash, Flag, ImageIcon, Keyboard, Loader2, MapPin, Undo2, UserRound, X } from 'lucide-react'
+import { ArrowLeft, Flag, ImageIcon, Keyboard, Loader2, MapPin, Undo2, UserRound, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from '@/api/client'
 import { useReviewEvents } from '@/api/p5'
@@ -16,10 +19,12 @@ import type { ReviewRow } from '@/api/types'
 import { EvidenceViews } from '@/components/EvidenceViews'
 import { GeoMini, type MiniPoint } from '@/components/GeoMini'
 import { ObjectMini } from '@/components/ObjectMini'
+import { AnswerButtons, NoBox, QuestionBlock, ReviewerSays } from '@/components/ReviewAsk'
 import { ReviewerDialog } from '@/components/ReviewerName'
 import { assetRegLabel, matchLabel, reviewLabel, reviewReasons, useLabel } from '@/lib/labels'
 import { DONE_LABEL, patchReviewCaches, PHOTO_MAX_MB, PHOTO_TYPES, photoProblem, saveDecision, undoDecision, type Decision, type ReviewEvent } from '@/lib/review'
 import { miniStreets } from '@/lib/mini'
+import { answerOf, correctable, outcomeLine, reviewQuestions, type Corrected } from '@/lib/reviewQuestions'
 import { propsFor, useAreaData } from '@/lib/useAreaData'
 import { cn, fmt, fmt1, plural } from '@/lib/utils'
 import { useUi } from '@/store/ui'
@@ -59,6 +64,7 @@ export default function Review() {
   const [note, setNote] = useState('')
   const [photo, setPhoto] = useState<File | null>(null)
   const [appeal, setAppeal] = useState(false)
+  const [noOpen, setNoOpen] = useState(false)            // D59: the No box (right value + note) is open
   const [msg, setMsg] = useState<string | null>(null)
   const [askName, setAskName] = useState(!reviewer)
   const [help, setHelp] = useState(false)
@@ -70,7 +76,7 @@ export default function Review() {
   const [saving, setSaving] = useState<Decision | null>(null)
   const [undoing, setUndoing] = useState(false)
   // the toast names ONE item and ONE decision (event); Undo sends exactly those two ids (D24)
-  const [done, setDone] = useState<{ id: number; name: string; action: Decision; eventId: number; key: number; sel: string } | null>(null)
+  const [done, setDone] = useState<{ id: number; name: string; action: Decision; eventId: number; key: number; sel: string; line: string } | null>(null)
   const [undone, setUndone] = useState<{ id: number; name: string } | null>(null)
 
   const base = useMemo(() => {
@@ -102,7 +108,7 @@ export default function Review() {
   const cur: ReviewRow | undefined = (sel ? base.find((r) => keyOf(r) === sel) : undefined) ?? list[0]
   const inList = !!cur && list.some((r) => keyOf(r) === keyOf(cur))
   const i = cur ? list.findIndex((r) => keyOf(r) === keyOf(cur)) : -1
-  useEffect(() => { setUndone((u) => (u && u.id !== cur?.id ? null : u)); setMsg(null) }, [cur?.id])
+  useEffect(() => { setUndone((u) => (u && u.id !== cur?.id ? null : u)); setMsg(null); setNoOpen(false) }, [cur?.id])
   useEffect(() => { setSel(null) }, [f])
   // the item a key press acts on is read from refs, never from a stale render (D23 skipped-items fix)
   const curRef = useRef(cur)
@@ -128,7 +134,10 @@ export default function Review() {
     qc.setQueryData<ReviewEvent[]>(['review-events', id], (old) => [ev, ...(old ?? []).map((e) => (undoes && e.id === undoes ? { ...e, undone_by: ev.id } : e))])
     qc.invalidateQueries({ queryKey: ['review-events', id] })
   }
-  const decide = useCallback(async (action: Decision) => {
+  /** the question for an item, from its own record (D59) */
+  const askOf = useCallback((r: ReviewRow) => reviewQuestions(r, r.item_type === 'building' ? records?.buildings.find((x) => x.id === r.ref_id) : null,
+    r.item_type === 'asset' ? records?.assets.find((x) => x.id === r.ref_id) : null), [records])
+  const decide = useCallback(async (action: Decision, opts: { corrected?: Corrected | null; noNote?: string } = {}) => {
     const item = curRef.current
     if (!item?.id || offline || lock.current) return
     if (!reviewer) { setAskName(true); return }
@@ -138,24 +147,33 @@ export default function Review() {
     lock.current = true
     setSaving(action); setMsg(null); setDone(null); setUndone(null)
     try {
-      const row = await saveDecision(item.id, action, { reviewer, note, photo })     // note / photo sent only for an appeal
+      // the appeal box's note / photo go only with "send back"; a No sends its own note and the right value (D59)
+      const row = await saveDecision(item.id, action, { reviewer, note, photo, ...opts })
       pushEvent(item.id, { id: row.event_id, action, status: row.status, previous_status: item.status, reviewer, previous_reviewer: item.reviewer,
-        note: row.note, previous_note: item.note, undoes: null, undone_by: null, created_at: new Date().toISOString(), has_photo: action === 'appeal' && !!photo })
+        note: row.note, previous_note: item.note, undoes: null, undone_by: null, created_at: new Date().toISOString(), has_photo: action === 'appeal' && !!photo,
+        corrected: row.corrected ?? null, previous_corrected: item.corrected ?? null })
       // the next item still waiting after this one, in the list as it was before the save
       const L = listRef.current
       const at = L.findIndex((r) => r.id === item.id)
       const next = L.find((r, k) => k > at && r.status === 'pending' && r.id !== item.id) ?? L.find((r) => r.status === 'pending' && r.id !== item.id)
       patchReviewCaches(qc, row)
-      setNote(''); setPhoto(null); setAppeal(false)
+      setNote(''); setPhoto(null); setAppeal(false); setNoOpen(false)
       const key = Date.now()
-      setDone({ id: item.id, name: title(item), action, eventId: row.event_id, key, sel: keyOf(item) })
+      setDone({ id: item.id, name: title(item), action, eventId: row.event_id, key, sel: keyOf(item),
+        line: outcomeLine(askOf(item), action === 'approve' ? 'yes' : action === 'reject' ? 'no' : 'appeal', row.corrected) })
       setFlash({ lat: item.lat, lon: item.lon, status: row.status, key })
       setDecidedHere((m) => new Map(m).set(item.id!, { lat: item.lat, lon: item.lon, status: row.status }))
       bump(+1)
-      if (next) { curRef.current = next; setSel(keyOf(next)) }
+      if (next) { curRef.current = next; setSel(keyOf(next)) } else setSel(keyOf(item))     // nothing left: keep it (and the saved line) on screen
     } catch (e) { setMsg(e instanceof ApiError ? (e.status === 503 ? 'Offline — read-only. Nothing was saved.' : e.message) : 'Could not save') }
     finally { lock.current = false; setSaving(null) }
-  }, [note, photo, offline, qc, reviewer]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [note, photo, offline, qc, reviewer, askOf]) // eslint-disable-line react-hooks/exhaustive-deps
+  /** R / the No button: a value question opens the No box first; any other question is answered at once */
+  const sayNo = useCallback(() => {
+    const it = curRef.current
+    if (!it?.id || offline || lock.current) return
+    if (correctable(askOf(it)).length) { setAppeal(false); setNoOpen(true) } else decide('reject')
+  }, [askOf, decide, offline])
 
   /** undo ONE decision (event) on ONE item: from the confirmation, from History, or with U (R1) */
   const undoEvent = useCallback(async (itemId: number, eventId: number, name: string, itemKey: string) => {
@@ -193,13 +211,13 @@ export default function Review() {
       if (e.key === 'j') move(1)
       else if (e.key === 'k') move(-1)
       else if (e.key === 'a') decide('approve')
-      else if (e.key === 'r') decide('reject')
-      else if (e.key === 'e') setAppeal(true)
+      else if (e.key === 'r') { e.preventDefault(); sayNo() }
+      else if (e.key === 'e') { setNoOpen(false); setAppeal(true) }
       else if ((e.key === 'z' && (e.ctrlKey || e.metaKey)) || e.key === 'u') undo()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [decide, undo, askName, help]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [decide, sayNo, undo, askName, help]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const b = cur?.item_type === 'building' ? records?.buildings.find((x) => x.id === cur.ref_id) : undefined
   const a = cur?.item_type === 'asset' ? records?.assets.find((x) => x.id === cur.ref_id) : undefined
@@ -210,6 +228,7 @@ export default function Review() {
     ui.go('explore')
     if (p) ui.select(p)
   }
+  const asked = cur ? askOf(cur) : null
   const waiting = base.filter((r) => r.status === 'pending').length
   const mins = session.t0 ? Math.max(1, (Date.now() - session.t0) / 60000) : null
   const mini = useMemo(() => miniStreets(streets), [streets])
@@ -255,7 +274,7 @@ export default function Review() {
             </li>
           ))}
         </ol>
-        <p className="t-small ink3 rule-t px-5 py-2"><span className="kbd">?</span> keyboard shortcuts · <span className="kbd">J</span> <span className="kbd">K</span> move · <span className="kbd">A</span> <span className="kbd">R</span> <span className="kbd">E</span> decide</p>
+        <p className="t-small ink3 rule-t px-5 py-2"><span className="kbd">?</span> keyboard shortcuts · <span className="kbd">J</span> <span className="kbd">K</span> move · <span className="kbd">A</span> yes <span className="kbd">R</span> no <span className="kbd">E</span> send back</p>
       </aside>
 
       <section className={cn('min-h-0 overflow-y-auto px-8 py-6', dive ? 'pointer-events-none' : 'pointer-events-auto')} style={{ background: dive ? 'transparent' : 'var(--ns-bg0)' }} aria-label="Evidence">
@@ -269,9 +288,9 @@ export default function Review() {
             <div className="t-micro">{cur.item_type === 'asset' ? 'Pole or streetlight' : 'Building'}</div>
             <h2 className="t-display mt-1" style={{ fontSize: 27 }}>{title(cur)}</h2>
             <div className="mt-4">
-              {b && <EvidenceViews kind="building" id={b.id} at={{ lat: b.lat, lng: b.lon }} target="building" />}
-              {a && <EvidenceViews kind="asset" id={a.id} at={{ lat: a.lat, lng: a.lon }} target={a.type === 'streetlight' ? 'lamp' : 'pole'} />}
-              {!b && !a && <div className="aspect-square w-full animate-pulse rounded-[var(--ns-r-control)] bg-line" />}
+              {b && <EvidenceViews kind="building" id={b.id} at={{ lat: b.lat, lng: b.lon }} target="building" maxPhoto={400} />}
+              {a && <EvidenceViews kind="asset" id={a.id} at={{ lat: a.lat, lng: a.lon }} target={a.type === 'streetlight' ? 'lamp' : 'pole'} maxPhoto={400} />}
+              {!b && !a && <div className="aspect-square w-full max-w-[400px] animate-pulse rounded-[var(--ns-r-control)] bg-line" />}
             </div>
           </div>
         )}
@@ -280,23 +299,19 @@ export default function Review() {
       <aside className="surface pointer-events-auto flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto overflow-x-hidden px-5 py-5 [&>*]:min-w-0" style={{ borderLeft: '1px solid var(--ns-line)' }} aria-label="Decision">
         {cur && <>
           {!inList && <p className="t-small rounded-[var(--ns-r-control)] px-2.5 py-1.5" style={{ boxShadow: 'inset 0 0 0 1px var(--ns-line-strong)' }}>This item is outside the current filter ({reviewLabel(cur.status).toLowerCase()}). <button className="link" onClick={() => move(0)}>Back to the list</button></p>}
-          <div className="t-micro">Why a person should check</div>
-          <ul className="space-y-1">{reasonsOf(cur).map((x) => <li key={x} className="t-small flex gap-2"><span className="mt-[7px] size-1.5 shrink-0 rounded-full" style={{ background: 'var(--ns-sodium)' }} />{x}</li>)}</ul>
+          {asked && <QuestionBlock q={asked} />}
           <div className="t-micro mt-1">What we saw</div>
           {b && <p className="t-small">{useLabel(b.attributes?.use?.value)} · {b.attributes?.floors?.value != null ? plural(b.attributes.floors.value, 'floor') : 'floors not known'} · {matchLabel(b.match_status, true, !!b.attributes?.use?.value)} <span className="ink3">(synthetic register)</span></p>}
           {a && <p className="t-small">{a.method === 'triangulated' ? 'Pinpointed' : 'Approximate position'} · {assetRegLabel(a.register?.status, true)} <span className="ink3">(synthetic register)</span></p>}
-          <div className="t-small ink3">Status: <span style={{ color: STATUS_COLOR[cur.status] }}>{reviewLabel(cur.status)}</span>{cur.status !== 'pending' && cur.reviewer ? ` by ${cur.reviewer}` : ''}{cur.status === 'appealed' && cur.note ? ` · note: ${cur.note}` : ''}</div>
-          {(b || a) ? <ObjectMini key={`${cur.item_type}:${cur.ref_id}:${flash?.key ?? 0}`} area={area} obj={b ? { kind: 'building', b } : { kind: 'asset', a: a! }}
-            streets={mini} extra={miniPoints.filter((p) => p.legend !== 'this item')} height={220} label="Where this item is: its street, the buildings around it, and the cameras that saw it" />
-            : <GeoMini area={area} streets={mini} points={miniPoints} fit="area" height={170} label="Where this item is; decisions made in this session flash here" key={flash?.key ?? 0} />}
-
+          <div className="t-small ink3">Status: <span style={{ color: STATUS_COLOR[cur.status] }}>{cur.status === 'pending' ? reviewLabel(cur.status) : `Answered ${answerOf(cur.status)}`}</span>{cur.status !== 'pending' && cur.reviewer ? ` by ${cur.reviewer}` : ''}{cur.note ? ` · note: ${cur.note}` : ''}
+            <ReviewerSays corrected={cur.corrected} /></div>
           <div className="grid min-w-0 gap-1.5" aria-busy={busy}>
             {offline && <p className="t-small sodium">Offline — read-only</p>}
-            <DecisionButton icon={<Check />} label="Approve: the finding is right" k="A" busy={saving === 'approve'} disabled={offline || busy} onClick={() => decide('approve')} />
-            <DecisionButton icon={<CircleSlash />} label="Reject: the finding is wrong" k="R" busy={saving === 'reject'} disabled={offline || busy} onClick={() => decide('reject')} />
-            <button className="btn btn-line justify-between" disabled={offline || busy} aria-pressed={appeal} onClick={() => setAppeal(!appeal)}><span className="flex items-center gap-1.5"><Flag /> Appeal with a note or photo</span><span className="kbd">E</span></button>
+            <AnswerButtons keys busy={saving === 'approve' ? 'yes' : saving === 'reject' ? 'no' : null} disabled={offline || busy} onYes={() => decide('approve')} onNo={sayNo} />
+            {noOpen && asked && <NoBox key={cur.id ?? 0} scrollIn q={asked} saving={saving === 'reject'} disabled={busy} onCancel={() => setNoOpen(false)}
+              onSave={(corrected, noNote) => decide('reject', { corrected, noNote })} />}
+            <button className="btn btn-line justify-between" disabled={offline || busy} aria-pressed={appeal} onClick={() => { setNoOpen(false); setAppeal(!appeal) }}><span className="flex items-center gap-1.5"><Flag /> Not sure? Send back with a note</span><span className="kbd">E</span></button>
             {appeal && <AppealBox note={note} setNote={setNote} photo={photo} setPhoto={setPhoto} saving={saving === 'appeal'} disabled={busy} onSend={() => decide('appeal')} onCancel={() => { setAppeal(false); setNote(''); setPhoto(null) }} />}
-            <button className="btn mt-1" onClick={showOnMap}><MapPin /> Show on the map</button>
             <div role="status" aria-live="polite" className="min-h-[1.5em]">
               {busy && <p className="t-small ink2 flex items-center gap-1.5"><Loader2 className="size-4 animate-spin sodium" /> {undoing ? 'Undoing…' : 'Saving…'}</p>}
               {!busy && done && (
@@ -305,7 +320,8 @@ export default function Review() {
                     <span className="t-body shrink-0" style={{ color: STATUS_COLOR[done.action === 'approve' ? 'approved' : done.action === 'reject' ? 'rejected' : 'appealed'] }}>{DONE_LABEL[done.action]} ✓</span>
                     <button className="btn btn-line h-8 shrink-0" onClick={undo}><Undo2 /> Undo <span className="kbd">U</span></button>
                   </div>
-                  <div className="t-small ink2 mt-1 truncate" title={done.name}>{done.name}</div>
+                  <p className="t-small mt-1" aria-label="What was saved">{done.line}</p>
+                  <div className="t-small ink2 mt-0.5 truncate" title={done.name}>{done.name}</div>
                   <button className="link t-small mt-0.5" onClick={() => setSel(done.sel)}>Show its history</button>
                 </div>
               )}
@@ -313,20 +329,16 @@ export default function Review() {
               {!busy && msg && <p className="t-small" style={{ color: 'var(--ns-no-record)' }}>{msg}</p>}
             </div>
           </div>
+          {(b || a) ? <ObjectMini key={`${cur.item_type}:${cur.ref_id}:${flash?.key ?? 0}`} area={area} obj={b ? { kind: 'building', b } : { kind: 'asset', a: a! }}
+            streets={mini} extra={miniPoints.filter((p) => p.legend !== 'this item')} height={220} label="Where this item is: its street, the buildings around it, and the cameras that saw it" />
+            : <GeoMini area={area} streets={mini} points={miniPoints} fit="area" height={170} label="Where this item is; decisions made in this session flash here" key={flash?.key ?? 0} />}
+          <button className="btn" onClick={showOnMap}><MapPin /> Show on the map</button>
           {cur.id != null && <History id={cur.id} busy={busy} onUndo={(ev) => undoEvent(cur.id!, ev.id, title(cur), keyOf(cur))} />}
         </>}
       </aside>
       {askName && <ReviewerDialog onClose={() => setAskName(false)} />}
       {help && <Shortcuts onClose={() => setHelp(false)} />}
     </div>
-  )
-}
-
-function DecisionButton({ icon, label, k, busy, disabled, onClick }: { icon: React.ReactNode; label: string; k: string; busy: boolean; disabled: boolean; onClick: () => void }) {
-  return (
-    <button className="btn btn-line justify-between" disabled={disabled} onClick={onClick}>
-      <span className="flex items-center gap-1.5">{busy ? <Loader2 className="animate-spin" /> : icon} {busy ? 'Saving…' : label}</span><span className="kbd">{k}</span>
-    </button>
   )
 }
 
@@ -394,7 +406,7 @@ function AppealBox({ note, setNote, photo, setPhoto, saving, disabled, onSend, o
   )
 }
 
-const ACTION: Record<string, string> = { approve: 'Approved', reject: 'Rejected', appeal: 'Appealed', undo: 'Undo' }
+const ACTION: Record<string, string> = { approve: 'Answered Yes', reject: 'Answered No', appeal: 'Sent back', undo: 'Undo' }
 const ago = (iso: string | null) => {
   if (!iso) return ''
   const s = (Date.now() - new Date(iso).getTime()) / 1000
@@ -433,12 +445,13 @@ function History({ id, busy, onUndo }: { id: number; busy: boolean; onUndo: (ev:
               <span className="absolute -left-[21px] top-1.5 size-2.5 rounded-full" style={{ background: e.action === 'undo' ? 'var(--ns-bg1)' : STATUS_COLOR[e.status], boxShadow: `0 0 0 2px ${e.action === 'undo' ? 'var(--ns-ink3)' : 'var(--ns-bg1)'}` }} aria-hidden />
               <div className="t-small flex flex-wrap items-baseline gap-x-1.5">
                 <b className={cn(e.undone_by && 'line-through ink3')} style={{ fontWeight: 600 }}>{ACTION[e.action]}</b>
-                {e.action === 'undo' && <span className="ink2">back to {reviewLabel(e.status).toLowerCase()}</span>}
+                {e.action === 'undo' && <span className="ink2">back to {e.status === 'pending' ? reviewLabel(e.status).toLowerCase() : `answered ${answerOf(e.status)}`}</span>}
                 <span className="ink2">by {e.reviewer ?? 'unknown'}</span>
                 <span className="ink3" title={e.created_at ? new Date(e.created_at).toLocaleString('en-IN') : undefined}>· {ago(e.created_at)}</span>
                 {e.undone_by && <span className="ink3">(undone)</span>}
               </div>
               {e.note && e.action !== 'undo' && <p className="t-small ink2 mt-0.5 break-words">“{e.note}”</p>}
+              {e.action !== 'undo' && <ReviewerSays corrected={e.corrected} className={cn('mt-0.5', e.undone_by && 'line-through opacity-60')} />}
               {live?.id === e.id && <button className="btn btn-line mt-1 h-7" disabled={busy} onClick={() => onUndo(e)}><Undo2 /> Undo this decision</button>}
               {e.has_photo && (photo?.ev === e.id && photo.url ? (
                 <a href={photo.url} target="_blank" rel="noreferrer" className="mt-1 block"><img src={photo.url} alt="Appeal photo" className="max-h-40 rounded-[4px]" /></a>
@@ -453,8 +466,8 @@ function History({ id, busy, onUndo }: { id: number; busy: boolean; onUndo: (ev:
 }
 
 function Shortcuts({ onClose }: { onClose: () => void }) {
-  const rows: [string, string][] = [['J / K', 'next / previous item'], ['A', 'approve: the finding is right'], ['R', 'reject: the finding is wrong'],
-    ['E', 'appeal with a note (and a photo)'], ['U  or  Ctrl+Z', 'undo the last decision'], ['?', 'show or hide this list'], ['Esc', 'close this list, or leave Live 360°']]
+  const rows: [string, string][] = [['J / K', 'next / previous item'], ['A', 'Yes: answer the question with yes'], ['R', 'No (a value question then asks for the right value)'],
+    ['Enter', 'save the No box'], ['E', 'not sure: send back with a note (and a photo)'], ['U  or  Ctrl+Z', 'undo the last decision'], ['?', 'show or hide this list'], ['Esc', 'close this list, or leave Live 360°']]
   return (
     <div className="pointer-events-auto absolute inset-0 z-50 flex items-center justify-center" style={{ background: 'color-mix(in srgb, var(--ns-bg0) 70%, transparent)' }} onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" className="sheet w-[420px] p-5" onClick={(e) => e.stopPropagation()}>

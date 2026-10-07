@@ -78,8 +78,10 @@ async function main() {
   await shot(page, 'h-street-report-buttons')
   const kp = await page.locator('[aria-label="Key figures (click to filter)"]').first().innerText().catch(() => '')
   console.log('    street key numbers:', kp.replace(/\s+/g, ' ').slice(0, 300))
+  // ui-polish-2: the street's downloads sit behind one "Report for this street" button
+  await page.locator('[aria-label="Download a report for Sathy Main Road"] button[aria-haspopup="menu"]').click()
   const [dl2] = await Promise.all([page.waitForEvent('download', { timeout: 60_000 }),
-    page.locator('[aria-label="Download a report for Sathy Main Road"] button', { hasText: 'Excel' }).click()])
+    page.locator('[aria-label="Download a report for Sathy Main Road"] [role=menu] button', { hasText: 'Excel' }).click()])
   await dl2.saveAs(join(OUT, `${MODE}-ui-${dl2.suggestedFilename()}`)); console.log('    downloaded', dl2.suggestedFilename())
   await browser.close()
 }

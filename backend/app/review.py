@@ -1,5 +1,13 @@
-"""Review queue: list (works offline, read-only), decisions (DB only), appeal photos (Supabase Storage, private)."""
+"""Review queue: list (works offline, read-only), decisions (DB only), appeal photos (Supabase Storage, private).
+
+ui-polish-2 (D59): each item is asked as a plain question with Yes / No answers (web/src/lib/reviewQuestions.ts);
+Yes = approve (the finding is right), No = reject. A "No" can carry the reviewer's corrected value (floors / use / sign
+name) and a note; the value is saved in review_items.corrected with the decision (and in review_events, so Undo restores
+it) and is never written over the AI's value or the register."""
+import json
 from typing import Optional
+
+from psycopg.types.json import Jsonb
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
@@ -9,6 +17,39 @@ from .store import Data
 
 router = APIRouter(tags=["review"])
 ACTIONS = {"approve": "approved", "reject": "rejected", "appeal": "appealed"}
+# the values a reviewer may correct (D59); uses = the pipeline's building-use values
+USES = ("residential", "commercial", "mixed", "institutional", "industrial", "under_construction", "other")
+
+
+def parse_corrected(raw):
+    """the `corrected` form field (JSON) -> a clean dict or None; 422 on anything else. floors: whole number 0-60;
+    use: one of USES; name: text, 1-120 characters."""
+    if raw is None or not str(raw).strip():
+        return None
+    try:
+        d = json.loads(raw)
+    except ValueError:
+        raise HTTPException(422, 'corrected must be JSON, e.g. {"floors": 2}')
+    if not isinstance(d, dict) or not d:
+        raise HTTPException(422, "corrected must be an object with floors, use or name")
+    out = {}
+    for k, v in d.items():
+        if k == "floors":
+            if isinstance(v, bool) or not isinstance(v, int) or not 0 <= v <= 60:
+                raise HTTPException(422, "corrected floors must be a whole number from 0 to 60")
+            out[k] = v
+        elif k == "use":
+            if v not in USES:
+                raise HTTPException(422, f"corrected use must be one of {list(USES)}")
+            out[k] = v
+        elif k == "name":
+            v = str(v or "").strip()
+            if not 1 <= len(v) <= 120:
+                raise HTTPException(422, "a corrected name must be 1 to 120 characters")
+            out[k] = v
+        else:
+            raise HTTPException(422, f"corrected: unknown field {k!r} (floors, use or name)")
+    return out
 
 
 def get_data(request: Request) -> Data:
@@ -59,17 +100,18 @@ def review_item(item_id: int, D: Data = Depends(get_data)):
 # The decision, its history row (review_events, D24), the object's review_status and the area's new cache version, in ONE
 # statement: the history can never miss a change made through the API. `prev` reads the row before the update.
 DECIDE_SQL = """
-with prev as (select id, area_id, ref_id, status, reviewer, note, appeal_photo_url from review_items where id = %(id)s for update),
+with prev as (select id, area_id, ref_id, status, reviewer, note, appeal_photo_url, corrected from review_items
+             where id = %(id)s for update),
 r as (
     update review_items r set status = %(status)s, reviewer = %(reviewer)s, note = %(note)s, appeal_photo_url = %(path)s,
-           updated_at = now()
+           corrected = %(corrected)s, updated_at = now()
     from prev where r.id = prev.id
-    returning r.id, r.area_id, r.item_type, r.ref_id, r.status, r.reviewer, r.note, r.appeal_photo_url, r.updated_at),
+    returning r.id, r.area_id, r.item_type, r.ref_id, r.status, r.reviewer, r.note, r.appeal_photo_url, r.updated_at, r.corrected),
 e as (
     insert into review_events (item_id, area_id, ref_id, action, status, previous_status, previous_reviewer, previous_note,
-                               previous_photo, reviewer, note, photo)
+                               previous_photo, reviewer, note, photo, previous_corrected, corrected)
     select prev.id, prev.area_id, prev.ref_id, %(action)s, r.status, prev.status, prev.reviewer, prev.note,
-           prev.appeal_photo_url, r.reviewer, r.note, r.appeal_photo_url
+           prev.appeal_photo_url, r.reviewer, r.note, r.appeal_photo_url, prev.corrected, r.corrected
     from prev join r on r.id = prev.id
     returning id),
 b as (update buildings t set review_status = r.status from r where r.item_type = 'building' and t.area_id = r.area_id and t.id = r.ref_id),
@@ -77,7 +119,7 @@ s as (update assets t set review_status = r.status from r where r.item_type = 'a
 select a.slug, r.status, r.reviewer, r.note, r.appeal_photo_url, r.updated_at,
        a.id, a.updated_at, greatest((select max(updated_at) from review_items x where x.area_id = a.id), r.updated_at),
        (select count(*) from review_items x where x.area_id = a.id),
-       (select id from e)
+       (select id from e), r.corrected
 from r join areas a on a.id = r.area_id
 """
 
@@ -89,18 +131,18 @@ with ev as (select * from review_events e where id = %(event)s and item_id = %(i
              and not exists (select 1 from review_events u where u.undoes = e.id)             -- not undone already
              and not exists (select 1 from review_events x where x.item_id = e.item_id and x.id > e.id  -- no later live decision
                              and x.action <> 'undo' and not exists (select 1 from review_events y where y.undoes = x.id))),
-prev as (select i.id, i.area_id, i.ref_id, i.status, i.reviewer, i.note, i.appeal_photo_url
+prev as (select i.id, i.area_id, i.ref_id, i.status, i.reviewer, i.note, i.appeal_photo_url, i.corrected
          from review_items i, ev where i.id = %(id)s for update of i),
 r as (
     update review_items r set status = ev.previous_status, reviewer = ev.previous_reviewer, note = ev.previous_note,
-           appeal_photo_url = ev.previous_photo, updated_at = now()
+           appeal_photo_url = ev.previous_photo, corrected = ev.previous_corrected, updated_at = now()
     from prev, ev where r.id = prev.id
-    returning r.id, r.area_id, r.item_type, r.ref_id, r.status, r.reviewer, r.note, r.appeal_photo_url, r.updated_at),
+    returning r.id, r.area_id, r.item_type, r.ref_id, r.status, r.reviewer, r.note, r.appeal_photo_url, r.updated_at, r.corrected),
 e as (
     insert into review_events (item_id, area_id, ref_id, action, status, previous_status, previous_reviewer, previous_note,
-                               previous_photo, reviewer, note, undoes)
+                               previous_photo, reviewer, note, undoes, previous_corrected, corrected)
     select prev.id, prev.area_id, prev.ref_id, 'undo', r.status, prev.status, prev.reviewer, prev.note, prev.appeal_photo_url,
-           %(reviewer)s, r.note, %(event)s
+           %(reviewer)s, r.note, %(event)s, prev.corrected, r.corrected
     from prev join r on r.id = prev.id
     returning id),
 b as (update buildings t set review_status = r.status from r where r.item_type = 'building' and t.area_id = r.area_id and t.id = r.ref_id),
@@ -108,7 +150,7 @@ s as (update assets t set review_status = r.status from r where r.item_type = 'a
 select a.slug, r.status, r.reviewer, r.note, r.appeal_photo_url, r.updated_at,
        a.id, a.updated_at, greatest((select max(updated_at) from review_items x where x.area_id = a.id), r.updated_at),
        (select count(*) from review_items x where x.area_id = a.id),
-       (select id from e)
+       (select id from e), r.corrected
 from r join areas a on a.id = r.area_id
 """
 
@@ -116,7 +158,8 @@ from r join areas a on a.id = r.area_id
 def _apply(s, item_id, row):
     """Patch the cached area with one written item (no full reload) and return (bundle, queue item, event id)."""
     slug, item = row[0], {"id": item_id, "status": row[1], "reviewer": row[2], "note": row[3],
-                          "appeal_photo_path": row[4], "updated_at": row[5].isoformat() if row[5] else None}
+                          "appeal_photo_path": row[4], "updated_at": row[5].isoformat() if row[5] else None,
+                          "corrected": row[11]}
     b = s.patch_review(slug, item, tuple(row[6:10]))
     if b is None:                                            # area not cached yet: load it once
         b, q = _find(s, item_id)
@@ -127,13 +170,16 @@ def _apply(s, item_id, row):
 @router.patch("/review/{item_id}")
 def review_decide(item_id: int, request: Request, action: str = Form(..., description="approve | reject | appeal"),
                   reviewer: str = Form(..., max_length=120, description="who decided (asked once in the browser, no login)"),
-                  note: Optional[str] = Form(None, max_length=2000, description="appeal only (required for an appeal)"),
+                  note: Optional[str] = Form(None, max_length=2000, description="reject (optional) or appeal (required)"),
                   photo: Optional[UploadFile] = File(None, description="appeal only: jpeg/png/webp, ≤ 8 MB"),
+                  corrected: Optional[str] = Form(None, max_length=1000, description='approve / reject: the reviewer\'s '
+                                                  'value as JSON, e.g. {"floors": 2} or {"use": "commercial"} or {"name": "…"}'),
                   D: Data = Depends(get_data)):
-    """Approve / reject / appeal ONE item, saved with the reviewer's name. A note and a photo belong to an appeal only
-    (P5 fix: a note typed in the appeal box is never saved with Approve / Reject). The photo goes to the private Supabase
-    bucket and is read back only through signed URLs. Returns the item and `event_id` (its history row), which is what
-    Undo needs. One SQL statement; the cached area is patched in place."""
+    """Answer ONE item, saved with the reviewer's name: approve = "Yes" (the finding is right), reject = "No", appeal =
+    send back with a note. "No" may carry an optional note; a photo belongs to an appeal only. `corrected` (D59) = the
+    reviewer's own value (floors / use / sign name), saved with the decision, never over the AI's value or the register.
+    The photo goes to the private Supabase bucket and is read back only through signed URLs. Returns the item and
+    `event_id` (its history row), which is what Undo needs. One SQL statement; the cached area is patched in place."""
     if action not in ACTIONS:
         raise HTTPException(422, f"action must be one of {list(ACTIONS)} (to undo, POST /review/{{item_id}}/undo)")
     reviewer = (reviewer or "").strip()
@@ -141,8 +187,13 @@ def review_decide(item_id: int, request: Request, action: str = Form(..., descri
         raise HTTPException(422, "a reviewer name is needed")
     note = (note or "").strip() or None
     has_photo = photo is not None and bool(photo.filename)
-    if action != "appeal" and (note or has_photo):
-        raise HTTPException(422, "a note or photo is saved only with an appeal")
+    if action == "approve" and note:
+        raise HTTPException(422, "a note is saved with a No (reject) or an appeal, not with a Yes")
+    if action != "appeal" and has_photo:
+        raise HTTPException(422, "a photo is saved only with an appeal")
+    fixed = parse_corrected(corrected)
+    if fixed and action == "appeal":
+        raise HTTPException(422, "a corrected value is saved with Yes or No, not with an appeal")
     if action == "appeal" and not note:
         raise HTTPException(422, "an appeal needs a note")
     content = None
@@ -161,7 +212,7 @@ def review_decide(item_id: int, request: Request, action: str = Form(..., descri
             path = storage.upload_photo(settings, b["slug"], item_id, content, photo.content_type)
         with s.pool.connection() as c:
             row = c.execute(DECIDE_SQL, {"status": ACTIONS[action], "action": action, "reviewer": reviewer, "note": note,
-                                         "path": path, "id": item_id}).fetchone()
+                                         "path": path, "id": item_id, "corrected": Jsonb(fixed) if fixed else None}).fetchone()
         if not row:
             raise HTTPException(404, f"review item {item_id} not found")
         return _apply(s, item_id, row)
@@ -179,7 +230,7 @@ class UndoIn(BaseModel):
 @router.post("/review/{item_id}/undo")
 def review_undo(item_id: int, body: UndoIn, D: Data = Depends(get_data)):
     """Undo exactly one decision on exactly one item: the item goes back to what it was before that decision (status,
-    reviewer, note, photo link). Needs the item id twice (path + body) and the decision's event id; refused (409) when
+    reviewer, note, photo link, corrected value). Needs the item id twice (path + body) and the decision's event id; refused (409) when
     that decision is not the item's latest event. Nothing else is touched. The undo event records who pressed Undo."""
     if body.item_id != item_id:
         raise HTTPException(422, "item_id in the body must match the item in the path")
@@ -200,7 +251,7 @@ def review_undo(item_id: int, body: UndoIn, D: Data = Depends(get_data)):
 
 
 EVENT_COLS = ("id", "action", "status", "previous_status", "reviewer", "previous_reviewer", "note", "previous_note", "undoes",
-              "created_at")
+              "created_at", "corrected", "previous_corrected")
 
 
 @router.get("/review/{item_id}/events")

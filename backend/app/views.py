@@ -567,7 +567,7 @@ def osm_answer(bundle, text, mode, osm_at, street=None, phrase=None, scoped=None
                   "kind": m["osm"].get("kind"), "matched": True} for m in sh["matched"]])
     out.update(rows=rows, total=len(rows),
                note=(f"Our camera found {n['camera']} businesses here; OpenStreetMap lists {n['osm']} along these streets: "
-                     f"{n['matched']} the same place ({n['matched_same_name']} also the same name), {n['camera_only']} seen by "
+                     f"{n['matched']} near each other (location only; {_names(n)}), {n['camera_only']} seen by "
                      f"our camera only, {n['osm_only']} in OpenStreetMap only. {sh['note']}"),
                osm={"mode": mode, "counts": n, "rule": sh["rule"], "fetched": sh.get("fetched"), "points": points})
     if not rows:
@@ -577,8 +577,17 @@ def osm_answer(bundle, text, mode, osm_at, street=None, phrase=None, scoped=None
     return out
 
 
+def _names(n):
+    """ui-polish-2: say plainly whether the paired businesses share a name ("names didn't match" for Ward 29's 9 pairs)"""
+    if not n["matched"]:
+        return "none"
+    if not n["matched_same_name"]:
+        return "names didn't match"
+    return f"{n['matched_same_name']} of {n['matched']} with the same name"
+
+
 OSM_TEXT = {"camera_only": "Businesses not in OpenStreetMap", "osm_only": "OpenStreetMap businesses not seen by the camera",
-            "matched": "Businesses in OpenStreetMap"}
+            "matched": "Businesses near an OpenStreetMap point"}
 
 
 def run_filters(bundle, filters, gaps_at=None, near_at=None, prio_at=None, osm_at=None):

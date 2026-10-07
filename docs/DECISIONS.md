@@ -2214,3 +2214,88 @@ review state verified clean afterwards: 404 waiting, every decision undone). **R
 ALL PASSED, 288 checks each, 0 areas needed the retry** (`run-2026-10-04_1834.log`, `run-2026-10-04_1855.log`). Expected
 answers: none changed; added (intended) the question "Businesses not in OpenStreetMap" → 138 and, per area / street, GIS
 layer counts = the Excel sheets.
+
+
+## 2026-10-07 — UI polish 2 (branch ui-polish-2)
+
+### D59. Projection removed; usable street list; short photo tags + key; smaller photo; Review asks a question with a corrected value; OSM "near each other"; OSM floors only where tagged; installable requirements
+**1. City-scale projection removed** (D58 §2): Hood section, PDF page-6 block and Excel rows, `GET /projection`,
+`app/projection.py`, `test_city_projection_is_a_range_from_our_runs`, `data/cache/projection_city_km.json`, README /
+manual-check mentions. PDF page 6 is "How sure the counts are" (floor confidence + OSM cross-checks); Ward 29 still 19 pages.
+
+**2. Street panel list.** Sentences ≤ 22% of the panel (was 42%); "Drive this street" + a single "Street report" menu button
+(PDF · Excel · GeoJSON · Shapefile; the area panel keeps its four buttons) in one row; the list has `min-height: 220px`.
+1366×768: 5 rows visible on 2nd Street, Gandhi Nagar and Sathy Main Road (was 1–2). A tab click selects it **and** opens the
+full list (`StreetListSheet`) beside the panel: same tabs, wider table (use, floors, review, ID columns appear), × / Esc
+(capture listener: closes only the sheet). "Open the full list" in the list footer too. Tab names unchanged (Buildings ·
+Lights & poles · Businesses).
+
+**3. Photo tags** (`lib/photoTags.ts`). B / P / S / L per kind, numbered left to right when a kind repeats; the target
+(orange) box has no tag; linked boxes ("part of this building") get a light-orange tag. Tags are 11 px on screen whatever the
+photo size (`EvidencePhoto` measures its width → `PhotoScale`), placed with the existing `placeLabels` (label height now a
+parameter, 15 px here). Confidence only on hover / tap (a tooltip over the tag), never printed on the photo. `PhotoKey` under
+the photo: "Orange = this building · S = part of this building · B building · P pole · S sign · L streetlight", then one entry
+per tag ("S2 = shop sign 'EXALT CUTS', part of this building · 35%"; text = the sign box's OCR reading, raw), max 3 lines then
+scroll. Box ↔ key highlight both ways (white outline, others faded; key entry underlined); keyboard focus highlights only
+when focus-visible. The evidence API adds `text` to sign boxes (`ocr.json` by crop file) — display only; **the target box
+choice is unchanged** (test: one target, same `target: "box"`). Under the Hood's example sheet uses the same tags + key.
+
+**4. Photo size.** `EvidenceViews maxPhoto`: 300 px (drawer, was the full 378 px column), 400 px (Review, was ~568 px).
+Photo + key + date / Front / Sign / Live 360° row fit at 1366×768 in both.
+
+**5. Review = a question** (`lib/reviewQuestions.ts`, `components/ReviewAsk.tsx`). Yes = approve, No = reject (statuses,
+counts, filters and the map keep their meaning; buttons and history say "Answered Yes / No", "Sent back"). Keys: A yes,
+R no (a value question opens the No box first; Enter saves, Esc cancels), E send back, U undo. Questions:
+
+| reason (pipeline / as listed) | question | value after No |
+|---|---|---|
+| high-severity / attribute discrepancy, no record (`missing_record`) — "Not in the register" | Is there a building here that's missing from the register? | — |
+| attribute discrepancy `extra_floor` — "Extra floor vs register" | The register says N floors, the photo suggests M floors. Is the photo right? | floors |
+| attribute discrepancy `use_change` — "Use differs from register" | The register says X, the photo suggests Y. Is the photo right? | use |
+| high-severity `location_shift` — "Register pin in the wrong place" | The register's pin for this building is N m away from it. Is the pin in the wrong place? | — |
+| high-severity `area_understated` — "Bigger than recorded" (not in today's queue) | The register says A m², the map outline is B m². Is the building bigger than recorded? | — |
+| several register differences (Vadakku Masi Veethi: pin + use) | The photo and the register differ. Is the photo right? + one line per difference | floors / use when among them |
+| asset `type_mismatch` (not in today's queue) | The register lists this as a X; the photo shows a Y. Is the photo right? | — |
+| floor count low confidence — "Floor count is an estimate" | Does this building have N floors? | floors |
+| use low confidence / not known (not in today's queue) | Is this building X? | use |
+| name read by VLM only — "Shop name read by the AI model only" | Does the sign say "…"? | sign name |
+| building seen from one view only (alone) — "Seen from one camera position only" | Does the orange box show this building? (else a "look closely" hint) | — |
+| single-detection asset — "Seen in one photo only" | Is there a pole / streetlight in the orange box? | — |
+| anything else | "<reason>. Is that right?" | — |
+
+With a register question and a floor estimate on one item (Trichy, 2 items), Yes / No answers the register question and the
+floor check shows as "Also, if you can tell: …" (its value can be given after No). Counts in the data (9 areas, 404 items;
+Ward 29 218): single-detection 290 (157), one view 46 (29), high-severity 39 (27), attribute 28 (14), floor estimate 27 (4),
+VLM-only name 1 (1).
+
+**Storage** (migration 009, additive, nullable): `review_items.corrected jsonb`, `review_events.corrected` +
+`previous_corrected`. Written by the same DECIDE / UNDO statements (the history still cannot miss a change); Undo restores
+`previous_corrected`. `PATCH /review/{id}` field `corrected` = JSON `{floors: 0–60 | use: one of 7 | name: 1–120 chars}`
+(422 otherwise; not with an appeal). **Note rule changed:** a No may carry its own note (`noNote` in the browser, never the
+appeal box's text); a Yes may not; a photo is still appeal-only. The corrected value is never written over the AI's value or
+the register: "Reviewer says: 3 floors" in the drawer (under our value), Review's status line and history, and the report /
+Excel / GIS Review column ("Rejected — reviewer says: 3 floors"). After each answer one line says what was saved
+(`outcomeLine`, e.g. "Saved: reviewer says it has 3 floors, not 2."). When the last item of a filtered queue is answered,
+it stays on screen (marked "outside the current filter") so the line stays readable. Review's right column now has the
+answer right under the question and "what we saw"; the mini-map and "Show on the map" follow.
+
+**6. OpenStreetMap shops:** "Matched (same place)" → "Near each other (location only)" (Hood, Trust, question note and its
+"understood" line, PDF chart / paragraph, Excel rows and summary, GIS `Result`, the buildings' "In OpenStreetMap" column:
+"near an OpenStreetMap point (…, 13 m; location only, names don't match)"), with "names didn't match" when none do (Ward 29
+0 of 9). API keys unchanged (`matched`, `matched_same_name`). Counts unchanged: 147 / 14 / 9 / 138 / 5.
+
+**7. OSM floor levels:** drawer row only when the building carries `building:levels` (Ward 29 2 of 381; the "OpenStreetMap
+has no floor count" / "not loaded" lines are gone); Excel / GIS column blank instead of "not tagged" / "not loaded"; Hood:
+one line "OpenStreetMap has floor counts for 2 of 381 buildings — too few to compare." (fewer than 20 compared = too few;
+Trust keeps the full comparison).
+
+**8. Requirements.** `../pipeline` replaced by a comment: pip resolves it from the current folder (repo root → invalid) and
+`pipeline/` has no pyproject (backend\ → not installable); `geo_cascadia` comes from `sys.path` in `app/main.py`. Fresh
+3.12 venv: exit 0 from the repo root and from `backend\`, `app.main` + `geo_cascadia` import (before: exit 1 from both).
+
+**Found, not fixed (needs new Street View photos):** about a third of Ward 29's stored panoramas are no longer served by
+Google (free metadata check, 5 of 12 sampled ZERO_RESULTS, incl. "transport india pvt ltd" `w1236978849`, 2nd Street,
+Gandhi Nagar): those photos show "No Street View image for this view". The before / after uses hitech gears
+(`w1252503923`, Sathy Main Road, 17 boxes, 11 linked signs) whose panorama still loads.
+
+**Checks (7 Oct).** Backend 469 passed / 1 skipped (457 − the removed projection test + 13 new in `test_ui_polish2.py`; `test_p5` note rule updated, intended); typecheck, build, test:ui 22 (4 new), check:data, audit (both themes) pass; fresh 3.12 venv: install from the repo root and `backend\` exit 0, 8 pure tests pass in it. Live: API round trip (No + `{"floors": 3}` + note → undo → row identical except `updated_at`; bad values 422), Excel Review cell, Ward 29 PDF 19 pages with no projection / "same place"; screenshots `web/scripts/ui-polish2-shots.ts` → `docs/screenshots/ui-polish-2/` (before / after, both themes; report pages in `report/`). Regression (production preview, output to a file): run 1 ALL PASSED, 291 checks, 0 retries (`run-2026-10-07_1754.log`); run 2 one FAIL — "no console errors" on Vadakku Masi Veethi: `ERR_CONNECTION_CLOSED`, then `ERR_HTTP2_PROTOCOL_ERROR` on the retry (an external host's connection dropping; every functional check passed, 289 ok, `run-2026-10-07_1812.log`); run 3 ALL PASSED, 291 checks, 0 retries (`run-2026-10-07_1833.log`). Expected answers: none changed; added (intended) section B's No + corrected value + undo (history +4 instead of +2; the snapshot now includes `corrected`) and the question "Businesses near an OpenStreetMap point" → 9.

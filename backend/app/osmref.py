@@ -8,7 +8,7 @@ nothing about the real street. It is shown as a cross-check, never as the truth,
   OpenStreetMap shop / office / business-amenity points within SCOPE_M of an analysed street (the same "along it" distance
   as the lighting priority, D54). The points are the app's local copy (D53); their names and tags come from one
   Overpass look-up by id per area (the copy keeps geometry only), saved in data/areas/<slug>/osm_tags.json.
-  Matched = within MATCH_M (to the building's outline, 0 inside; to a sign business's point), one-to-one, a name that
+  Paired ("near each other, location only"; the API key stays `matched`) = within MATCH_M (to the building's outline, 0 inside; to a sign business's point), one-to-one, a name that
   `textmatch.same_business` accepts first, then the nearest.
 - Levels (extras 4): OpenStreetMap's building:levels for the analysed buildings (the same osm_tags.json look-up, by the
   buildings' own OSM ids). Shown next to our count as a cross-check; our count is never changed.
@@ -215,8 +215,8 @@ def shops(bundle, tags, street=None):
         "rule": (f"Our businesses: buildings with a shop name read clearly or a commercial / shop + home use, plus businesses "
                  f"read from signs with no analysed building. OpenStreetMap: shop, office and business amenity points within "
                  f"{SCOPE_M} m of an analysed street (schools, places of worship, toilets, bus stops, parking and ATMs left out). "
-                 f"Same place = within {MATCH_M} m (to the building outline), one to one; a matching name decides between "
-                 f"candidates, then the nearest."),
+                 f"Near each other = within {MATCH_M} m (to the building outline), one to one; a matching name decides between "
+                 f"candidates, then the nearest. This pairs by location only: it does not mean the same business."),
     }
 
 
@@ -246,7 +246,8 @@ def shop_status_by_id(sh):
     """{building id or business id: 'in OpenStreetMap' / 'not in OpenStreetMap'} for the report and Excel column"""
     if not sh or not sh.get("available"):
         return {}
-    out = {m["camera"]["id"]: f"in OpenStreetMap ({m['osm']['name'] or m['osm']['kind']}, {m['distance_m']:g} m)" for m in sh["matched"]}
+    out = {m["camera"]["id"]: (f"near an OpenStreetMap point ({m['osm']['name'] or m['osm']['kind']}, {m['distance_m']:g} m; location only, "
+                               + ("same name)" if m["same_name"] else "names don't match)")) for m in sh["matched"]}
     out.update({c["id"]: "not in OpenStreetMap" for c in sh["camera_only"]})
     return out
 
@@ -328,7 +329,7 @@ def floor_confidence(fl, model_card=None):
 OSM_WORD = re.compile(r"\b(open\s*street\s*map|osm)\b", re.I)
 OSM_MODES = {"camera_only": "seen by our camera, not in OpenStreetMap",
              "osm_only": "in OpenStreetMap, not seen by our camera",
-             "matched": "in OpenStreetMap and seen by our camera (same place)"}
+             "matched": "near an OpenStreetMap point (location only)"}
 
 
 def extract_question(text):

@@ -243,6 +243,13 @@ def _exact_view(D, idx, v, label, stored_box=None, target_cls=None, footprint=No
     links = D.sign_links(idx["slug"]) if link_fp else {}
     lk = lambda d: bool(link_fp) and d["cls"] == "signboard" and bool(d.get("crop")) and links.get(os.path.basename(d["crop"])) == link_fp
     boxes = [_box(d, target=d is t, linked=lk(d)) for d in sorted(dets, key=lambda d: -d["conf"])]
+    # ui-polish-2: the text read from each sign box (ocr.json, by its crop file) for the photo key ("S1 = shop sign '…'");
+    # display only, the target choice above is unchanged
+    ocr = D.ocr_best(idx) if any(d["cls"] == "signboard" and d.get("crop") for d in dets) else {}
+    for bx, d in zip(boxes, sorted(dets, key=lambda d: -d["conf"])):
+        txt = (ocr.get(os.path.basename(d["crop"])) or [None])[0] if d["cls"] == "signboard" and d.get("crop") else None
+        if txt:
+            bx["text"] = str(txt).strip()[:80]
     if t is None and stored_box:
         boxes.append(_box({"cls": target_cls or "building", "conf": 1.0, **stored_box}, target=True))
     return {**base, "source": "exact", "boxes": boxes, "target": "box" if t is not None else ("record_box" if stored_box else "none"),

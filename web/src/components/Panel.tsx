@@ -2,8 +2,8 @@
  *  out", and shows exactly one of them. Plain language; technical detail sits behind "How do we know?" (D16). */
 import { useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowRight, Inbox, Route, X } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { ArrowRight, Inbox, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { GapProps } from '@/api/types'
 import { KPI_DEFS, kpis, matchAsset, matchBuilding, matchUnmapped } from '@/lib/derive'
 import { shortArea } from '@/lib/labels'
@@ -202,11 +202,17 @@ function KpiPanel() {
   )
 }
 
-/** A selected street: what stands out on it, in sentences, then its buildings / lights / businesses */
+type StreetTab = 'building' | 'asset' | 'unmapped'
+
+/** A selected street: what stands out on it, in sentences, then its buildings / lights / businesses.
+ *  ui-polish-2: the sentences take at most 22% of the panel and the drive / report buttons share one row, so
+ *  the list keeps several rows at 1366×768; a tab click also opens the whole list in a larger view (StreetListSheet). */
 function StreetPanel() {
   const { records, gaps, streets, area } = useAreaData()
   const street = useUi((s) => s.filter.street)!
-  const [tab, setTab] = useState<'building' | 'asset' | 'unmapped'>('building')
+  const [tab, setTab] = useState<StreetTab>('building')
+  const [full, setFull] = useState(false)
+  useEffect(() => { setFull(false) }, [street])
   const act = useSentenceAction()
   const gp = useMemo(() => gaps.map((g) => g.props as GapProps), [gaps])
   if (!records) return <Loading />
@@ -217,21 +223,53 @@ function StreetPanel() {
   return (
     <>
       <PanelHead eyebrow="Street" title={street} sub={props?.length_m ? <><span className="t-data">{fmt.format(Math.round(props.length_m))} m</span> analysed</> : undefined} />
-      <div className="max-h-[42%] shrink-0 overflow-y-auto">
+      <div className="max-h-[22%] shrink-0 overflow-y-auto">
         {streetSentences(records, street, gp).map((s) => <SentenceRow key={s.key} s={s} onClick={s.action ? () => act(s) : undefined} />)}
       </div>
-      <div className="flex items-center gap-2 px-5 py-3 rule-t">
+      <div className="flex shrink-0 items-center gap-2 px-5 py-2 rule-t">
         <DriveButton street={street} />
-        <span className="t-small ink3 flex items-center gap-1"><Route className="size-3.5" /> through the real camera stops</span>
+        <ReportButton area={area} street={street} compact className="ml-auto" />
       </div>
-      <ReportButton area={area} street={street} className="px-5 pb-3" />
-      <div className="flex gap-1 px-5 pb-2" role="tablist" aria-label="Show">
+      <div className="flex shrink-0 items-center gap-1 px-5 pb-1.5 pt-1.5 rule-t" role="tablist" aria-label="Show">
         {([['building', `Buildings ${B.length}`], ['asset', `Lights & poles ${A.length}`], ['unmapped', `Businesses ${U.length}`]] as const).map(([k, l]) => (
-          <button key={k} role="tab" aria-selected={tab === k} aria-pressed={tab === k} onClick={() => setTab(k)} className="btn h-7">{l}</button>
+          <button key={k} role="tab" aria-selected={tab === k} aria-pressed={tab === k} title="Open the whole list in a larger view" onClick={() => { setTab(k); setFull(true) }} className="btn h-7 whitespace-nowrap px-2">{l}</button>
         ))}
       </div>
-      <FindingsTable kind={tab} rows={tab === 'building' ? B : tab === 'asset' ? A : U} />
+      <div className="flex min-h-[220px] flex-1 flex-col" aria-label="Street list">
+        <FindingsTable kind={tab} rows={tab === 'building' ? B : tab === 'asset' ? A : U} onExpand={() => setFull(true)} />
+      </div>
+      {full && <StreetListSheet street={street} tab={tab} setTab={setTab} rows={{ building: B, asset: A, unmapped: U }} onClose={() => setFull(false)} />}
     </>
+  )
+}
+
+/** ui-polish-2: the street's list in a larger view beside the panel: the same tabs and rows (wider, so use, floors,
+ *  review and ID show), easy to scroll; × or Esc closes it (Esc closes only this, not the panel underneath) */
+function StreetListSheet({ street, tab, setTab, rows, onClose }: { street: string; tab: StreetTab; setTab: (t: StreetTab) => void
+  rows: Record<StreetTab, Parameters<typeof FindingsTable>[0]['rows']>; onClose: () => void }) {
+  const close = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    close.current?.focus()
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopImmediatePropagation(); e.preventDefault(); onClose() } }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [onClose])
+  const label = (k: StreetTab) => (k === 'building' ? `Buildings ${rows.building.length}` : k === 'asset' ? `Lights & poles ${rows.asset.length}` : `Businesses ${rows.unmapped.length}`)
+  return (
+    <motion.div role="dialog" aria-modal="false" aria-label={`Full list: ${street}`} initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.18 }}
+      className="surface pointer-events-auto fixed z-40 flex flex-col rounded-[var(--ns-r-panel,10px)] shadow-2xl"
+      style={{ right: PANEL_W + 12, top: 72, bottom: 40, width: `min(720px, calc(100vw - ${PANEL_W + 100}px))`, boxShadow: '0 0 0 1px var(--ns-line-strong), 0 18px 48px rgb(0 0 0 / 0.35)' }}>
+      <header className="flex items-start justify-between gap-3 px-5 pb-2 pt-4">
+        <div className="min-w-0"><div className="t-micro">Full list</div><h2 className="t-title mt-1 truncate">{street}</h2></div>
+        <button ref={close} className="btn btn-icon" onClick={onClose} aria-label="Close the full list (Esc)"><X /></button>
+      </header>
+      <div className="flex gap-1 px-5 pb-2" role="tablist" aria-label="Show">
+        {(['building', 'asset', 'unmapped'] as const).map((k) => (
+          <button key={k} role="tab" aria-selected={tab === k} aria-pressed={tab === k} onClick={() => setTab(k)} className="btn h-8">{label(k)}</button>
+        ))}
+      </div>
+      <FindingsTable kind={tab} rows={rows[tab]} />
+    </motion.div>
   )
 }
 
