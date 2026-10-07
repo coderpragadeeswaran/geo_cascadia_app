@@ -246,4 +246,96 @@
 
 ---
 
+## 7 Oct 2026 · D61 — Are re-issued photos the same photo? Checked with the detector: no. No boxes restored; the check runs by itself
+
+### What
+1. **The question.** D60 found 303 Ward 29 photo references (and 2 in Trichy) whose Google panorama IDs are retired, each with
+   a replacement 0–5 m away from the same month, and called it "the same photo under a new ID". Before drawing the analysis'
+   boxes on the replacements, this was tested with the real detector.
+2. **The answer: no.** The replacements are neighbouring photos from the same drive, not the analysis photo. **No box is
+   restored**; those photos keep showing Google's current photo without boxes, as since D60.
+3. **The wording that said otherwise is corrected.** Under such a photo: "… Taken on the same drive, less than 1 m from the
+   analysis camera: a neighbouring photo, not the one the analysis used." (was "taken from the same spot: Google now serves it
+   under a new ID"). Under the Hood: "303 of 852 analysis photos are no longer served by Google; Google's current photos taken
+   near the same spots are shown instead, without boxes (taken on the same drive, up to 5 m from the analysis cameras:
+   neighbouring photos, not the ones the analysis used; re-running the detector, the saved boxes came back on 3 of 68 checked
+   panoramas)." Drive's "Current photo" tooltip says the same.
+4. **The monthly photo check now does this test by itself** (`tools\check_photos.py`) for every newly retired panorama, and
+   lets the app draw the saved boxes (with the note "Same photo under a new Google ID") only where the test passes.
+5. **Building drawer:** "1 building · 6 sign boxes in 4 photos linked to it (light-orange S tags on the photos; the same sign is
+   often boxed in several photos, and some boxes aren't shop signs)". It used to say "6 shop signs linked to it … marked
+   'part of this building' on the photos", which counted boxes as signs and described labels that no longer exist.
+6. **`/design-preview` removed.** The old design reference page was linked from nowhere and still asked Google for retired
+   panoramas.
+
+### Why
+- Drawing old boxes on a different photo would put "this building" on the wrong thing. The owner asked for proof first.
+- "The same photo under a new ID" was an assumption (same month + a few metres); the test shows it is false.
+- One sign seen from three cameras is three boxes, and a 20-photo check (D47) found 6 of 20 sign boxes aren't shop signs.
+
+### How it works
+- **The rule, fixed before any photo was fetched** (`backend/app/sameimage.py`): fetch the replacement at the stored heading,
+  pitch and field of view; run the production detector (YOLOv8s, the owner's weights, on the laptop CPU) exactly as the
+  pipeline does; match boxes per class one-to-one (Hungarian, by overlap). A photo is the same image when at least 2 saved
+  boxes of confidence ≥ 0.5 exist, the matched boxes overlap with median IoU ≥ 0.80, ≥ 80 % of those confident boxes are found
+  again (IoU ≥ 0.5) and nothing is shifted by more than 6 px. Go / no-go: restore only if ≥ 90 % of the retired photos pass and
+  their overlap is within 0.05 of still-served control photos; otherwise nothing at all.
+- **The study** (`tools\verify_same_image.py`): 40 retired references spread over 7 streets and 6 kinds (poles / lights,
+  building fronts, signs, best photos, nearest cameras, business signs) and 10 still-served controls.
+- **The monthly check** (`tools\check_photos.py` → `tools\detect_photos.py` in a separate CPU venv; photos only in memory): one
+  spot-check photo per newly retired panorama (the view with the most confident saved boxes; up to 3 if it can't tell), then
+  the per-area gate (≥ 90 % of judged panoramas pass). Verdicts and one row per retired photo reference (old → new ID, same
+  image yes / no) are kept in `data/areas/<slug>/photo_check.json` and re-used while Google's replacement ID stays the same,
+  so a re-run fetches nothing. Without the detector, new retirements stay "not checked" (no boxes).
+- **App:** the API (`photos.same_images`) marks a replacement `same_image` only for a passed panorama in an area whose gate
+  passed; the browser then shows it under the new ID at the stored view, with the boxes, tags and key (`photoSwap` state
+  `same`). Today no photo is in that state.
+- **Sign grouping, tried and dropped:** grouping boxes of one sign by where their sight lines meet the outline would put 26 %
+  (Ward 29) / 13 % (Trichy) of box pairs from one photo — different signs by definition — within 1 m of each other; identical
+  read text joins only 103 pairs. Not reliable, so the drawer says "sign boxes".
+
+### Files changed
+- Backend: new `app/sameimage.py`; `app/photos.py` (`same_images`, `gone_panoramas`, `check_area` references and counts, the
+  Hood note), `app/main.py` (evidence and `/photos` pass the verdicts). Tests: new `tests/test_box_restore.py` (12).
+- Tools: new `tools/detect_photos.py`, `tools/verify_same_image.py`; `tools/check_photos.py` (spot-check, gate, compact file).
+- Web: `lib/photoSwap.ts` (state `same`, `showsBoxes`, `shownView`, corrected note), `components/EvidencePhoto.tsx`,
+  `EvidenceViews.tsx`, `ExampleSheet.tsx`, `DrivePanel.tsx`, `EvidenceDrawer.tsx` (sign-box line), `api/types.ts`, `main.tsx`;
+  removed `design/DesignPreview.tsx`, `NsDrive.tsx`, `NsShell.tsx`, `NsStory.tsx`, `NsParts.tsx`, `nsLayers.ts`,
+  `design/data/ward29-sathy-drive.json`; scripts `test-ui.ts` (1 new test, 1 updated), new `box-restore-shots.ts`.
+- Data: `data/areas/*/photo_check.json` (verdicts, gate, references). Docs: this entry, DECISIONS D61, README, manual checks
+  72–75. `backend/.env` (git-ignored) gained `DETECTOR_PYTHON` / `DETECTOR_WEIGHTS`. No change to the pipeline, the worker, the
+  analysis results or the database.
+
+### Key numbers
+- **Study (40 retired, 10 controls):**
+
+  | | same / different / can't tell | boxes found again | median overlap (IoU) | typical sideways shift | the object's own box |
+  |---|---|---|---|---|---|
+  | retired → replacement | 0 / 34 / 6 | 120 of 233 | 0.49 | 20 px (up to 89) | median IoU 0.17 |
+  | still served (control) | 8 / 1 / 1 | 63 of 63 | 1.00 | 0 px | 1.00 |
+
+  Pass rate 0 % (needed 90 %) → **nothing restored.** The replacements were 0.4–4.9 m from the old cameras.
+- **Every retired panorama (monthly check, 7 Oct):** Ward 29 69 → 65 different, 3 pass alone, 1 can't tell → gate 3 of 68
+  (4 %): no restore. The 3 are 0.1 / 0.4 / 1.2 m away with overlap 0.83–0.88 — close neighbours, not identical (1.00). Trichy
+  1 → different.
+- **Cost:** 122 Street View photos (50 study + 72 spot-check) = $0.85 at Google's list price; Amazon Nova (AWS) $0. Metadata
+  calls 0 (cache). A re-run of the check fetched 0 photos. The screenshot runs loaded about 20 more photos in the browser.
+- **Checks:** backend 496 passed, 1 skipped (12 new in `test_box_restore.py`); typecheck, build, test:ui 24 (1 new; the D60 wording test updated, intended), check:data and the audit (both themes) pass. Regression (production preview, output to a file): ALL PASSED, 291 checks, 0 retries (`run-2026-10-07_2302.log`); no expected answer changed. Live: the evidence API, `GET /photos/{id}` and the Hood note called against the running API (no `same_image` anywhere, the new note).
+- **Screenshots** (`docs/screenshots/box-restore/`, Night and Daylight, 1366×768, before = main's frontend + API):
+  `t-w1236978849` (+ `-sign`) transport india, `x-w1236978077` (one of the 3 panoramas that pass alone: still no boxes),
+  `w-w1252503923` hitech gears (the sign-box line), `h-photo-note` (Hood).
+
+### Limits
+- The test shows the saved boxes don't fit the replacements; it does not measure how far each replacement moved the view.
+- The 3 panoramas that pass alone show the photo thresholds can admit a very close neighbouring frame; the area gate stops
+  them. A stricter photo rule (e.g. overlap ≥ 0.95) would separate them more cleanly; not applied (tuning after the fact).
+- The monthly check needs the detector venv and the weights on the laptop; without them new retirements stay without boxes.
+
+### Lines that are now out of date in 00–06
+- D60's wording "Same capture month, taken from the same spot: Google now serves it under a new ID" (quoted in this file's
+  D60 entry and in DECISIONS D60) is wrong: they are neighbouring photos (D61).
+- Anything naming `/design-preview` as the design reference route (DESIGN.md, D15): the page is gone; the tokens remain.
+
+---
+
 [← 06 Updates](06_updates.md) · [Start here](00_START_HERE.md) · (this is the last file) →

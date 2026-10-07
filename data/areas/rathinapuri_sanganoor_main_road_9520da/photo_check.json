@@ -11,5 +11,16 @@
  "panoramas_gone": 0,
  "panoramas_gone_current_available": 0,
  "max_moved_m": null,
- "source": "Google Street View metadata (free), by panorama id; for a gone one, by location within 25 m of its camera (outdoor)"
+ "gone_same_image": 0,
+ "panoramas_gone_same_image": 0,
+ "source": "Google Street View metadata (free), by panorama id; for a gone one, by location within 25 m of its camera (outdoor)",
+ "same_image_rule": "same capture month, <= 5 m from the old camera, and the production detector re-run on the replacement photo (same heading, pitch and field of view) finds the saved boxes again: median IoU >= 0.8, >= 80% of the saved boxes with confidence >= 0.5 found at IoU >= 0.5, no shift over 6 px; at least 2 such boxes to judge",
+ "same_image_restore": {
+  "restore": false,
+  "passed": 0,
+  "judged": 0,
+  "rule": ">= 90% of the judged retired panoramas must pass, else none is restored"
+ },
+ "same_image": {},
+ "references": []
 }

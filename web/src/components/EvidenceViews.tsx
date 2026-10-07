@@ -13,7 +13,7 @@ import { Fact, HowWeKnow } from './HowWeKnow'
 import { placeLabels } from '@/lib/labelLayout'
 import { CLS_LETTER, CLS_NOUN, LETTER_KEY, tagBoxes } from '@/lib/photoTags'
 import { measureText, useFontsReady } from '@/lib/textWidth'
-import { swapOf } from '@/lib/photoSwap'
+import { shownView, showsBoxes, swapOf } from '@/lib/photoSwap'
 
 /** overlay colours are fixed (they sit on photos, not on the Night / Daylight surface) */
 export const CLS_COLOR: Record<EvidenceBox['cls'], string> = { building: '#cfd6ea', pole: '#ffffff', lamp_head: '#ffc27a', signboard: '#7dcad6' }
@@ -154,8 +154,8 @@ export function EvidenceViews({ kind, id, at, target, maxPhoto = 300 }: {
   const toggle = (c: string) => setHidden((h) => { const n = new Set(h); if (n.has(c)) n.delete(c); else n.add(c); return n })
   // D60: the analysis photo is gone from Google: its current photo there (no boxes), or none at all
   const sw = swapOf(v.served, v.current, v.date)
-  const ok = sw.state === 'served'
-  const live = sw.state === 'swapped' && sw.current ? sw.current : ok ? v : null
+  const ok = showsBoxes(sw)                 // D61: also the same photo under a new Google ID
+  const live = sw.state === 'swapped' && sw.current ? sw.current : ok ? shownView(sw, v) : null
   return (
     <div>
       <div style={{ maxWidth: maxPhoto }}>
@@ -205,7 +205,9 @@ export function EvidenceViews({ kind, id, at, target, maxPhoto = 300 }: {
         {v.target === 'box' && v.aim_offset_deg != null && <Fact k="Which box">The box closest to where the camera was aimed: {v.aim_offset_deg}° from the middle of the photo</Fact>}
         {v.note && !(v.source === 'projected' && v.target === 'box') && <Fact k="Note">{v.note}</Fact>}
         <Fact k="Taken" hint="panorama capture month (Google)">{monthText(v.date) ?? 'Date not stored for this photo'}</Fact>
-        <Fact k="Photo ID" hint="Street View panorama"><span className="t-data">{v.pano_id}</span></Fact>
+        {sw.state === 'same' && sw.current ? (
+          <Fact k="Photo ID" hint="re-issued by Google"><span className="t-data">{v.pano_id}</span> (analysis) is now served as <span className="t-data">{sw.current.pano_id}</span>: same capture month, {sw.current.moved_m} m apart, and the detector re-run on it found the saved boxes again, so they are drawn as before.</Fact>
+        ) : <Fact k="Photo ID" hint="Street View panorama"><span className="t-data">{v.pano_id}</span></Fact>}
       </HowWeKnow>
       )}
     </div>

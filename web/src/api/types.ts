@@ -243,7 +243,9 @@ export interface EvidenceViewData {
   current?: CurrentPhoto | null
 }
 /** D60: the photo shown instead of a stored one Google no longer serves */
-export interface CurrentPhoto { pano_id: string; heading: number; pitch: number; fov: number; date: string | null; lat: number; lon: number; moved_m: number }
+export interface CurrentPhoto { pano_id: string; heading: number; pitch: number; fov: number; date: string | null; lat: number; lon: number; moved_m: number
+  /** D61: the verified same image under a new id (stored heading / pitch / fov; the saved boxes are drawn) */
+  same_image?: boolean }
 export interface PhotoStatus { pano_id: string; served: boolean | null; current: CurrentPhoto | null; date: string | null }
 /** P8: photo ages (GET /areas/{slug}/imagery), from the capture months the pipeline stored; nothing fetched */
 export interface ImageryObject { date: string | null; newest: string | null; oldest: string | null; outdated: boolean }

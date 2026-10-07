@@ -14,6 +14,7 @@ import { flyTo, OBJECT_TILT } from '@/map/camera'
 import { useDriveData, useDriveStop, viewHeading, type DriveBranch } from '@/map/drive'
 import { useUi, type DriveView } from '@/store/ui'
 import { staticUrl } from './EvidencePhoto'
+import { SAME_NOTE } from '@/lib/photoSwap'
 import { StatusDot } from './FindingsTable'
 
 const PASS_M = 20
@@ -131,8 +132,11 @@ function Frame({ branch, i, view }: { branch: DriveBranch; i: number; view: Driv
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: REDUCED ? 0 : 0.3 }} />}
       </AnimatePresence>
       {pano === null && <div className="t-small absolute inset-0 flex items-center justify-center px-6 text-center text-white/75">No Street View photo available here any more</div>}
-      {swapped && pano && <span className="t-small absolute left-2 top-2 rounded-[var(--ns-r-control)] px-1.5 py-0.5 text-[12.5px] text-white" style={{ background: 'rgb(0 0 0 / 0.72)' }}
-        title="Google no longer serves the photo used in the analysis; this is its current photo from the same spot">Current photo{monthText(qs.data?.current?.date) ? ` · ${monthText(qs.data?.current?.date)}` : ''}</span>}
+      {swapped && pano && (qs.data?.current?.same_image
+        ? <span className="t-small absolute left-2 top-2 rounded-[var(--ns-r-control)] px-1.5 py-0.5 text-[12.5px] text-white" style={{ background: 'rgb(0 0 0 / 0.72)' }}
+          title="Google re-issued the analysis photo under a new ID (checked: same capture month, same spot, the detector finds the same boxes)">{SAME_NOTE}</span>
+        : <span className="t-small absolute left-2 top-2 rounded-[var(--ns-r-control)] px-1.5 py-0.5 text-[12.5px] text-white" style={{ background: 'rgb(0 0 0 / 0.72)' }}
+          title="Google no longer serves the photo used in the analysis; this is a photo Google took nearby (same drive), not the analysis photo">Current photo{monthText(qs.data?.current?.date) ? ` · ${monthText(qs.data?.current?.date)}` : ''}</span>)}
       <figcaption className="t-data absolute inset-x-0 bottom-0 flex justify-between px-2.5 py-1.5 text-[13px] text-white/90" style={{ background: 'linear-gradient(transparent, rgb(0 0 0 / 0.72))' }}>
         <span>{view} · {Math.round(viewHeading(stop.heading, view))}°</span><span>Imagery © Google</span>
       </figcaption>
