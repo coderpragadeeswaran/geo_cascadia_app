@@ -115,8 +115,11 @@ def test_report_numbers_equal_the_app(api, slug):
     hood = api.get(f"/areas/{slug}/hood").json()
     rt = hood["routing"]
     sv, ai = rt["street_view"]["usd"], rt["totals"]["usd"]
-    assert report.usd_text(sv + ai) in c["cost"]["line"] and report.usd_text(sv) in c["cost"]["line"]
-    assert report.fmt(rt["street_view"]["photos"]) in c["cost"]["line"] and report.usd_text(ai) in c["cost"]["line"]
+    # D60: Google and AWS on separate lines, no combined total; the India billing line under the Google one
+    L = c["cost"]["lines"]
+    assert L[0].startswith("Street View photos (Google): " + report.usd_text(sv)) and report.fmt(rt["street_view"]["photos"]) in L[0]
+    assert L[1] == hood["billing"]["line"] and L[2].startswith("Cloud AI (Amazon Nova Lite, AWS): " + report.usd_text(ai))
+    assert report.usd_text(sv + ai) not in c["cost"]["line"]
     im = hood["imagery"]
     assert c["sources"][0][1].startswith(f"taken {report.month_text(im['oldest'])} – {report.month_text(im['newest'])}; "
                                          f"{im['older_than_cutoff']} of {im['camera_stops_dated']}")

@@ -179,8 +179,10 @@ function JobDetail({ id, online, onOpen, onDelete }: { id: string; online: boole
         <div className="mt-4">
           <div className="t-micro mb-1">Estimate</div>
           <dl className="t-small grid grid-cols-[120px_1fr] gap-y-1">
-            <dt className="ink3">Photos</dt><dd>about {fmt.format(est.street_view_images)} Street View images{est.street_view_usd != null ? ` · about $${est.street_view_usd.toFixed(2)}` : ''}</dd>
-            <dt className="ink3">Total</dt><dd>{est.total_usd != null ? `about $${est.total_usd.toFixed(2)}` : '—'}{est.cap_usd != null ? ` · cost cap $${est.cap_usd.toFixed(2)}` : ''}</dd>
+            {/* D60: Street View (Google) and cloud AI (AWS) on separate lines, no combined total */}
+            <dt className="ink3">Street View</dt><dd>about {fmt.format(est.street_view_images)} Google photos{est.street_view_usd != null ? ` · about $${est.street_view_usd.toFixed(2)} at list price` : ''}</dd>
+            <dt className="ink3">Cloud AI</dt><dd>{est.cloud_ai_usd != null ? `Amazon Nova (AWS) · about $${est.cloud_ai_usd.toFixed(est.cloud_ai_usd < 0.01 ? 4 : 2)}` : '—'}</dd>
+            {est.cap_usd != null && <><dt className="ink3">Cost cap</dt><dd>${est.cap_usd.toFixed(2)} per street</dd></>}
             <dt className="ink3">Time</dt><dd>{est.gpu_minutes != null ? `about ${minutesText(est.gpu_minutes)}` : '—'}</dd>
           </dl>
           <p className="t-small ink3 mt-1">Worked out from the photos this street needs, when it was queued; an estimate, not a measurement.</p>

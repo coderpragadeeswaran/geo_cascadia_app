@@ -33,7 +33,13 @@ web (React, :5173) ──> API (FastAPI, :8000) ──> Supabase Postgres + Post
    ```
    It takes **about 30 min, longer when OpenStreetMap is busy — start it the day before** (1 Oct: 28.4 and 29.4 min;
    most of it is the cost estimates). Run it again if it reports "NOT complete" (finished items are skipped). The caches live in `data/cache/` and survive API restarts.
-2. Run the checks below (Tests) once.
+2. **Check which stored Street View photos Google still serves** (free metadata calls only, a few minutes; D60). The app
+   then reads the answers from `data/cache/streetview_meta.json` (kept 30 days) and never requests a photo it knows is gone:
+   ```powershell
+   backend\.venv\Scripts\python tools\check_photos.py          # all areas; prints refs / served / gone per area
+   ```
+   Commit the updated `data/areas/*/photo_check.json` (Under the Hood's one-line note per area).
+3. Run the checks below (Tests) once.
 
 ### On the day, in this order
 0. **Worker files changed in D53 (local map data):** re-paste the worker cell, and upload `geo_cascadia_pkg_p7c.zip`
@@ -134,6 +140,8 @@ npx tsx scripts/d53-shots.ts       # D53 (dev server): Hood map-data line, map a
 npx tsx scripts/lighting-shots.ts  # D54/D55 (dev server): priority list, stretch card, map colours, priority question, report buttons + real downloads; MODE=daylight
 npx tsx scripts/extras-shots.ts    # D58 (dev server): "continues outside this area", GIS downloads, OSM question + map tags, floor confidence, Hood/Trust; MODE=daylight
 npx tsx scripts/ui-polish2-shots.ts  # D59 (dev server): street list + full list, photo tags + key, Review questions, a No with a value (undone), OSM; MODE=daylight, TAG=before|after
+npx tsx scripts/photo-fallback-shots.ts  # D60 (dev server): retired panoramas → current photo (drawer, pole, sign, Review, Drive), Hood note + cost lines; MODE=daylight, TAG=before|after
+npx tsx scripts/photo-browse.ts [label]  # D60 (dev server): one fixed Ward 29 click path; counts Street View photo requests and failures
 backend\.venv\Scripts\python tools\audit_numbers.py    # (repo root) Ward 29 numbers straight from the database
 ```
 
@@ -223,6 +231,12 @@ real walk is longer. `--all` includes decided items.
 No Street View photo is stored by the API or in `data/`. The worker keeps photo crops only while a job runs and
 deletes them once the result is delivered (it prints how many). Local screenshots in `docs/screenshots/` (git-ignored)
 can show Street View photos: delete them when no longer needed. Details: explainer 04 §6.9.
+
+**Retired panoramas (D60).** Google re-issues panorama ids: on 7 Oct 2026, 303 of Ward 29's 852 evidence photos (69 of 201
+panoramas) and 2 of Trichy's 223 were no longer served. Before showing a stored photo the app asks its API whether Google
+still serves that panorama (free metadata, cached 30 days). If not, it shows Google's current photo from the same spot
+(within 25 m, aimed at the same building front, pole or sign) without the analysis' boxes, and says so; with no photo
+nearby it says "No Street View photo available here any more" and requests nothing. Re-run `tools\check_photos.py` monthly.
 
 Registers are synthetic demo data. Prototype — imagery © Google. Map data © OpenStreetMap contributors (ODbL);
 building footprints © Microsoft (Global ML Building Footprints, ODbL).

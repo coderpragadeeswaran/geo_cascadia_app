@@ -10,7 +10,7 @@ import { REGISTER_NOTE, assetPoints, buildingPolys, darkLines, miniStreets, sign
 import { propsFor, useAreaData } from '@/lib/useAreaData'
 import { cn, fmt1 } from '@/lib/utils'
 import { useUi } from '@/store/ui'
-import { EvidencePhoto } from './EvidencePhoto'
+import { EvidencePhoto, usePhotoSwap } from './EvidencePhoto'
 import { Boxes, EvidenceViews, PhotoKey } from './EvidenceViews'
 import { GeoMini, metres, type MiniLine, type MiniPolygon, type MiniStreet } from './GeoMini'
 import { ObjectMini } from './ObjectMini'
@@ -69,6 +69,7 @@ function Example({ ex, exKey, onClose }: { ex: HoodExample; exKey: string; onClo
   const detail = useDetail()
   const [photo, setPhoto] = useState(false)
   const [hl, setHl] = useState<number | null>(null)          // ui-polish-2: box <-> key highlight
+  const sw = usePhotoSwap(ex.kind === 'photo' && ex.view ? ex.view : null)   // D60: a gone photo shows no boxes, so no key
   const mini = useMemo(() => miniStreets(streets), [streets])
   const b = ex.kind === 'building' ? records?.buildings.find((x) => x.id === ex.id) : undefined
   const a = ex.kind === 'asset' ? records?.assets.find((x) => x.id === ex.id) : undefined
@@ -106,8 +107,8 @@ function Example({ ex, exKey, onClose }: { ex: HoodExample; exKey: string; onClo
               <EvidencePhoto view={ex.view} label={`${ex.title} · ${Math.round(ex.view.heading)}°`}>
                 <Boxes boxes={(ex.boxes ?? []) as EvidenceBox[]} all={(ex.boxes?.length ?? 0) <= 4} hidden={NONE} hl={hl} setHl={setHl} />
               </EvidencePhoto>
-              <PhotoKey boxes={(ex.boxes ?? []) as EvidenceBox[]} all={(ex.boxes?.length ?? 0) <= 4} hidden={NONE} hl={hl} setHl={setHl}
-                targetName={exKey.startsWith('signs') ? 'This sign' : exKey.startsWith('bld') ? 'This building' : 'This box'} />
+              {sw.state === 'served' && <PhotoKey boxes={(ex.boxes ?? []) as EvidenceBox[]} all={(ex.boxes?.length ?? 0) <= 4} hidden={NONE} hl={hl} setHl={setHl}
+                targetName={exKey.startsWith('signs') ? 'This sign' : exKey.startsWith('bld') ? 'This building' : 'This box'} />}
             </div>
             {!!ex.rays?.length && <PhotoMini area={area} mini={mini} ray={ex.rays[0]} faced={keyOutlines} records={records} />}
           </div>

@@ -15,7 +15,7 @@ import io
 import math
 import os
 
-from . import camonly, lighting, mapdata, osmref
+from . import camonly, lighting, mapdata, osmref, photos
 from .hood import hood as hood_view
 from .imagery import imagery as imagery_view
 
@@ -635,18 +635,23 @@ def content(store, bundle, F, model_card, areas_dir, street=None, today=None):
     cost = None
     if rt:
         sv, ai = rt["street_view"], rt["totals"]["usd"]
-        total = sv["usd"] + ai if sv.get("usd") is not None and ai is not None else None
-        line = None
-        if total:
+        # D60: Street View (Google) and cloud AI (Amazon Nova, AWS) on separate lines, never one total: the photo dollars
+        # are Google's global list price, while Google actually billed ₹0 (data/billing.json)
+        lines = []
+        if sv.get("usd") is not None:
+            lines.append(f"Street View photos (Google): {usd_text(sv['usd'])} — {fmt(sv['photos'])} photos at Google’s global list price.")
+            bill = photos.billing(os.path.dirname(areas_dir))
+            if bill and bill.get("line"):
+                lines.append(bill["line"])
+        if ai is not None:
             cloud = sorted([(x["usd"], t["key"]) for t in rt["tasks"] for x in t["routes"] if x["route"] == "cloud" and x["usd"] is not None],
                            reverse=True)
-            line = (f"This run cost about {usd_text(total)}: Street View photos {usd_text(sv['usd'])} ({fmt(sv['photos'])} at "
-                    f"Google’s list price, {round(100 * sv['usd'] / total)}%) and cloud AI (Nova Lite) {usd_text(ai)} "
-                    f"({100 * ai / total:.1f}%)." + (" Floor counting is the largest AI cost; it isn’t routed yet."
-                                                     if cloud and cloud[0][1] == "floors" else ""))
+            lines.append(f"Cloud AI (Amazon Nova Lite, AWS): {usd_text(ai)}." + (" Floor counting is the largest AI cost; it isn’t routed yet."
+                                                                                 if cloud and cloud[0][1] == "floors" else ""))
+        line = " ".join(lines) or None
         tasks = [[t["title"], f"{x['route']} · {x['model']}", fmt(x["n"]), "$0" if x["route"] == "local" else usd_text(x["usd"]),
                   "" if x["route"] == "local" else x["usd_status"]] for t in rt["tasks"] if t["input"] > 0 for x in t["routes"]]
-        cost = {"line": line, "tasks": tasks, "as_run": (rt["totals"]["calls"], rt["totals"]["usd"], rt["totals"]["status"]),
+        cost = {"line": line, "lines": lines, "tasks": tasks, "as_run": (rt["totals"]["calls"], rt["totals"]["usd"], rt["totals"]["status"]),
                 "no_router": (rt["all_cloud"]["calls"], rt["all_cloud"]["usd"]) if rt.get("all_cloud") else None}
 
     # Gate 1, worded as on Trust
@@ -1337,9 +1342,10 @@ def _page_method(doc, c, W):
     _section(doc, "Data sources")
     for k_, v in c["sources"]:
         _text(doc, f"{k_}: {v}", size=10, after=0.8)
-    if c["cost"] and c["cost"]["line"]:
+    if c["cost"] and c["cost"]["lines"]:
         _section(doc, "Cost of this run" + (" (whole area)" if c["street"] else ""))
-        _text(doc, c["cost"]["line"], size=10)
+        for t in c["cost"]["lines"]:
+            _text(doc, t, size=10, after=0.8)
     yl = doc.get_y()
     # right column: limits, Gate 1
     x2 = M + cw + gap

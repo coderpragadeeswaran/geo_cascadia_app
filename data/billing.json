@@ -1,0 +1,10 @@
+{
+ "street_view": {
+  "pricing": "India",
+  "billed_inr": 0,
+  "photos_billed": 17747,
+  "period": {"from": "2026-09-07", "to": "2026-10-06"},
+  "line": "Billed under Google's India pricing: ₹0 so far — within the free monthly allowance (17,747 Street View photos billed at ₹0, Sep 7 – Oct 6 2026).",
+  "source": "owner, from the Google Cloud billing report (7 Oct 2026); account-wide, not per area"
+ }
+}

@@ -243,7 +243,7 @@ export function AnalysePanel() {
                 {est ? (
                   <dl className="mt-4 grid grid-cols-2" aria-live="polite" style={{ opacity: plan.busy ? 0.6 : 1 }}>
                     <div><dt className="t-micro">Street View</dt><dd className="t-figure mt-1" style={{ fontSize: 21.5 }}>≈ {fmt.format(est.street_view_images)}</dd>
-                      <dd className="t-small ink3">{noun(est.street_view_images, 'image')}{est.street_view_usd != null ? ` · ≈ $${est.street_view_usd.toFixed(2)}` : ''}</dd></div>
+                      <dd className="t-small ink3">{noun(est.street_view_images, 'image')}{est.street_view_usd != null ? ` · ≈ $${est.street_view_usd.toFixed(2)} (Google list price)` : ''}</dd></div>
                     <div className="rule-l pl-4"><dt className="t-micro">Time</dt><MinutesFigure m={est.gpu_minutes} /></div>
                   </dl>
                 ) : plan.st?.status === 'failed' ? null
@@ -261,7 +261,8 @@ export function AnalysePanel() {
                 )}
                 {est && (
                   <p className="t-small ink2 mt-2">
-                    {est.total_usd != null ? <>Total ≈ <span className="t-data">${est.total_usd.toFixed(2)}</span> (photos{est.cloud_ai_usd != null ? ` + cloud AI $${est.cloud_ai_usd.toFixed(est.cloud_ai_usd < 0.01 ? 4 : 2)}` : ''})</> : 'Total not known'}
+                    {/* D60: Google and AWS on separate lines; the photo dollars above are Google's global list price */}
+                    {est.cloud_ai_usd != null ? <>Cloud AI (Amazon Nova, AWS) ≈ <span className="t-data">${est.cloud_ai_usd.toFixed(est.cloud_ai_usd < 0.01 ? 4 : 2)}</span></> : 'Cloud AI cost not known'}
                     {plan.busy && <> · updating…</>}
                   </p>
                 )}

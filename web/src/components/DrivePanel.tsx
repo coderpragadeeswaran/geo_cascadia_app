@@ -7,9 +7,9 @@ import { useMap } from '@vis.gl/react-google-maps'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronLeft, ChevronRight, Pause, Play, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useConfig } from '@/api/queries'
+import { useConfig, usePhotoStatus } from '@/api/queries'
 import { matchLabel, useLabel } from '@/lib/labels'
-import { cn, fmt, plural } from '@/lib/utils'
+import { cn, fmt, monthText, plural } from '@/lib/utils'
 import { flyTo, OBJECT_TILT } from '@/map/camera'
 import { useDriveData, useDriveStop, viewHeading, type DriveBranch } from '@/map/drive'
 import { useUi, type DriveView } from '@/store/ui'
@@ -93,20 +93,36 @@ export function DrivePanel() {
   )
 }
 
-/** the Street View frame for the chosen view at this stop: debounced (one billed image per stop you settle on), next stop prefetched */
+/** the Street View frame for the chosen view at this stop: debounced (one billed image per stop you settle on), next stop prefetched.
+ *  D60: a stop whose panorama Google no longer serves shows Google's current panorama there (same heading), and nothing is
+ *  requested for a stop with no photo at all. */
 function Frame({ branch, i, view }: { branch: DriveBranch; i: number; view: DriveView }) {
   const { data: cfg } = useConfig()
   const stop = branch.stops[i]
   const next = branch.stops[i + 1]
+  const key = !!cfg?.maps_js_key
+  const qs = usePhotoStatus({ pano_id: stop.pano_id, heading: 0 }, null, key)
+  const qn = usePhotoStatus(next ? { pano_id: next.pano_id, heading: 0 } : null, null, key)
   const [src, setSrc] = useState<string | null>(null)
-  const url = (st: typeof stop) => (cfg ? staticUrl(cfg.maps_js_key, { pano_id: st.pano_id, heading: viewHeading(st.heading, view), pitch: 0, fov: 90 }, '640x400') : null)
+  // the panorama to ask Google for: undefined = still checking, null = none
+  const panoOf = (st: typeof stop, q: typeof qs) => (q.isPending ? undefined : q.data?.served === false ? (q.data.current?.pano_id ?? null) : st.pano_id)
+  const url = (pano: string | null | undefined) => (cfg && pano ? staticUrl(cfg.maps_js_key, { pano_id: pano, heading: viewHeading(stop.heading, view), pitch: 0, fov: 90 }, '640x400') : null)
+  const pano = panoOf(stop, qs)
+  const swapped = qs.data?.served === false
   useEffect(() => {
-    const u = url(stop)
+    setSrc(null)
+    const u = url(pano)
     if (!u) return
     const t = setTimeout(() => setSrc(u), SETTLE_MS)
     return () => clearTimeout(t)
-  }, [stop, view, cfg]) // eslint-disable-line react-hooks/exhaustive-deps
-  const onLoad = () => { if (next) { const n = url(next); if (n) { const img = new Image(); img.referrerPolicy = 'strict-origin-when-cross-origin'; img.src = n } } }
+  }, [stop, view, cfg, pano]) // eslint-disable-line react-hooks/exhaustive-deps
+  const onLoad = () => {
+    if (!next || !cfg) return
+    const np = panoOf(next, qn)
+    if (!np) return
+    const img = new Image(); img.referrerPolicy = 'strict-origin-when-cross-origin'
+    img.src = staticUrl(cfg.maps_js_key, { pano_id: np, heading: viewHeading(next.heading, view), pitch: 0, fov: 90 }, '640x400')
+  }
   return (
     <figure className="relative mx-5 aspect-[16/10] overflow-hidden rounded-[var(--ns-r-control)] bg-black">
       <AnimatePresence>
@@ -114,6 +130,9 @@ function Frame({ branch, i, view }: { branch: DriveBranch; i: number; view: Driv
           referrerPolicy="strict-origin-when-cross-origin" onLoad={onLoad}
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: REDUCED ? 0 : 0.3 }} />}
       </AnimatePresence>
+      {pano === null && <div className="t-small absolute inset-0 flex items-center justify-center px-6 text-center text-white/75">No Street View photo available here any more</div>}
+      {swapped && pano && <span className="t-small absolute left-2 top-2 rounded-[var(--ns-r-control)] px-1.5 py-0.5 text-[12.5px] text-white" style={{ background: 'rgb(0 0 0 / 0.72)' }}
+        title="Google no longer serves the photo used in the analysis; this is its current photo from the same spot">Current photo{monthText(qs.data?.current?.date) ? ` · ${monthText(qs.data?.current?.date)}` : ''}</span>}
       <figcaption className="t-data absolute inset-x-0 bottom-0 flex justify-between px-2.5 py-1.5 text-[13px] text-white/90" style={{ background: 'linear-gradient(transparent, rgb(0 0 0 / 0.72))' }}>
         <span>{view} · {Math.round(viewHeading(stop.heading, view))}°</span><span>Imagery © Google</span>
       </figcaption>
