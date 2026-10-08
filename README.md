@@ -19,6 +19,49 @@ web (React, :5173) ──> API (FastAPI, :8000) ──> Supabase Postgres + Post
 
 ---
 
+## Deployment (AWS, D63)
+
+One **g4dn.xlarge** (NVIDIA T4) in ap-south-1 runs the website, the API and the GPU analysis worker; the database stays
+on Supabase. Site: **http://65.1.253.18/** (open to anyone with the link; SSH only from the owner's IP). Instance
+`i-09e10c6bc76bb84dc`. No laptop, Colab or tunnel needed while it runs.
+
+```
+browser ──http :80──> nginx ──/──> web build
+                         └─/api/──> API (uvicorn :8000, user gcapp) ──> Supabase Postgres + PostGIS
+                                      ▲ 127.0.0.1
+                              worker (systemd, user gcworker, GPU) ── OCR in its own Paddle venv
+```
+
+**Money.** $0.579/hour while running. Disk 100 GB $9.12/month and Elastic IP $3.65/month whether running or not
+(stopped: $12.77/month). It **stops by itself 90 minutes after every start**; stop it yourself when done.
+
+All commands from the repo root, in PowerShell:
+
+| What | Command |
+|---|---|
+| Start (waits until the site and the worker are up, re-arms the 90-min auto-stop) | `tools\deploy\start.ps1` |
+| Stop (waits for "stopped") | `tools\deploy\stop.ps1` |
+| More time (+60 min, or `-Minutes 30`) | `tools\deploy\extend.ps1` |
+| State, site, health, worker, minutes left | `tools\deploy\status.ps1` |
+| New AWS keys for Amazon Nova: paste them into `C:\projects\aws_builder.env`, then | `tools\deploy\refresh_keys.ps1` |
+| Deploy an update (commit first; code + web + data files; the server keeps its models) | `tools\deploy\deploy.ps1` |
+| After changing `backend\.env` (Supabase, Google keys, worker token) | `tools\deploy\deploy.ps1 -Env` |
+| Build the bundle only (no AWS) | `tools\deploy\make_bundle.ps1` |
+
+- **Keys.** EC2 keys: `C:\projects\aws_ec2.env`; Bedrock (worker only): `C:\projects\aws_builder.env`; SSH key and the
+  state file: `C:\projects\geo-cascadia-keys\`. All outside the repo. When the EC2 keys expire, the scripts say so:
+  refresh the file from the AWS access portal and run the command again. On the server the secrets are in
+  `/etc/geo-cascadia/` (600); the API never gets AWS keys.
+- **Google keys.** Browser map key: website restriction `http://65.1.253.18/*` (plus `http://localhost:5173/*` for the
+  laptop). Server key: unchanged (no IP restriction; checked from the server).
+- **First time on a new server** (done once, 8 Oct 2026): `launch.ps1` (asks; one instance only), then
+  `deploy.ps1 -Setup -Env -Assets`, then `refresh_keys.ps1`. The model files come from
+  `C:\projects\geo-cascadia-assets\` (laid out like Drive `alldataset`) and `C:\projects\gc-detector\best.pt`.
+- **Logs** (SSH): `sudo journalctl -u geo-cascadia-api -f`, `sudo journalctl -u geo-cascadia-worker -f`.
+- **Areas analysed on the server** keep their run files on the server (`/opt/geo-cascadia/data/areas`); the database is
+  shared with the laptop.
+- Plain HTTP, no domain: the site is not encrypted. Details and limits: explainer 07 (D63).
+
 ## Demo day
 
 ### The day before

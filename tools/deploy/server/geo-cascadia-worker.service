@@ -15,6 +15,7 @@ Environment=GC_PIPELINE_DIR=/opt/geo-cascadia/current/pipeline
 Environment=GC_ASSETS_DIR=/opt/geo-cascadia/assets
 Environment=GC_WORK_DIR=/var/lib/gc-worker/jobs
 Environment=GC_OCR_PYTHON=/opt/geo-cascadia/venv-ocr/bin/python
+Environment=YOLO_CONFIG_DIR=/var/lib/gc-worker/ultralytics
 Environment=USE_TF=0
 Environment=TRANSFORMERS_NO_TF=1
 Environment=PYTHONUNBUFFERED=1
