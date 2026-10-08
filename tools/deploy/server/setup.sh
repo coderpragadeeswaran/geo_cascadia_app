@@ -92,6 +92,7 @@ systemctl enable nginx >/dev/null
 systemctl reload-or-restart nginx
 
 log "GPU and models"
+cd /var/lib/gc-worker      # the checks run as gcworker: from a folder it can read (PaddleX looks at paths on import)
 nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader || echo "⚠ nvidia-smi failed"
 sudo -u gcworker -H "$BASE/venv-worker/bin/python" - <<'PY' || echo "⚠ worker venv check failed"
 import os, warnings, torch, transformers, sklearn, joblib

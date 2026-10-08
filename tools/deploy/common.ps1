@@ -58,6 +58,7 @@ function Get-SshArgs {
 
 # Run one command on the server; returns its exit code (output goes to the console).
 function Invoke-Remote([string]$Cmd) {
+    $ErrorActionPreference = 'Continue'      # ssh's stderr must not end the script (PS 5.1); the exit code decides
     $a = Get-SshArgs
     & ssh @a $Cmd | Out-Host
     return $LASTEXITCODE
@@ -65,18 +66,21 @@ function Invoke-Remote([string]$Cmd) {
 
 # Send text to a command's stdin on the server (env files: never written to a local temp file, never printed).
 function Send-Remote([string[]]$Lines, [string]$Cmd) {
+    $ErrorActionPreference = 'Continue'
     $a = Get-SshArgs
     ($Lines -join "`n") | & ssh @a $Cmd | Out-Host
     return $LASTEXITCODE
 }
 
 function Copy-ToServer([string]$Local, [string]$Remote) {
+    $ErrorActionPreference = 'Continue'
     $s = Get-State
     & scp -q -i $s.pem -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$KnownHosts" -o BatchMode=yes $Local "ubuntu@$($s.elastic_ip):$Remote" | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "Upload of $Local failed." }
 }
 
 function Wait-Ssh([int]$Seconds = 300) {
+    $ErrorActionPreference = 'Continue'
     $t = Get-Date
     while (((Get-Date) - $t).TotalSeconds -lt $Seconds) {
         $a = @('-q') + (Get-SshArgs)

@@ -24,7 +24,7 @@ case "${1:-}" in
   --derive-worker) derive_worker; exit 0 ;;
   *) echo "usage: put_env.sh app.env|aws_builder.env|--derive-worker"; exit 2 ;;
 esac
-( umask 077; tr -d '\r' > $ETC/$1.new )
+( umask 077; tr -d '\r' | sed '1s/^\xEF\xBB\xBF//' > $ETC/$1.new )   # PowerShell's pipe adds a UTF-8 BOM
 [ -s $ETC/$1.new ] || { rm -f $ETC/$1.new; echo "empty input: $1 not changed"; exit 1; }
 chown $own:$own $ETC/$1.new
 mv $ETC/$1.new $ETC/$1

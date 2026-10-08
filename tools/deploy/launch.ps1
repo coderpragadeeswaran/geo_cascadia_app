@@ -23,6 +23,7 @@ Write-Host "INSTANCE $($s.instance_id)   ELASTIC IP $($s.elastic_ip)" -Foregroun
 icacls $s.pem /inheritance:r /grant:r "$($env:USERNAME):(R)" | Out-Null
 Write-Host 'Waiting for SSH (first boot takes a few minutes)...'
 if (-not (Wait-Ssh 600)) { throw 'No SSH after 10 minutes. Run stop.ps1 unless you are going to look into it now.' }
+Invoke-Remote 'cloud-init status --wait > /dev/null' | Out-Null   # sudo works only once cloud-init has finished
 for ($i = 0; $i -lt 12; $i++) {                   # the user data may still be running right after SSH comes up
     if ((Invoke-Remote 'sudo /usr/local/sbin/gc-autostop show') -eq 0) { Write-Host 'Auto-stop armed.'; return }
     Start-Sleep 10
