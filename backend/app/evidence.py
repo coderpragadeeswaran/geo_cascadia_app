@@ -177,6 +177,23 @@ class Detections:
             self._cache[key] = {"stamp": stamp, "rows": rows}
         return rows
 
+    def box_choice(self, slug):
+        """D62: box_choice.json (tools/box_choice.py, M3): building id -> view key -> the box drawn as "this building"
+        (or none: can't tell). {} when the file is missing: the analysis' own box is drawn, as before."""
+        path, stamp = self._read(slug, "box_choice.json")
+        if not path:
+            return {}
+        key = f"bc:{slug}"
+        with self._lock:
+            hit = self._cache.get(key)
+            if hit and hit["stamp"] == stamp:
+                return hit["rows"]
+        with open(path, encoding="utf-8") as f:
+            rows = (json.load(f) or {}).get("buildings") or {}
+        with self._lock:
+            self._cache[key] = {"stamp": stamp, "rows": rows}
+        return rows
+
     def ocr_best(self, idx):
         """crop file name → OCR text (for picking the signboard a building's sign view refers to)"""
         if idx["ocr"] is None:
@@ -292,6 +309,29 @@ def _aimed_view(idx, v, label, asset_type):
             "note": "No detection box lies in the aimed direction in this panorama's views; the crosshair marks where the camera was aimed."}
 
 
+def apply_choice(v, ch):
+    """D62 (display only): the orange "this building" box on a Front / Best photo is the M3 choice (box_choice.json):
+    another building box, or none ("can't tell"). Linked sign boxes and every other box are unchanged."""
+    if not ch or ch.get("status") not in ("same", "changed", "cant_tell"):
+        return v
+    v["box_choice"] = ch["status"]
+    v["analysis_box"] = ch.get("analysis_box")
+    if v.get("target") == "record_box":                         # the saved box shown because no detection matched it
+        v["boxes"] = [b for b in v["boxes"] if not b.get("target")]
+    want = ch.get("box")
+    hit = None
+    if want:
+        hit = next((b for b in v["boxes"] if b["cls"] == "building" and all(abs(b[k] - float(w)) < 0.06 for k, w in zip(("x1", "y1", "x2", "y2"), want))), None)
+    for b in v["boxes"]:
+        if b["cls"] == "building":
+            b["target"] = b is hit
+    v["target"] = "box" if hit is not None else "none"
+    if hit is None:
+        v["box_choice"] = "cant_tell"
+    v["note"] = None
+    return v
+
+
 def evidence(D, bundle, kind, obj_id):
     """All evidence views of one object, each with every detection box and the object's own box marked, and where its
     camera stood (`camera`: lat/lon from panos.json, null when unknown)."""
@@ -312,11 +352,13 @@ def _evidence(D, bundle, kind, obj_id):
         if b is None:
             return None
         ev = b.get("evidence") or {}
+        choice = D.box_choice(bundle["slug"]).get(obj_id) or {}           # D62
         out = []
         if ev.get("attribute_view"):
             av = ev["attribute_view"]
             stored = {k: av[k] for k in ("x1", "y1", "x2", "y2")} if all(av.get(k) is not None for k in ("x1", "y1", "x2", "y2")) else None
-            out.append({"key": "attr", **_exact_view(D, idx, av, "Front", stored, "building", obj_id, link_fp=obj_id)})
+            v = _exact_view(D, idx, av, "Front", stored, "building", obj_id, link_fp=obj_id)
+            out.append({"key": "attr", **apply_choice(v, choice.get(view_key(av["pano_id"], av["heading"], av.get("pitch"), av.get("fov"))))})
         best = None
         if not ev.get("attribute_view"):
             best = D.bviews(bundle["slug"]).get(obj_id)
@@ -331,9 +373,10 @@ def _evidence(D, bundle, kind, obj_id):
                 why = _gate_why(q)
                 view = {"pano_id": q["pano_id"], "heading": q["heading"], "pitch": q.get("pitch") or 0, "fov": q.get("fov") or 90}
                 box = {k: q[k] for k in ("x1", "y1", "x2", "y2")}
-                v = _exact_view(D, idx, view, "Best photo", box, "building", None, link_fp=obj_id)
-                v["user_note"] = (f"The box the analysis matched to this building failed the photo quality check ({why}), so its use "
-                                  "and floors were not read from it." if why else None)
+                v = apply_choice(_exact_view(D, idx, view, "Best photo", box, "building", None, link_fp=obj_id),
+                                 choice.get(view_key(view["pano_id"], view["heading"], view["pitch"], view["fov"])))
+                v["user_note"] = (f"The box the analysis matched to this building{' (not the orange one)' if v.get('box_choice') == 'changed' else ''} "
+                                  f"failed the photo quality check ({why}), so its use and floors were not read from it." if why else None)
                 out.insert(0, {"key": "best", **v})
             elif not out and ev.get("views"):
                 v0 = {**ev["views"][0], "fov": ev["views"][0].get("fov") or 90}

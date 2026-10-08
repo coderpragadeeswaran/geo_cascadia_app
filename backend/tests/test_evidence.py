@@ -27,8 +27,16 @@ def test_building_and_business_photos_mark_the_stored_box(client):
         v = next(x for x in r.json()["views"] if x["key"] == "attr")
         av = b["evidence"]["attribute_view"]
         t = [x for x in v["boxes"] if x["target"]]
-        assert v["source"] == "exact" and v["target"] == "box" and len(t) == 1
-        assert abs(t[0]["x1"] - av["x1"]) < 1 and abs(t[0]["y2"] - av["y2"]) < 1
+        assert v["source"] == "exact"
+        # D62 (intended change): the orange box is the M3 choice; the stored box when M3 agrees, none when it can't tell
+        if v.get("box_choice") == "cant_tell":
+            assert v["target"] == "none" and not t
+            continue
+        assert v["target"] == "box" and len(t) == 1
+        if v.get("box_choice", "same") == "same":
+            assert abs(t[0]["x1"] - av["x1"]) < 1 and abs(t[0]["y2"] - av["y2"]) < 1
+        else:
+            assert v["analysis_box"] == [av[k] for k in ("x1", "y1", "x2", "y2")] and t[0]["cls"] == "building"
         assert {x["cls"] for x in v["boxes"]} <= {"building", "pole", "lamp_head", "signboard"}
         assert all(0 <= x["conf"] <= 1 for x in v["boxes"])
     u = exp["unmapped_businesses"][0]

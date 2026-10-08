@@ -2418,3 +2418,63 @@ route" no longer holds; DESIGN.md / tokens are unchanged.
 disk by the checks.
 
 **Checks (7 Oct).** Backend 496 passed, 1 skipped (12 new in `test_box_restore.py`); typecheck, build, test:ui 24 (1 new; the D60 wording test updated, intended), check:data and the audit (both themes) pass. Regression (production preview, output to a file): ALL PASSED, 291 checks, 0 retries (`run-2026-10-07_2302.log`); no expected answer changed. Live: the evidence API, `GET /photos/{id}` and the Hood note called against the running API (no `same_image` anywhere, the new note). Screenshots `web/scripts/box-restore-shots.ts` → `docs/screenshots/box-restore/` (before = main's frontend and API from a worktree on :5173 / :8000; after; both themes).
+
+## 2026-10-08 — M3 at level 1 (branch m3-level1)
+
+### D62. The orange "this building" box is chosen by M3 (visible span) — display only
+**Owner decision (8 Oct):** port the Part 2 experiment's M3 at level 1 (which box is drawn and labelled only), with exactly
+the parameters frozen there; no re-tuning; positions, Gate 1, register matches, review queue contents / counts, reports and
+every other number unchanged; linked sign boxes unchanged. The owner spot-checked the experiment's labels.
+
+**Rule** (`backend/app/boxchoice.py`, a port of the experiment's code): from the photo's camera, one line of sight per 4 px
+image column (161 per 640 px photo), from 1.5 m to 60 m, into every building outline; outlines the camera stands in are
+skipped. The first outline each line meets is what that column sees. The building's visible columns V; each building box's
+columns S (the nearest column for a sliver); score = |S ∩ V| / |S ∪ V| (rounded to 3 decimals, as in the experiment); the
+highest score wins (ties: detector confidence); below 0.4 → **can't tell**: no orange box.
+- Photos it applies to: each building's Front photo (attribute view with a stored box) or, without one, its Best photo
+  (the pipeline's building_views match) — the photos whose orange box is a building box. Not changed: the Sign photo (its
+  orange box is the sign), the "Nearest camera" photo of a building the pipeline matched no box to (no orange box, as
+  before), assets, business signs, and Under the Hood's quality-gate examples (they explain the box the analysis judged).
+- Outlines: the pipeline's own `Area` around the run's cameras, as the run loaded them (OSM, + Microsoft where the run used
+  them): the run-era Overpass cache first, else the app's local copy (D53), else Overpass. Outline counts equal the
+  experiment's in all 9 areas (Ward 29 3,715).
+- Stored per area in `data/areas/<slug>/box_choice.json` (status same / changed / cant_tell, score, chosen box, the
+  analysis' box): `tools/box_choice.py` for existing areas; a new worker area gets it in the background after delivery
+  (until it lands, the analysis' own box is drawn). No pipeline or worker change, no photo, no model call.
+- Evidence API: Front / Best views carry `box_choice` and `analysis_box`; the orange box follows the choice; with
+  cant_tell no box is orange and every other box and tag stays. Missing file → as before.
+- UI: "Can't tell which box is this building in this photo." under the photo (drawer and Review); "How do we know?" →
+  "Which box" explains the rule and, when it differs, that the analysis used another box (its results unchanged). The
+  Review question for "Seen from one camera position only" on a can't-tell photo: "We can't tell which box is this building
+  in this photo. Look at the photo (or Live 360°): can you see this building?" (Yes / No keep their meaning).
+
+**Experiment numbers** (Part 2, development / test halves, labels by Claude Code, spot-checked by the owner; small sample:
+one test item = 3 points): test n = 33 — M3 84.8 % correct, 12.1 % wrong box, 93.9 % get a box; today's rule 75.8 % /
+24.2 % / 100 %. By stratum (test): single camera 38 → 15 % wrong, row / attached 36 → 21 %, small in front of big 29 → 29 %.
+Known misses: the owner's two examples stay wrong under M3 alone (#27 the warehouse box for the small building in front,
+#28 the compound wall); M3 + linked signs did better on the test half (6.1 % wrong) but that was not the development
+half's choice, so it is not ported.
+
+**Consistency:** the app's choice equals the experiment's M3 output for all 80 labelled photos (80 / 80).
+
+**Effect (all building Front / Best photos):**
+
+| area | photos | box changed | can't tell | (still served by Google: changed / can't tell) |
+|---|---|---|---|---|
+| Ward 29 | 338 | 42 | 30 | 219: 30 / 25 |
+| Bharathidasan Salai, Trichy | 53 | 3 | 7 | same |
+| Sanganur Road | 49 | 5 | 3 | same |
+| Vadakku Masi Veethi | 47 | 9 | 2 | same |
+| Rathinapuri (Sanganoor) Main Road | 42 | 4 | 3 | same |
+| 3rd Street, Sridevi Nagar | 24 | 9 | 0 | same |
+| Unnamed road between Bharathiar Road and Sankara Linganar Street | 8 | 1 | 1 | same |
+| Kattabomman Street Extention | 7 | 0 | 1 | same |
+| Uthukuli Road, Tiruppur | 1 | 0 | 0 | same |
+
+Ward 29's other 119 photos are on panoramas Google no longer serves (D60/D61): they show a current photo without boxes.
+
+**Level 2 not done:** positions / Gate 1 still use the analysis' box choice (the experiment's what-if: Ward 29 260 →
+247 camera-derived, median 2.80 → 2.74 m, 60.4 → 64.0 % ≤ 3.5 m, mostly from buildings leaving that set; not a measured
+gain).
+
+**Checks (8 Oct).** Backend: full suite 503 passed, 2 failed, 1 skipped — the 2 were `test_evidence` asserting the stored box is always orange (intended change, updated; a first full run also failed `test_p5::test_no_guessed_building_box` the same way, updated, and the known-flaky `test_p6` delete test, which passed alone and in the rerun); after the updates the changed files pass (test_evidence, test_m3_level1, test_p5, test_p6). typecheck, build, test:ui 25 (1 new), check:data pass; the audit: first run 1 fail ("Esc closes the palette", Night — unrelated code), second run all passed. Regression (production preview): ALL PASSED, 291 checks, 0 retries (`run-2026-10-08_0710.log`); no expected answer changed. Live: the evidence API for the three cases and the Ward 29 key numbers (unchanged) against the running API. Screenshots `web/scripts/m3-level1-shots.ts` → `docs/screenshots/m3-level1/` (both themes). Clean-up (Google terms): the experiment's review and example images and `docs/screenshots/box-restore/` deleted; `labels.csv`, `RESULTS.md`, `M12_PROTOCOL.md` kept.

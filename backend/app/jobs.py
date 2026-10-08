@@ -787,6 +787,8 @@ def worker_result(request: Request, job: str = Form(...), files: List[UploadFile
             out = _get_job(c, j["id"])
         s.invalidate(slug)
         _osm_tags_later(s, request.app.state.settings, slug)
+        from . import boxchoice                                  # D62: which box is "this building" (display only)
+        boxchoice.write_later(folder, os.path.join(request.app.state.settings.data_dir, "cache", "p45_overpass"), log)
         return out
     out = D.write(fn)
     _seen(request, worker_id, job="")

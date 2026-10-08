@@ -430,7 +430,9 @@ def test_no_guessed_building_box(offline, slug):
             assert all(v.get("user_note") for v in views if v["key"] == "v0")
         else:
             best = next(v for v in views if v["key"] == "best")
-            assert best["pano_id"] == bv[b["id"]]["pano_id"] and len([x for x in best["boxes"] if x["target"]]) == 1
+            # D62: the orange box is the M3 choice; none when M3 can't tell (intended change)
+            assert best["pano_id"] == bv[b["id"]]["pano_id"]
+            assert len([x for x in best["boxes"] if x["target"]]) == (0 if best.get("box_choice") == "cant_tell" else 1)
             assert bool(best.get("user_note")) == (not bv[b["id"]].get("reliable"))
 
 

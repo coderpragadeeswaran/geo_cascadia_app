@@ -338,4 +338,80 @@
 
 ---
 
+## 8 Oct 2026 · D62 — The orange "this building" box is chosen by what the camera can actually see (M3), display only
+
+### What
+1. On each building's **Front** photo (or its **Best photo** when it has no Front photo), the orange box is now the
+   building box that best covers the part of the building the camera can see, after nearer buildings on the map hide what
+   is behind them. Until now it was the box whose centre line of sight happened to hit the building first.
+2. When no building box covers enough of it (less than 40 % overlap), **no box is orange**, the other tags stay, and one
+   line under the photo says: "Can't tell which box is this building in this photo." This shows in the Explore drawer and in
+   Review.
+3. Review: for an item whose only reason is "Seen from one camera position only" and whose photo is a can't-tell photo, the
+   question becomes "We can't tell which box is this building in this photo. Look at the photo (or Live 360°): can you see
+   this building?" (Yes / No keep their meaning). There is no such item in today's queues; the wording is tested.
+4. "How do we know?" → "Which box" explains the choice, and says when the analysis used a different box (its results are
+   unchanged).
+5. Every area, including streets analysed later: the choice is computed by the API from the saved run files and the map's
+   building outlines.
+
+### Why
+- The Part 2 experiment (80 labelled photos, development / test halves) found today's rule claims a wrong box on about a
+  quarter of photos (test: 24.2 %). M3 cut that to 12.1 % on the held-out half. The owner checked the labels and chose to port
+  M3 for display only (level 1).
+
+### How it works
+- `backend/app/boxchoice.py` is the experiment's M3, unchanged: one line of sight per 4 px image column (161 per photo),
+  from 1.5 m to 60 m, into every building outline (outlines the camera stands in are skipped). The first outline each line
+  meets is what that column sees. Score of a box = overlap (IoU) between its columns and the building's visible columns;
+  the best box wins (ties: detector confidence); below 0.4: can't tell.
+- The outlines are the ones the run used (the pipeline's own area loader around the run's cameras: the run-era cache, else
+  the app's local OpenStreetMap / Microsoft copy, else OpenStreetMap). Results: `data/areas/<slug>/box_choice.json`
+  (`tools\box_choice.py`; a new worker area in the background after delivery — until then its photos show the analysis'
+  own box).
+- The evidence API marks the chosen box (`box_choice`: same / changed / cant_tell; `analysis_box`). Sign photos, assets,
+  business signs, the "Nearest camera" photo and Under the Hood's quality-gate examples are unchanged.
+- **Unchanged:** positions and Gate 1, register matches, the review queue and its counts, reports / Excel / GIS, every
+  number in the app, and which sign boxes are linked to a building.
+
+### Files changed
+- Backend: new `app/boxchoice.py`; `app/evidence.py` (reads box_choice.json, `apply_choice`), `app/jobs.py` (new areas).
+  Tests: new `tests/test_m3_level1.py` (10); `tests/test_p5.py` and `tests/test_evidence.py` updated for the intended change
+  (a can't-tell photo has no orange box; a changed photo's orange box is the M3 box).
+- Tools: new `tools/box_choice.py`. Data: new `data/areas/<slug>/box_choice.json` (9 areas).
+- Web: `components/EvidenceViews.tsx` (the line, "Which box"), `lib/reviewQuestions.ts`, `pages/Review.tsx`, `api/types.ts`,
+  `api/queries.ts`; scripts `test-ui.ts` (1 new), new `m3-level1-shots.ts`.
+- Docs: this entry, DECISIONS D62, README, manual checks 76–79. No change to the pipeline or the worker; no photo fetched.
+
+### Key numbers
+- **Experiment (test half, n = 33; one item = 3 points — a small sample):** M3 84.8 % correct, 12.1 % wrong box, 93.9 % get
+  a box; today 75.8 % / 24.2 % / 100 %. Single-camera photos 38 → 15 % wrong, row / attached 36 → 21 %; small building in
+  front of a big one 29 → 29 % (no gain).
+- **Consistency:** the app's choice = the experiment's M3 output for 80 of 80 labelled photos.
+- **Per area (building Front / Best photos):** Ward 29 338 photos — 42 changed box, 30 can't tell (of the 219 still served
+  by Google: 30 / 25); Trichy 53 — 3 / 7; Sanganur Road 49 — 5 / 3; Vadakku Masi Veethi 47 — 9 / 2; Rathinapuri 42 — 4 / 3;
+  3rd Street, Sridevi Nagar 24 — 9 / 0; Unnamed road between Bharathiar Road and Sankara Linganar Street 8 — 1 / 1;
+  Kattabomman 7 — 0 / 1; Tiruppur 1 — 0 / 0.
+- **Checks:** backend: full suite 503 passed, 2 failed, 1 skipped — the 2 were `test_evidence` asserting the stored box is always orange (intended change, updated; a first full run also failed `test_p5::test_no_guessed_building_box` the same way, updated, and the known-flaky `test_p6` delete test, which passed alone and in the rerun); after the updates the changed files pass (test_evidence, test_m3_level1, test_p5, test_p6). typecheck, build, test:ui 25 (1 new), check:data pass; the audit: first run 1 fail ("Esc closes the palette", Night — unrelated code), second run all passed. Regression (production preview): ALL PASSED, 291 checks, 0 retries (`run-2026-10-08_0710.log`); no expected answer changed. Live: the evidence API for the three cases and the Ward 29 key numbers (unchanged) against the running API.
+- **Screenshots** (`docs/screenshots/m3-level1/`, Night and Daylight, 1366×768): `w27-warehouse`, `c28-compound-wall`,
+  `n30-cant-tell` (drawer), `r30-review-cant-tell` (Review).
+
+### Limits
+- **The owner's two examples are not fixed by M3:** #27 (the small building in front still gets the warehouse box) and
+  #28 (the compound wall still gets the box). M3 + linked signs fixed #27 on the test half but was not the development
+  half's choice, so it is not ported.
+- 12 % wrong boxes remain on the test half; can't tell removes the orange box from about 6 % of photos.
+- The labels are one labeller's (Claude Code), spot-checked by the owner; 33 test items.
+- **Level 2 not done:** positions and Gate 1 still use the analysis' box. The experiment's what-if (Ward 29: 260 → 247
+  camera-derived positions, median 2.80 → 2.74 m, 60.4 → 64.0 % within 3.5 m) comes mostly from buildings leaving that set and
+  uses the same map wall as the reference, so it is not a measured gain.
+- A Front photo's use and floors were read by the analysis from its own box; when M3 marks a different box, the readings
+  are not redone (display only).
+
+### Lines that are now out of date in 00–06
+- Descriptions of the orange box as "the box whose line of sight hits the building first" (explainer 04 evidence section,
+  D31's H7 wording) now describe the analysis' choice, not what the app draws.
+
+---
+
 [← 06 Updates](06_updates.md) · [Start here](00_START_HERE.md) · (this is the last file) →
