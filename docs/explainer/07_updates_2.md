@@ -635,7 +635,21 @@
 - **Costs:** Street View (Google) 1,343 photos for the run + 20 for the spot-check (≈ $9.54 at list price; billed under
   India pricing, D60), 137 Places look-ups, a few geocoding calls; Amazon Nova (AWS) $0.061 + $0.000002 key checks; EC2
   (AWS) about 21 min for the run (≈ $0.20) plus the final deploy and live check.
-- **Checks:** see DECISIONS D64.
+- **Checks (8 Oct, after the switch):** backend full suite 522 passed, 1 skipped, after the intended updates (48 tests
+  quoted the Sep run: Sep-run-specific ones now point at `ward29_v1`, Ward 29 constants updated; 1 new D64 test file);
+  typecheck, build, test:ui 25, check:data pass; the audit passes (a first Night pass failed on the API's cold first load,
+  the rerun passed). Regression: A–D and F pass with the new expected answers; E's first run failed only on
+  `unnamed_road_near_5th_street_6eeca4` (the D63 live street whose files were only on the server: photos 404 on the
+  laptop) — its files were then copied home and committed; the rerun: **ALL PASSED, 0 retries** (`run-2026-10-08_1954.log`).
+- **Live** (http://65.1.253.18/, deployed 14:13 UTC): `/api/areas` lists Ward 29 and not the backup; `/api/areas/ward29`
+  373 / 22 / 54 / 221, no "resumed run" badge; `/api/areas/ward29_v1` answers; Front / Best photos carry one orange box
+  (box_choice "same"); Review 221 waiting; the PDF builds; the audit (both themes) passes against the live site; a
+  "Differ from register" drawer shows a fresh photo with its orange box; Trust shows the Sep run's model-card row and the new
+  Gate 1 counts. Screenshots: `docs/screenshots/ward29-rerun/live/` (`web/scripts/ward29-rerun-shots.ts`). The server
+  data folder held 6 Sep-run files in `ward29` and the old `ward29_v2` folder (a deploy never deletes): removed after
+  checking each was an identical copy of `ward29_v1`'s.
+- **Server time:** 12:18–12:39 UTC (run) and 13:50–14:24 UTC (deploy and live check), about 55 min, ≈ $0.53. The EC2 keys
+  had expired by the end, so the instance was stopped with an OS shutdown over SSH (shutdown behaviour = stop).
 
 ### Limits
 - **Gate 1 is still measured against the OSM wall** that the positions themselves use (partly circular); the rise to

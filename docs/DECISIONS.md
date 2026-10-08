@@ -2551,4 +2551,10 @@ same method and the same number of planted mistakes (78); no Trichy re-run.
   the boundary); left as delivered, flagged to the owner.
 - **Fixed on the way:** `tools/eval_gate1.py` dropped every model-card key after `gate1_position` (sign_links restored).
 
+**Checks (8 Oct, after the switch):** backend 522 passed, 1 skipped; typecheck, build, test:ui 25, check:data, audit (both
+themes, laptop and live) pass; regression ALL PASSED, 0 retries (`run-2026-10-08_1954.log`) with the new Ward 29 answers
+(after copying the D63 live street's files home; its photos had 404ed on the laptop). Live: deployed 14:13 UTC, Ward 29
+checked on http://65.1.253.18/ (map, photos with boxes, Review, PDF, Trust), server stopped by an OS shutdown (EC2 keys
+expired). Server time today ≈ 55 min.
+
 Old → new table, limits and files: explainer 07, D64 entry.
