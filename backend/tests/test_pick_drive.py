@@ -194,7 +194,7 @@ def test_drive_forward_follows_the_road_tangent(client):
     turns = [((b - a + 180) % 360) - 180 for a, b in zip(h, h[1:])]
     assert all(abs(t) < 100 for t in turns)                                # no 180° flip between neighbouring stops
     sathy = client.get("/areas/ward29/drive", params={"street": "Sathy Main Road"}).json()["branches"][0]
-    assert [g["id"] for g in sathy["gaps"]] == ["gap60-001", "gap60-002"]
+    assert [g["id"] for g in sathy["gaps"]] == ["gap60-001"]                # D64 re-run
     assert len(sathy["lamps"]) == 13
 
 

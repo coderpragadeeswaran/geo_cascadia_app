@@ -111,7 +111,9 @@ def build_export(area_name, cfg, buildings, results, views, vlm_bld, ocr_res, as
     meta = {"area": area_name, "generated": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "pipeline": {"detector": f"YOLOv8s {os.path.basename(os.path.dirname(os.path.dirname(cfg.yolo_weights)))}",
                          "ocr": f"PaddleOCR en+ta ({run_stats.get('ocr_mode')})", "vlm": cfg.vlm_model,
-                         "name_gate": cfg.name_gate, "footprints": "OSM", "reference": "Google Places (New)"},
+                         "name_gate": cfg.name_gate, "footprints": "OSM", "reference": "Google Places (New)",
+                         **({"box_rule": "M3 visible span (D64): the box shown is the box read and positioned"}
+                            if getattr(cfg, "box_rule", "m0") == "m3" else {})},
             "registers": "SYNTHETIC property + asset registers with planted errors (no open municipal data)",
             "counts": {"buildings": len(blds), "assets": len(ast), "missing_asset_records": len(missing),
                        "streetlight_gaps_60m": len(g60), "review_items": len(queue)}, "run": run_stats}

@@ -51,7 +51,7 @@ SUB_STAGES = {"vlm_names": "vlm", "building_crops": "vlm", "vlm_buildings": "vlm
 # statuses a worker leaves open (the job is not finished): no finished_at
 OPEN_STATUSES = ("expired_token", "needs_approval")
 ACTIVE_SQL = "('queued', 'running', 'expired_token', 'needs_approval')"      # not finished: blocks a new street
-ORIGINAL_AREAS = {"ward29", "trichy_bharathidasan_salai", "tiruppur_uthukuli_road"}   # never deletable
+ORIGINAL_AREAS = {"ward29", "ward29_v1", "trichy_bharathidasan_salai", "tiruppur_uthukuli_road"}   # never deletable (D64: + the backup)
 FILE_OK = re.compile(r"^[A-Za-z0-9_.-]{1,80}\.(json|geojson|csv)$")
 MAX_FILE = 40 * 1024 * 1024
 CANCELLED = "cancelled by user"
@@ -303,7 +303,7 @@ def job_create(body: JobIn, request: Request, D: Data = Depends(get_data)):
         with s.pool.connection() as c:
             if not body.test:
                 # P6 cap: one street at a time (cost control on a free-tier demo). Test jobs never block real ones.
-                busy = c.execute(f"""select j.input->>'street' from jobs j where not j.is_test and j.status in {ACTIVE_SQL}
+                busy = c.execute(f"""select case when coalesce((j.input->>'hidden')::boolean, false) then null else j.input->>'street' end from jobs j where not j.is_test and j.status in {ACTIVE_SQL}
                                      order by j.created_at limit 1""").fetchone()
                 if busy:
                     raise HTTPException(409, f"“{busy[0] or 'Another street'}” is still being analysed. One street at a "
@@ -324,7 +324,9 @@ def job_list(request: Request, active: bool = False, limit: int = 50, D: Data = 
             return []
         with s.pool.connection() as c:
             _finish_stale_cancels(c)
-            where = f"where j.status in {ACTIVE_SQL}" if active else ""
+            # D64: a hidden job (a re-run set up by the owner, its area hidden until approved) is not listed; GET /jobs/{id}
+            # still answers
+            where = "where not coalesce((j.input->>'hidden')::boolean, false)" + (f" and j.status in {ACTIVE_SQL}" if active else "")
             return [_job(r) for r in c.execute(f"select {JOB_COLS} from jobs j left join areas a on a.id = j.area_id "
                                                f"{where} order by j.created_at desc limit %s", (max(1, min(limit, 200)),))]
     jobs, off = D.read(fn)
@@ -478,7 +480,7 @@ def job_retry(job_id: str, request: Request, D: Data = Depends(get_data)):
             if not j["retryable"]:          # failed with an error: not cancelled, not "no Street View", no area
                 raise HTTPException(409, f"job is {j['display_status']}: only a failed job can be retried")
             if not j["is_test"]:
-                busy = c.execute(f"""select j.input->>'street' from jobs j where not j.is_test and j.status in {ACTIVE_SQL}
+                busy = c.execute(f"""select case when coalesce((j.input->>'hidden')::boolean, false) then null else j.input->>'street' end from jobs j where not j.is_test and j.status in {ACTIVE_SQL}
                                      and j.id <> %s order by j.created_at limit 1""", (job_id,)).fetchone()
                 if busy:
                     raise HTTPException(409, f"“{busy[0] or 'Another street'}” is still being analysed. One street at a "
@@ -559,6 +561,8 @@ def _seen(request, worker_id, device=None, job=None):
 
 
 def _job_brief(j):
+    if j and j["input"].get("hidden"):
+        return ""                                     # D64: a hidden job is not named in the top bar
     return {"id": j["id"], "street": j["street"], "stage": j["stage"], "done": j["done"], "total": j["total"]} if j else None
 
 
@@ -635,6 +639,33 @@ def worker_mapdata(body: MapDataIn, request: Request):
     except streetpick.OverpassBusy:
         return {"source": "none"}
     return {"source": "cache" if cached else "overpass", "elements": els}
+
+
+class RegisterIn(BaseModel):
+    job: str
+
+
+@router.post("/worker/register", tags=["worker"], dependencies=[Depends(worker_auth)])
+def worker_register(body: RegisterIn, request: Request, D: Data = Depends(get_data)):
+    """D64: a re-run of an analysed area keeps that area's synthetic register. For a job whose input names
+    `register_from` (an area slug), the records (with their hidden building ids) and the planted list of that area, as
+    its run saved them; the pipeline pairs them by location as always. 404 when the job asks for none."""
+    def fn(s):
+        with s.pool.connection() as c:
+            return _get_job(c, body.job)
+    j, _ = D.read(fn)
+    src = j["input"].get("register_from")
+    if not src or not re.fullmatch(r"[a-z0-9_]+", src):
+        raise HTTPException(404, "this job keeps no earlier register")
+    folder = os.path.join(request.app.state.settings.areas_dir, src)
+    try:
+        with open(os.path.join(folder, "register_synthetic.json"), encoding="utf-8") as f:
+            records = json.load(f)
+        with open(os.path.join(folder, "planted_register_mistakes.json"), encoding="utf-8") as f:
+            planted = json.load(f)
+    except (OSError, ValueError):
+        raise HTTPException(404, f"no saved register for {src}") from None
+    return {"offline": False, "from": src, "records": records, "planted": planted}
 
 
 @router.post("/worker/known", tags=["worker"], dependencies=[Depends(worker_auth)])
@@ -769,6 +800,9 @@ def worker_result(request: Request, job: str = Form(...), files: List[UploadFile
                            "resumed_from_saved_files": bool(wr.get("resumed_from_saved_files")),
                            "attempts": wr.get("attempts"), "ocr_mode": wr.get("ocr_mode"),
                            "replay_of": wr.get("replay_of")}, fh)             # fake worker: another run's files
+            if j["input"].get("hidden"):                  # D64: kept out of the area list until the owner switches
+                with open(os.path.join(tmp, loader.HIDDEN_FILE), "w", encoding="utf-8") as fh:
+                    json.dump({"hidden": True, "job_id": j["id"], "why": j["input"].get("hidden_why") or "hidden job"}, fh)
             r = subprocess.run([sys.executable, os.path.join(loader.ROOT, "tools", "build_run_report.py"), tmp],
                                capture_output=True, text=True, encoding="utf-8", env={**os.environ, "PYTHONUTF8": "1"})
             if r.returncode:
@@ -847,7 +881,9 @@ def fill_street_names(folder, job_input=None):
         ways[st["name"]] = set(json.loads(w) if isinstance(w, str) else (w or []))
     display = lambda raw: names.get(raw, raw)
     ji = job_input or {}
-    job_ways, job_name = set(ji.get("way_ids") or []), ji.get("street")
+    # only a street CLICK names its street after the job (D64: a polygon job listing way ids, e.g. a re-run of an area,
+    # keeps the pipeline's names)
+    job_ways, job_name = set(ji.get("way_ids") or []) if ji.get("click") else set(), ji.get("street")
     new, used = {}, set(names.values())
     for raw in geo:
         clicked = bool(job_name and ways.get(raw, set()) & job_ways)

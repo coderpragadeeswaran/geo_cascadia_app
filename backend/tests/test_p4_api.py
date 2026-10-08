@@ -20,10 +20,10 @@ def test_chips_round_trip_through_queryengine(client):
     """Editing chips = the same QueryEngine answer as the equivalent text; every street of every area round-trips."""
     t = q(client, text=Q1).json()
     f = q(client, filters=t["parsed_filters"]).json()
-    assert f["parsed_filters"] == t["parsed_filters"] and f["total"] == t["total"] == 0
-    assert [s["count"] for s in f["why_empty"]] == [381, 27, 5, 2, 0]      # after D42-D44 + the safer sign rule (was 381, 19, 1, 1, 0)
+    assert f["parsed_filters"] == t["parsed_filters"] and f["total"] == t["total"] == 1     # D64 re-run: one building
+    assert f["why_empty"] == []        # a found row has no "why empty" funnel (Sep 2026 run: 0 rows, 381, 27, 5, 2, 0)
     relaxed = q(client, filters={**t["parsed_filters"], "floors_op": ">=", "floors_n": 1}).json()   # edit a chip
-    assert relaxed["parsed_filters"]["floors_op"] == ">=" and relaxed["total"] == 2          # 1 before D42-D44
+    assert relaxed["parsed_filters"]["floors_op"] == ">=" and relaxed["total"] == 4          # D64 re-run (Sep run: 2)
     for slug in AREAS:
         streets = {b["street"] for b in raw_export(slug)["buildings"]} | {g["street"] for g in raw_export(slug)["streetlight_gaps"]}
         for st in streets:
@@ -41,8 +41,8 @@ def test_chips_round_trip_through_queryengine(client):
 
 def test_gap_query_rows_show_recorded_and_along_road(client):
     rows = {r["id"]: r for r in q(client, text=Q2).json()["rows"]}
-    assert rows["gap60-001"]["length_m"] == 376 and rows["gap60-001"]["along_road_m"] == 424 and rows["gap60-001"]["length_differs"]
-    assert rows["gap60-006"]["display_mode"] == "check" and "4 lit camera stops" in rows["gap60-006"]["note"]
+    assert rows["gap60-008"]["length_m"] == 275 and rows["gap60-008"]["along_road_m"] == 367 and rows["gap60-008"]["length_differs"]
+    assert rows["gap60-007"]["display_mode"] == "check" and "4 lit camera stops" in rows["gap60-007"]["note"]     # D64 re-run
     assert [r["length_m"] for r in rows.values()] == sorted((r["length_m"] for r in rows.values()), reverse=True)
 
 
@@ -79,8 +79,8 @@ def test_measured_rates_come_from_full_live_runs():
     med = starts[len(starts) // 2] if len(starts) % 2 else (starts[len(starts) // 2 - 1] + starts[len(starts) // 2]) / 2
     assert abs(r["gpu"]["startup_s"] - med) < 1e-9
     assert r["sv_price"] == mc["cost_time"]["street_view_price_usd_per_image"]
-    # Ward 29's photos from its run files: 1,154 views fetched + 266 building crops = 1,420 (the owner's full run)
-    assert planest.photos_of_run(os.path.join(st.areas_dir, "ward29")) == {"views": 1154, "crops": 266, "photos": 1420}
+    # the Sep 2026 Ward 29 run's photos (ward29_v1 since D64): 1,154 views fetched + 266 building crops = 1,420
+    assert planest.photos_of_run(os.path.join(st.areas_dir, "ward29_v1")) == {"views": 1154, "crops": 266, "photos": 1420}
 
 
 def test_cancel_job(online):

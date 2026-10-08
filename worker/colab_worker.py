@@ -843,6 +843,13 @@ def run_job(api, job, base_cfg, run_area, state):
 
     poly = inp.get("polygon")
     name = inp.get("name") or inp.get("street") or "New street"
+    reg = None
+    if inp.get("register_from"):                                   # D64: a re-run keeps the area's synthetic register
+        r = api.call("/worker/register", {"job": job["id"]})
+        reg = (r["records"], r["planted"])
+        note["register_from"] = r["from"]
+        json.dump(note, open(note_p, "w"))
+        print(f"  register: the {len(r['records'])} records + {len(r['planted'])} planted mistakes of {r['from']} (kept)")
     print(f"\n▶ {name}: analysing on {cfg.device.upper()}"
           + (f" ({cfg.ocr_mode} sign reading on CPU)" if cfg.device == "cpu" else "")
           + (" - continuing from the progress saved on Drive" if from_drive else
@@ -860,7 +867,8 @@ def run_job(api, job, base_cfg, run_area, state):
         while True:
             try:
                 exp, _ = run_area(poly, out, cfg, area_name=name, way_ids=inp.get("way_ids"), progress=progress,
-                                  on_stage=on_stage, plan_check=plan_check, resume=True, ocr_runner=ocr_runner_for(tell, ocr_log))
+                                  on_stage=on_stage, plan_check=plan_check, resume=True, ocr_runner=ocr_runner_for(tell, ocr_log),
+                                  **({"register_records": reg} if reg else {}))
                 break
             except Exception as err:
                 if str(err).startswith("NO_STREET_VIEW"):

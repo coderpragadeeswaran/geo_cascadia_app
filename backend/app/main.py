@@ -535,7 +535,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
                 "single_camera_by_distance": card.get("single_camera_by_distance")}
 
     @app.get("/trust/sign-links", tags=["trust"])
-    def trust_sign_links(area: str = "ward29"):
+    def trust_sign_links(area: str = views.MODEL_CARD_AREA):     # D64: the spot-check was made on the Sep 2026 run
         """P7.4: the sign-linking rule and its Google-pin check (model_card.sign_links), the spot-check sample of sign moves
         (sign_spotcheck.json: photo view, box, camera, line of sight, old / new outline) and the AI first-pass verdicts
         (sign_spotcheck_ai.json, labelled as an AI visual check, not a human one)."""
@@ -564,7 +564,9 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         """Every place, in every area, where a stored counter or story sentence differs from the computed count."""
         def fn(s):
             bundles = [b for b in (s.bundle(x) for x in s.slugs()) if b]
-            return trust.consistency(bundles, {b["slug"]: app.state.runfiles.get(b["slug"]) for b in bundles}, mc())
+            mcb = s.bundle(views.MODEL_CARD_AREA)              # D64: the model card's run, hidden since the switch
+            files = {b["slug"]: app.state.runfiles.get(b["slug"]) for b in bundles + ([mcb] if mcb else [])}
+            return trust.consistency(bundles, files, mc(), mcb)
         res, off = D.read(fn)
         return {"offline": off, "rows": res}
 

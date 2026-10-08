@@ -12,6 +12,7 @@ from app.settings import ROOT
 from app.store import JsonStore
 
 AREAS = os.path.join(ROOT, "data", "areas")
+OLD = "ward29_v1"       # D64: the Sep 2026 Ward 29 run (its retired panoramas), a hidden backup since the switch
 CAM = {"lat": 11.03561906110748, "lon": 76.98019144932174}
 GONE_ID = "IzK35muPb34GUZjakVoDOg"          # transport india pvt ltd (w1236978849), 2nd Street, Gandhi Nagar
 NEW = {"status": "OK", "pano_id": "NEWPANO", "date": "2026-02", "location": {"lat": CAM["lat"] + 1e-6, "lng": CAM["lon"]}}
@@ -85,7 +86,7 @@ def test_aimed_from_the_new_position_at_the_target():
 
 @pytest.fixture(scope="module")
 def ward29():
-    return JsonStore(AREAS).bundle("ward29"), evidence.Detections(AREAS)
+    return JsonStore(AREAS).bundle(OLD), evidence.Detections(AREAS)
 
 
 def test_transport_india_gets_the_current_photo_aimed_at_its_front(tmp_path, ward29):
@@ -125,17 +126,17 @@ def test_check_area_counts_and_hood_note(tmp_path, ward29):
 
 def test_committed_ward29_check_and_hood(client):
     """the one-off check's file (tools/check_photos.py, 7 Oct 2026) and what the Hood serves from it"""
-    with open(os.path.join(AREAS, "ward29", "photo_check.json"), encoding="utf-8") as f:
+    with open(os.path.join(AREAS, OLD, "photo_check.json"), encoding="utf-8") as f:
         c = json.load(f)
     assert c["photo_refs"] == c["served"] + c["gone"] + c["unknown"] and c["gone_current_available"] <= c["gone"]
-    h = client.get("/areas/ward29/hood").json()
+    h = client.get(f"/areas/{OLD}/hood").json()
     assert h["photo_check"]["text"].startswith(f"{c['gone']} of {c['photo_refs']} analysis photos")
     assert h["billing"]["line"].startswith("Billed under Google's India pricing: ₹0 so far") and "17,747" in h["billing"]["line"]
 
 
 def test_evidence_and_photo_endpoints_carry_the_answer(client):
     """cache only here (conftest blanks the server key): served is true / false / null, never an error"""
-    v = client.get("/areas/ward29/evidence/building/w1236978849").json()["views"]
+    v = client.get(f"/areas/{OLD}/evidence/building/w1236978849").json()["views"]
     assert all("served" in x and "current" in x for x in v)
     r = client.get(f"/photos/{GONE_ID}?heading=129.8").json()
     assert r["pano_id"] == GONE_ID and r["served"] in (True, False, None) and r["date"] == "2026-02"

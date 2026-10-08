@@ -214,8 +214,9 @@ def test_hood_numbers_equal_computed_counts(offline, slug):
 def test_hood_story_corrections_ward29(offline):
     c = offline.get("/areas/ward29/hood").json()["corrections"]
     by = {x["chapter"]: x for x in c}
-    assert "20 triangulated" in by["positions"]["text"] and "29 triangulated" in by["positions"]["stored"]
-    assert "221 had a usable view" in by["buildings"]["text"] and "43 had no building box" in by["buildings"]["text"]
+    # D64 re-run: the story counts VLM-stage records / assets seen by 2+ cameras; the corrected text counts the records
+    assert "19 triangulated" in by["positions"]["text"] and "27 triangulated" in by["positions"]["stored"]
+    assert "176 had a usable view" in by["buildings"]["text"] and "57 had no building box" in by["buildings"]["text"]
     assert set(by) == {"positions", "buildings"}
 
 
@@ -245,7 +246,7 @@ def test_hood_examples_are_real(offline, key):
 
 
 def test_hood_timings_flagged_as_resumed(offline):
-    c = offline.get("/areas/ward29/hood").json()["cost"]
+    c = offline.get("/areas/ward29_v1/hood").json()["cost"]          # D64: the Sep 2026 (resumed) Ward 29 run
     assert c["timings"]["representative"] is False and c["timings"]["badge"] == "resumed run, not representative"
     mc = json.load(open(os.path.join(ROOT, "data", "model_card.json"), encoding="utf-8"))
     vlm = next(x for x in c["lines"] if x["key"] == "vlm")

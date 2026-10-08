@@ -1,7 +1,9 @@
 """Which detection box is "this building" on a building's evidence photo (D62, M3 "occlusion-aware visible span").
 
-Display only: positions, Gate 1, register matches, review items, reports and every count keep using the analysis' own
-box choice. This only decides which box the app draws orange.
+Display only for areas analysed before D64: positions, Gate 1, register matches, review items, reports and every count keep
+using the analysis' own box choice. This only decides which box the app draws orange. Areas analysed with the pipeline's
+M3 (D64, level 2: building_views.json rows carry box_rule "M3") already show the box they used: from_pipeline().
+The rule's functions (first_hits, span, choose) live in the pipeline (geo_cascadia.boxpick): one rule for both.
 
 Today's rule (the pipeline's building_views) gives a building the box whose CENTRE line of sight hits its outline first.
 That picks a wrong box on about a quarter of photos (a small building in front of a big one takes the big one's box; a
@@ -28,15 +30,9 @@ import os
 import pickle
 import threading
 
-STEP = 4
-COLS = list(range(0, 641, STEP))
-MAX_R = 60.0
-START_M = 1.5
-MIN_OVERLAP = 0.4
+from geo_cascadia.boxpick import COLS, MAX_R, MIN_OVERLAP, RULE, START_M, STEP, choose, first_hits, span  # noqa: F401,E402 - one rule (D64)
+
 PAD_DEG = 0.0007
-RULE = ("M3 visible span: per 4 px image column, the first building outline the camera's line of sight meets (60 m, "
-        "outlines the camera stands in skipped); the box whose columns best overlap the building's visible columns "
-        f"(IoU; ties by detector confidence); none below {MIN_OVERLAP}")
 _AREA_LOCK = threading.Lock()
 
 
@@ -86,51 +82,6 @@ def area_for(folder, dets, cache_dir):
     return a
 
 
-def first_hits(a, cam, heading, pitch, fov):
-    """per image column: the first outline id its line of sight meets (None: nothing within 60 m)"""
-    from shapely.geometry import LineString, Point, box as sbox
-    from geo_cascadia.geo import pixel_to_bearing
-    near = [int(i) for i in a.tree.query(sbox(cam[0] - MAX_R, cam[1] - MAX_R, cam[0] + MAX_R, cam[1] + MAX_R))]
-    polys = [(a.fp_ids[i], a.footprints[i]) for i in near]
-    P = Point(cam)
-    own = {fp for fp, p in polys if p.contains(P)}
-    out = []
-    for u in COLS:
-        r = math.radians(pixel_to_bearing(heading, u, 640, fov))
-        ray = LineString([(cam[0] + START_M * math.sin(r), cam[1] + START_M * math.cos(r)),
-                          (cam[0] + MAX_R * math.sin(r), cam[1] + MAX_R * math.cos(r))])
-        best = None
-        for fp, p in polys:
-            if fp in own:
-                continue
-            it = ray.intersection(p)
-            if it.is_empty:
-                continue
-            d = P.distance(it)
-            if best is None or d < best[0]:
-                best = (d, fp)
-        out.append(best[1] if best else None)
-    return out
-
-
-def span(x1, x2):
-    s = [i for i, u in enumerate(COLS) if x1 <= u <= x2]
-    return s or [min(range(len(COLS)), key=lambda i: abs(COLS[i] - (x1 + x2) / 2))]
-
-
-def choose(first, target, boxes):
-    """M3 on one photo: (the chosen box or None, its score, every box's score)"""
-    V = {i for i, fp in enumerate(first) if fp == target}
-    scored = []
-    for b in boxes:
-        S = set(span(b["x1"], b["x2"]))
-        scored.append((round(len(S & V) / len(S | V), 3) if S | V else 0.0, b))      # rounded as in the experiment
-    if not scored:
-        return None, 0.0, []
-    s, b = max(scored, key=lambda t: (t[0], t[1]["conf"]))
-    return (b if s >= MIN_OVERLAP else None), s, scored
-
-
 def building_photos(exp, bviews):
     """each building's photo whose orange box is a building box: the attribute view (Front) when it has a stored box,
     else the pipeline's best match (building_views): [(building id, 'attr' | 'best', view, the analysis' box)]"""
@@ -163,6 +114,8 @@ def compute(folder, cache_dir):
     if not dets or not exp:
         return None
     bviews = {q["fp"]: q for q in rd("building_views.json", []) or []}
+    if any(q.get("box_rule") == "M3" for q in bviews.values()):
+        return from_pipeline(exp, bviews)
     a = area_for(folder, dets, cache_dir)
     by_view = {}
     for d in dets:
@@ -193,6 +146,22 @@ def compute(folder, cache_dir):
 
 
 from collections import Counter  # noqa: E402
+
+
+def from_pipeline(exp, bviews):
+    """D64 (level 2): the run itself chose every building's box with M3 (pipeline boxpick, the same functions as above),
+    and that box is the one it read and positioned. So the box shown IS the analysis' box: nothing is recomputed here (no
+    second rule); every Front / Best photo is "same", with the pipeline's own score."""
+    rows, n = {}, Counter()
+    for bid, key, v, abox in building_photos(exp, bviews):
+        k = (v["pano_id"], float(v["heading"]), float(v.get("pitch") or 0), float(v.get("fov") or 90))
+        q = bviews.get(bid) or {}
+        rows.setdefault(bid, {})[view_key(*k)] = {"view": key, "status": "same", "score": q.get("m3_score"), "box": abox,
+                                                  "analysis_box": abox}
+        n["same"] += 1
+    return {"rule": RULE, "params": {"column_px": STEP, "max_m": MAX_R, "min_overlap": MIN_OVERLAP},
+            "level": 2, "source": "the run's own choice (pipeline boxpick, D64): the box shown is the box used",
+            "computed": dt.date.today().isoformat(), "counts": dict(n), "buildings": rows}
 
 
 def write(folder, cache_dir):

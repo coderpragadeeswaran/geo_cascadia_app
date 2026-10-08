@@ -84,11 +84,14 @@ def test_counts_computed_from_records(client, ward29):
     """D2/D9: summary counts come from records (20 triangulated; 139 not classified after D44 with the safer sign rule), not story text."""
     r = client.get("/areas/ward29").json()
     s = r["summary"]
-    assert s["assets_triangulated"] == sum(a["method"] == "triangulated" for a in ward29["assets"]) == 20
+    assert s["assets_triangulated"] == sum(a["method"] == "triangulated" for a in ward29["assets"]) == 19
     unknown = sum(b["attributes"]["use"]["value"] is None for b in ward29["buildings"])
-    assert s["use_not_classified"] == unknown == 139                                   # 160 before D32, 135 before D44, 142 with the first D44 rule
+    assert s["use_not_classified"] == unknown == 168                                   # D64 re-run (Sep run: 139)                                   # 160 before D32, 135 before D44, 142 with the first D44 rule
     assert r["dashboard"]["kpi"]["use_not_classified"] == unknown
     assert r["dashboard"]["charts"]["building_use"]["not classified"] == unknown
-    assert any("triangulated" in c["field"] and c["stored"] == 29 and c["computed"] == 20 for c in r["consistency"])
-    assert r["cost"]["model_card"]["source"] == "model_card"             # D1
-    assert r["cost"]["run_stats_representative"] is False
+    assert any("triangulated" in c["field"] and c["stored"] == 27 and c["computed"] == 19 for c in r["consistency"])
+    # D64: Ward 29 is a fresh run from the app: its own counters are representative; the model card's cost figures
+    # describe the Sep 2026 run (ward29_v1), shown there
+    assert r["cost"]["model_card"] is None and r["cost"]["run_stats_representative"] is True and r["cost"]["run_stats_badge"] is None
+    old = client.get("/areas/ward29_v1").json()["cost"]
+    assert old["model_card"]["source"] == "model_card" and old["run_stats_representative"] is False      # D1

@@ -123,6 +123,15 @@ def _replace(cur, table, key_cols, cols, rows, area_id, geom_exprs=None, key_nam
     cur.execute(f"delete from {table} where area_id = %s and not ({key_name} = any(%s))", (area_id, keys))
 
 
+HIDDEN_FILE = "hidden.json"
+
+
+def is_hidden(folder):
+    """D64: a hidden.json marker in the area folder keeps the area out of the area list (a re-run waiting for the owner's
+    approval, or a backup kept after a switch); it is still served by its own address"""
+    return os.path.isfile(os.path.join(folder, HIDDEN_FILE))
+
+
 def load_area(conn, folder, slug=None, source_job_id=None):
     folder = os.path.abspath(folder)
     slug = slug or os.path.basename(folder.rstrip("\\/"))
@@ -143,16 +152,17 @@ def load_area(conn, folder, slug=None, source_job_id=None):
     with conn.transaction(), conn.cursor() as cur:
         cur.execute(
             f"""insert into areas (slug, name, polygon, polygon_source, bbox, source_job_id, meta, dashboard, run_report,
-                                   computed, consistency)
-                values (%s, %s, {G}, %s, {G}, %s, %s, %s, %s, %s, %s)
+                                   computed, consistency, hidden)
+                values (%s, %s, {G}, %s, {G}, %s, %s, %s, %s, %s, %s, %s)
                 on conflict (slug) do update set name = excluded.name, polygon = excluded.polygon,
                   polygon_source = excluded.polygon_source, bbox = excluded.bbox,
                   source_job_id = coalesce(excluded.source_job_id, areas.source_job_id), meta = excluded.meta,
                   dashboard = excluded.dashboard, run_report = excluded.run_report, computed = excluded.computed,
-                  consistency = excluded.consistency, updated_at = now()
+                  consistency = excluded.consistency, hidden = excluded.hidden, updated_at = now()
                 returning id""",
             (slug, meta.get("area") or slug, poly.wkt, poly_src, bbox.wkt, source_job_id, J(meta),
-             J(exp.get("dashboard") or {}), J(rr), J(computed_counts(exp)), J(consistency(exp, rr, mc))))
+             J(exp.get("dashboard") or {}), J(rr), J(computed_counts(exp)), J(consistency(exp, rr, mc)),
+             is_hidden(folder)))
         area_id = cur.fetchone()[0]
 
         rows = []

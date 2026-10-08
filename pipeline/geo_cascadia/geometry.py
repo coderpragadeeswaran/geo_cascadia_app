@@ -3,7 +3,6 @@
 import math
 from collections import defaultdict
 import numpy as np
-from sklearn.cluster import DBSCAN
 from .geo import pixel_to_bearing, haversine, triangulate_multiview
 
 
@@ -26,6 +25,7 @@ def _ray(d, frame, cfg):
 
 
 def locate_assets(dets, frame, cfg):
+    from sklearn.cluster import DBSCAN                    # here, so building_views also runs on the laptop (D64 preview)
     rays, assets = [_ray(d, frame, cfg) for d in dets], []
 
     def solve(members):
@@ -123,21 +123,29 @@ def signs_by_building(dets, area):
     return dict(by_fp)
 
 
-def building_views(dets, area, edge=0.02, max_h_m=22.0):
-    """Best view per building for the VLM + the box-quality gate (cells 65 + 68)."""
+def building_views(dets, area, edge=0.02, max_h_m=22.0, chosen=None):
+    """Best view per building for the VLM + the box-quality gate (cells 65 + 68).
+    chosen (D64): boxpick.assign()'s rays — each building's box per photo chosen by M3, with its distance; the building's
+    view is then picked among those boxes only (the box shown = the box read = the box positioned). None: the pre-D64 rule
+    (a box belongs to the outline its centre line of sight hits first)."""
     bld = [d for d in dets if d["cls"] == "building" and d["geom_ok"]]
     per_view = defaultdict(int)
     for d in bld: per_view[(d["pano_id"], d["heading"], d["pitch"])] += 1
     by_fp = defaultdict(list)
-    for d in bld:
+    shape = lambda d, dist: {"ray_dist_m": round(dist, 1), "w_frac": round((d["x2"] - d["x1"]) / d["W"], 3),
+                             "h_frac": round((d["y2"] - d["y1"]) / d["H"], 3),
+                             "boxes_in_view": per_view[(d["pano_id"], d["heading"], d["pitch"])]}
+    if chosen is not None:
+        for r in chosen:
+            if r.get("ray_dist_m") is None: continue
+            d = {k: v for k, v in r.items() if k not in ("bearing", "cx", "cy", "hit_m", "fp", "ray_dist_m")}
+            by_fp[r["fp"]].append({**d, **shape(d, r["ray_dist_m"]), "box_rule": "M3"})
+    for d in (bld if chosen is None else []):
         b = pixel_to_bearing(d["heading"], d["u"], d["W"], d["fov"])
         cx, cy = area.L(d["camera_lat"], d["camera_lon"])
         dist, idx = area.cast(cx, cy, math.sin(math.radians(b)), math.cos(math.radians(b)))
         if idx is not None:
-            by_fp[area.fp_ids[idx]].append({**d, "ray_dist_m": round(dist, 1),
-                                            "w_frac": round((d["x2"] - d["x1"]) / d["W"], 3),
-                                            "h_frac": round((d["y2"] - d["y1"]) / d["H"], 3),
-                                            "boxes_in_view": per_view[(d["pano_id"], d["heading"], d["pitch"])]})
+            by_fp[area.fp_ids[idx]].append({**d, **shape(d, dist)})
     rank = lambda d: (0 if (d["w_frac"] >= 0.92 and d["h_frac"] >= 0.92) else 1,
                       0 if d["y1"] <= d["H"] * edge else 1, -abs(d["w_frac"] - 0.55), d["conf"])
     out = []
@@ -154,5 +162,6 @@ def building_views(dets, area, edge=0.02, max_h_m=22.0):
                                                   "x1", "y1", "x2", "y2", "ray_dist_m", "w_frac", "h_frac")},
                     "det_conf": q["conf"], "n_views": len(ds), "full_frame": full, "top_cut": top_cut,
                     "bottom_cut": bottom_cut, "sliver": sliver,
-                    "reliable": not (top_cut or bottom_cut or full or sliver or h_m > max_h_m)})
+                    "reliable": not (top_cut or bottom_cut or full or sliver or h_m > max_h_m),
+                    **({"box_rule": "M3", "m3_score": q.get("m3_score")} if q.get("box_rule") else {})})
     return out

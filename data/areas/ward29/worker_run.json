@@ -1,0 +1,1 @@
+{"attempts": 1, "resumed_from_saved_files": false, "ocr_mode": "full", "register_from": "ward29", "map_data": {"local": true, "answers": {"overpass": {"app_local": 3}}, "city": "coimbatore", "osm_snapshot": "2026-10-02T20:21:34+00:00", "ms_release": "2026-02-23"}, "ocr_tries": [{"try": 1, "device": "gpu", "ocr_mode": "full", "ok": true, "why": null}]}

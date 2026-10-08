@@ -245,8 +245,8 @@ Excel columns). `GET /areas/{slug}/report.pdf|.xlsx|.geojson|.shp.zip?street=`. 
 
 **OpenStreetMap as a real reference** (not an official register; it never changes our results): our businesses vs
 OpenStreetMap's shop points along the analysed streets (Under the Hood, Trust, the question "Businesses not in
-OpenStreetMap", the report). Pairs within 25 m are "near each other (location only)": Ward 29's 9 pairs share no name
-(D59). OpenStreetMap's building:levels shows in the building card only where the building has the tag (Ward 29: 2 of 381). The names
+OpenStreetMap", the report). Pairs within 25 m are "near each other (location only)": Ward 29's 10 pairs share no name
+(D59). OpenStreetMap's building:levels shows in the building card only where the building has the tag (Ward 29: 2 of 373). The names
 and tags come from one OpenStreetMap look-up per area (free, no Google call), saved in `data/areas/<slug>/osm_tags.json`:
 ```powershell
 backend\.venv\Scripts\python tools\fetch_osm_tags.py          # areas without the file (new worker areas fetch it themselves)
@@ -279,11 +279,19 @@ No Street View photo is stored by the API or in `data/`. The worker keeps photo 
 deletes them once the result is delivered (it prints how many). Local screenshots in `docs/screenshots/` (git-ignored)
 can show Street View photos: delete them when no longer needed. Details: explainer 04 §6.9.
 
-**Retired panoramas (D60).** Google re-issues panorama ids: on 7 Oct 2026, 303 of Ward 29's 852 evidence photos (69 of 201
+**Retired panoramas (D60).** Google re-issues panorama ids: on 7 Oct 2026, 303 of the Sep 2026 Ward 29 run's 852 evidence photos (69 of 201
 panoramas) and 2 of Trichy's 223 were no longer served. Before showing a stored photo the app asks its API whether Google
 still serves that panorama (free metadata, cached 30 days). If not, it shows Google's current photo from the same spot
 (within 25 m, aimed at the same building front, pole or sign) without the analysis' boxes, and says so; with no photo
 nearby it says "No Street View photo available here any more" and requests nothing. Re-run `tools\check_photos.py` monthly.
+
+**Ward 29 re-run (D64).** Since 8 Oct 2026 the app's Ward 29 is a fresh run on the AWS server (same boundary, streets and
+method; every photo has its boxes again), with the building box chosen by M3 at level 2 (the box shown is the box read and
+positioned; `pipeline/geo_cascadia/boxpick.py`). The previous run (Sep 2026, Colab) is kept as a **hidden** area
+`ward29_v1` (not in the area list; `/areas/ward29_v1` still answers; its review decisions stay with it). Roll back with
+`backend\.venv\Scripts\python tools\switch_ward29.py --rollback`, then commit and deploy. Tools: `tools\ward29_rerun.py`
+(estimate / queue the hidden job), `tools\rebuild_register.py` (a synthetic register from a run's own buildings, D42 method),
+`tools\m3_level2_preview.py` (offline what-if). An area folder with a `hidden.json` is hidden the same way.
 
 **Which box is "this building" (D62).** The orange box on a building's Front / Best photo is the building box that best
 covers the part of the building the camera can see (other outlines hide the rest); below 40 % overlap the photo says

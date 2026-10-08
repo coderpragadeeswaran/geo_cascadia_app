@@ -120,7 +120,7 @@
   "_note": "Automatic evaluation, NOT hand labels (tools/eval_gate1.py). Target: predicted building position within 3.5 m (FarmwiseAI Gate 1). Official rule (D27, D28): triangulated wall-corner midpoint with >= 2 cameras, else wall_hit (best ray on the road-facing wall; uses the map footprint), else wall_centre (midpoint of the road-facing wall, D33), else footprint_centre (no road-facing wall). Development runs (box centre vs wall corners, D26): data/areas/<slug>/gate1_eval.json.",
   "organiser_guidance": "Organiser guidance: OpenStreetMap footprints are accepted as the reference; the position is the centre of the building's front.",
   "front_centre_note": "vs OSM front-wall centre: distance to the midpoint of the road-facing footprint wall. wall_centre IS that point (0 m by construction, coordinate rounding only), so it and 'all buildings' flatter the result; 'camera-derived' pools the methods whose position along the wall comes from a camera (triangulated, wall_hit).",
-  "generated": "2026-09-27",
+  "generated": "2026-10-08",
   "target_m": 3.5,
   "status": "not verified",
   "status_note": "No reference accurate to ~1 m is available, so a 3.5 m result can't be confirmed or ruled out. Evaluation tool ready for surveyed points (tools/eval_gate1.py).",
@@ -151,12 +151,12 @@
     "triangulation_rejected": 4
    },
    "ward29": {
-    "buildings": 381,
-    "triangulated": 36,
-    "wall_hit": 224,
-    "wall_centre": 121,
+    "buildings": 373,
+    "triangulated": 35,
+    "wall_hit": 205,
+    "wall_centre": 133,
     "footprint_centre": 0,
-    "triangulation_rejected": 11
+    "triangulation_rejected": 6
    }
   },
   "self_consistency": {
@@ -179,13 +179,13 @@
     "pair_estimates": 20
    },
    "ward29": {
-    "triangulated": 36,
-    "estimated": 17,
+    "triangulated": 35,
+    "estimated": 16,
     "not_estimated": 19,
-    "n": 17,
-    "median_m": 2.51,
-    "p90_m": 7.46,
-    "pair_estimates": 48
+    "n": 16,
+    "median_m": 2.35,
+    "p90_m": 4.51,
+    "pair_estimates": 39
    }
   },
   "vs OSM front-wall centre": {
@@ -439,63 +439,63 @@
    },
    "ward29": {
     "triangulated (cameras only)": {
-     "n": 36,
-     "median_m": 5.28,
-     "p90_m": 9.69,
-     "within_3_5_m_pct": 38.9,
+     "n": 35,
+     "median_m": 4.0,
+     "p90_m": 9.27,
+     "within_3_5_m_pct": 48.6,
      "worst_5": [
       {
-       "building_id": "w1247745260",
-       "m": 15.9
+       "building_id": "w1236978398",
+       "m": 11.7
       },
       {
-       "building_id": "w1236978516",
-       "m": 11.6
+       "building_id": "w1236977995",
+       "m": 9.6
       },
       {
-       "building_id": "w1236978736",
-       "m": 11.2
-      },
-      {
-       "building_id": "w1236978389",
-       "m": 9.7
-      },
-      {
-       "building_id": "w1247744960",
+       "building_id": "w1236977972",
        "m": 9.4
+      },
+      {
+       "building_id": "w1236978592",
+       "m": 9.3
+      },
+      {
+       "building_id": "w1236978617",
+       "m": 9.0
       }
      ]
     },
     "wall_hit (camera ray on the map wall; uses the map)": {
-     "n": 224,
-     "median_m": 2.58,
-     "p90_m": 6.86,
-     "within_3_5_m_pct": 63.8,
+     "n": 205,
+     "median_m": 2.39,
+     "p90_m": 6.03,
+     "within_3_5_m_pct": 70.7,
      "worst_5": [
-      {
-       "building_id": "w1236977995",
-       "m": 16.3
-      },
       {
        "building_id": "w1247744970",
        "m": 15.6
       },
       {
-       "building_id": "w1236978398",
-       "m": 12.5
+       "building_id": "w1247745245",
+       "m": 14.5
       },
       {
-       "building_id": "w1247745245",
-       "m": 12.2
+       "building_id": "w1247745191",
+       "m": 13.0
       },
       {
        "building_id": "w1247745341",
        "m": 11.8
+      },
+      {
+       "building_id": "w1236978198",
+       "m": 11.7
       }
      ]
     },
     "wall_centre (front-wall centre from the map; uses the map)": {
-     "n": 121,
+     "n": 133,
      "median_m": 0.01,
      "p90_m": 0.01,
      "within_3_5_m_pct": 100.0,
@@ -530,66 +530,66 @@
      "worst_5": []
     },
     "all buildings": {
-     "n": 381,
-     "median_m": 1.58,
-     "p90_m": 6.58,
-     "within_3_5_m_pct": 73.0,
+     "n": 373,
+     "median_m": 1.26,
+     "p90_m": 5.58,
+     "within_3_5_m_pct": 79.1,
      "worst_5": [
-      {
-       "building_id": "w1236977995",
-       "m": 16.3
-      },
-      {
-       "building_id": "w1247745260",
-       "m": 15.9
-      },
       {
        "building_id": "w1247744970",
        "m": 15.6
       },
       {
-       "building_id": "w1236978398",
-       "m": 12.5
+       "building_id": "w1247745245",
+       "m": 14.5
       },
       {
-       "building_id": "w1247745245",
-       "m": 12.2
+       "building_id": "w1247745191",
+       "m": 13.0
+      },
+      {
+       "building_id": "w1247745341",
+       "m": 11.8
+      },
+      {
+       "building_id": "w1236978398",
+       "m": 11.7
       }
      ]
     },
     "camera-derived (triangulated + wall_hit)": {
-     "n": 260,
-     "median_m": 2.8,
-     "p90_m": 7.52,
-     "within_3_5_m_pct": 60.4,
+     "n": 240,
+     "median_m": 2.52,
+     "p90_m": 6.79,
+     "within_3_5_m_pct": 67.5,
      "worst_5": [
-      {
-       "building_id": "w1236977995",
-       "m": 16.3
-      },
-      {
-       "building_id": "w1247745260",
-       "m": 15.9
-      },
       {
        "building_id": "w1247744970",
        "m": 15.6
       },
       {
-       "building_id": "w1236978398",
-       "m": 12.5
+       "building_id": "w1247745245",
+       "m": 14.5
       },
       {
-       "building_id": "w1247745245",
-       "m": 12.2
+       "building_id": "w1247745191",
+       "m": 13.0
+      },
+      {
+       "building_id": "w1247745341",
+       "m": 11.8
+      },
+      {
+       "building_id": "w1236978398",
+       "m": 11.7
       }
      ]
     },
     "baseline: footprint centroid for every building (uses the map)": {
-     "n": 381,
-     "median_m": 7.03,
-     "p90_m": 14.19,
-     "within_3_5_m_pct": 6.8,
+     "n": 373,
+     "median_m": 7.25,
+     "p90_m": 14.34,
+     "within_3_5_m_pct": 7.0,
      "worst_5": [
       {
        "building_id": "w1251626539",
@@ -786,45 +786,45 @@
    },
    "ward29": {
     "triangulated (cameras only)": {
-     "n": 36,
-     "median_m": 3.48,
-     "p90_m": 8.0,
-     "within_3_5_m_pct": 50.0,
+     "n": 35,
+     "median_m": 2.54,
+     "p90_m": 6.36,
+     "within_3_5_m_pct": 65.7,
      "worst_5": [
       {
-       "building_id": "w1236978516",
-       "m": 9.4
+       "building_id": "w1236977934",
+       "m": 7.9
       },
       {
-       "building_id": "w1247744960",
-       "m": 9.4
+       "building_id": "w1236978617",
+       "m": 7.3
       },
       {
-       "building_id": "w1247745260",
-       "m": 9.3
+       "building_id": "w1236978126",
+       "m": 6.9
       },
       {
-       "building_id": "w1247744854",
-       "m": 8.0
+       "building_id": "w1236978398",
+       "m": 6.4
       },
       {
-       "building_id": "w1236978031",
-       "m": 7.6
+       "building_id": "w1236977972",
+       "m": 6.1
       }
      ]
     },
     "wall_hit (camera ray on the map wall; uses the map)": {
-     "n": 224,
+     "n": 205,
      "median_m": 0.0,
      "p90_m": 0.0,
      "within_3_5_m_pct": 100.0,
      "worst_5": [
       {
-       "building_id": "w1252505716",
+       "building_id": "w1252505798",
        "m": 0.0
       },
       {
-       "building_id": "w1252505552",
+       "building_id": "w1252505279",
        "m": 0.0
       },
       {
@@ -832,17 +832,17 @@
        "m": 0.0
       },
       {
-       "building_id": "w1247745336",
+       "building_id": "w1251630398",
        "m": 0.0
       },
       {
-       "building_id": "w1247745250",
+       "building_id": "w1247745328",
        "m": 0.0
       }
      ]
     },
     "wall_centre (front-wall centre from the map; uses the map)": {
-     "n": 121,
+     "n": 133,
      "median_m": 0.0,
      "p90_m": 0.01,
      "within_3_5_m_pct": 100.0,
@@ -864,7 +864,7 @@
        "m": 0.0
       },
       {
-       "building_id": "w1252505260",
+       "building_id": "w1252505014",
        "m": 0.0
       }
      ]
@@ -877,30 +877,30 @@
      "worst_5": []
     },
     "all buildings": {
-     "n": 381,
+     "n": 373,
      "median_m": 0.0,
      "p90_m": 0.01,
-     "within_3_5_m_pct": 95.3,
+     "within_3_5_m_pct": 96.8,
      "worst_5": [
       {
-       "building_id": "w1236978516",
-       "m": 9.4
+       "building_id": "w1236977934",
+       "m": 7.9
       },
       {
-       "building_id": "w1247744960",
-       "m": 9.4
+       "building_id": "w1236978617",
+       "m": 7.3
       },
       {
-       "building_id": "w1247745260",
-       "m": 9.3
+       "building_id": "w1236978126",
+       "m": 6.9
       },
       {
-       "building_id": "w1247744854",
-       "m": 8.0
+       "building_id": "w1236978398",
+       "m": 6.4
       },
       {
-       "building_id": "w1236978031",
-       "m": 7.6
+       "building_id": "w1236977972",
+       "m": 6.1
       }
      ]
     }
@@ -1087,140 +1087,7 @@
     "status": "computed before D33 (old fallback); not re-run"
    },
    "ward29": {
-    "triangulated": {
-     "n": 2,
-     "median_m": 24.88,
-     "p90_m": 37.73,
-     "within_3_5_m_pct": 0.0,
-     "worst_5": [
-      {
-       "building_id": "w1236978464",
-       "m": 37.7
-      },
-      {
-       "building_id": "w1252503923",
-       "m": 12.0
-      }
-     ]
-    },
-    "wall_hit (uses map footprint)": {
-     "n": 14,
-     "median_m": 9.9,
-     "p90_m": 19.75,
-     "within_3_5_m_pct": 7.1,
-     "worst_5": [
-      {
-       "building_id": "w1247744963",
-       "m": 23.3
-      },
-      {
-       "building_id": "w1247744754",
-       "m": 19.8
-      },
-      {
-       "building_id": "w1252504180",
-       "m": 18.9
-      },
-      {
-       "building_id": "w1236977972",
-       "m": 16.1
-      },
-      {
-       "building_id": "w1247744765",
-       "m": 13.8
-      }
-     ]
-    },
-    "footprint_centre (fallback)": {
-     "n": 8,
-     "median_m": 28.38,
-     "p90_m": 48.49,
-     "within_3_5_m_pct": 12.5,
-     "worst_5": [
-      {
-       "building_id": "w1251629725",
-       "m": 48.5
-      },
-      {
-       "building_id": "w1247745254",
-       "m": 42.2
-      },
-      {
-       "building_id": "w1236977949",
-       "m": 41.6
-      },
-      {
-       "building_id": "w1252504900",
-       "m": 30.2
-      },
-      {
-       "building_id": "w1252503776",
-       "m": 26.6
-      }
-     ]
-    },
-    "all buildings": {
-     "n": 24,
-     "median_m": 12.02,
-     "p90_m": 41.6,
-     "within_3_5_m_pct": 8.3,
-     "worst_5": [
-      {
-       "building_id": "w1251629725",
-       "m": 48.5
-      },
-      {
-       "building_id": "w1247745254",
-       "m": 42.2
-      },
-      {
-       "building_id": "w1236977949",
-       "m": 41.6
-      },
-      {
-       "building_id": "w1236978464",
-       "m": 37.7
-      },
-      {
-       "building_id": "w1252504900",
-       "m": 30.2
-      }
-     ]
-    },
-    "match_rate": {
-     "buildings_with_sign_text": 158,
-     "place_found_within_50m": 24,
-     "used": 24
-    },
-    "pin_vs_osm_wall": {
-     "n": 24,
-     "median_m": 7.71,
-     "p90_m": 21.36,
-     "within_3_5_m_pct": 20.8,
-     "worst_5": [
-      {
-       "building_id": "w1236977949",
-       "m": 35.0
-      },
-      {
-       "building_id": "w1236978464",
-       "m": 32.5
-      },
-      {
-       "building_id": "w1251629725",
-       "m": 21.4
-      },
-      {
-       "building_id": "w1252503776",
-       "m": 19.6
-      },
-      {
-       "building_id": "w1252504180",
-       "m": 17.9
-      }
-     ]
-    },
-    "status": "computed before D33 (old fallback); not re-run"
+    "status": "not re-run for the Oct 2026 Ward 29 run (it needs paid Google look-ups); the Sep 2026 run's result stays with that run (ward29_v1, hidden backup)"
    }
   }
  },

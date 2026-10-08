@@ -39,7 +39,7 @@ def test_report_has_no_projection(online):
 def test_osm_pairs_are_location_only_and_names_said(client):
     r = client.post("/query", json={"area": "ward29", "text": "Businesses in OpenStreetMap"}).json()
     n = r["osm"]["counts"]
-    assert (n["matched"], n["matched_same_name"], n["camera"], n["osm"], n["camera_only"], n["osm_only"]) == (9, 0, 147, 14, 138, 5)
+    assert (n["matched"], n["matched_same_name"], n["camera"], n["osm"], n["camera_only"], n["osm_only"]) == (10, 0, 141, 14, 131, 4)     # D64 re-run
     assert "near each other (location only; names didn't match)" in r["note"]
     assert "same place" not in r["note"]
     assert r["understanding"]["understood"][0]["meaning"] == "businesses near an OpenStreetMap point (location only)"
@@ -53,7 +53,7 @@ def test_report_osm_labels(online):
     rows, _ = report._shop_rows(sh)
     labels = {r[0] for r in rows}
     assert "Near each other (location only)" in labels and not any("Matched" in x for x in labels)
-    assert sum(r[0] == "Near each other (location only)" for r in rows) == 9
+    assert sum(r[0] == "Near each other (location only)" for r in rows) == 10
     assert report._names_line(sh["counts"]) == "the names didn't match for any of them"
 
 
@@ -62,9 +62,9 @@ def test_osm_levels_blank_unless_tagged(online):
     tags = osmref.load("ward29", online.app.state.settings.areas_dir)
     ex = raw_export("ward29")
     tagged = [b["id"] for b in ex["buildings"] if osmref.building_levels(tags, b["id"])["osm_levels"] is not None]
-    assert len(tagged) == 2 and len(ex["buildings"]) == 381
+    assert len(tagged) == 2 and len(ex["buildings"]) == 373
     lv = online.get("/areas/ward29/osm").json()["levels"]
-    assert (lv["tagged"], lv["buildings"]) == (2, 381)
+    assert (lv["tagged"], lv["buildings"]) == (2, 373)
     _, c = _content(online)
     t = c["tables"]["buildings"]
     col = t["columns"].index("OSM building:levels (cross-check)")

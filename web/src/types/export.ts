@@ -178,12 +178,17 @@ export function makeExportSchemas(mode: SchemaMode) {
       pairing: obj({ all: Pairing, pin_moved: Pairing, pin_not_moved: Pairing }).nullable() }).nullable().optional(),
     signs_relinked: z.number().optional(),
     p7a_reapplied: z.record(z.string(), z.union([z.boolean(), z.number(), z.string()])).optional(),
+    // D64: the run's M3 box choice counts, a kept register, a register rebuilt from the run's own buildings
+    box_choice: obj({ rule: z.string(), pairs: z.number(), box: z.number(), none: z.number(), changed: z.number() }).nullable().optional(),
+    register_reused: z.boolean().optional(),
+    register_rebuilt: obj({ method: z.string(), seed_key: z.string(), keys_tried: z.number(), planted: z.number(), replaced: z.string() }).optional(),
   })
 
   const Meta = obj({
     area: z.string(), generated: z.string(),
     pipeline: obj({
       detector: z.string(), ocr: z.string(), vlm: z.string(), name_gate: z.number(), footprints: z.string(), reference: z.string(),
+      box_rule: z.string().optional(),                     // D64: M3 at level 2
     }),
     registers: z.string(),
     counts: obj({

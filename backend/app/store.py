@@ -110,7 +110,8 @@ class JsonStore:
         if not os.path.isdir(self.dir):
             return []
         return sorted(d for d in os.listdir(self.dir) if ".upload-" not in d     # a worker upload being unpacked (P6)
-                      and os.path.isfile(os.path.join(self.dir, d, "export.json")))
+                      and os.path.isfile(os.path.join(self.dir, d, "export.json"))
+                      and not loader.is_hidden(os.path.join(self.dir, d)))       # D64: hidden areas: own address only
 
     def bundle(self, slug):
         folder = os.path.join(self.dir, slug)
@@ -187,7 +188,7 @@ class DbStore:
         with self.pool.connection() as c:
             rows = c.execute("""select a.slug, a.id, a.updated_at, (select max(updated_at) from review_items r where r.area_id = a.id),
                                        (select count(*) from review_items r where r.area_id = a.id)
-                                from areas a order by a.slug""").fetchall()
+                                from areas a where not a.hidden order by a.slug""").fetchall()   # D64: hidden: own address only
         now = time.monotonic()
         with self._lock:
             for slug, *ver in rows:

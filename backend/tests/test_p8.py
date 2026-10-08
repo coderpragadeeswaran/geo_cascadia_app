@@ -19,13 +19,15 @@ def _mc():
     return json.load(open(os.path.join(S.data_dir, "model_card.json"), encoding="utf-8"))
 
 
+OLD = "ward29_v1"       # D64: the Sep 2026 Ward 29 run the model card describes (a hidden backup since the switch)
+
 # ------------------------------------------------------------------------------------------------ 1/2 routing and cost
 def test_ward29_cost_recount_explains_the_model_card():
     """model_card: $0.056 / 339 calls with the router, $0.089 / 782 without. The run files show 339 = 73 use + 266 floors
     calls only (a resumed run re-used the 166 name and 84 business-sign checks); 782 = all four kinds, every use call
     to the cloud. Recounted like for like, the without-router figure is reproduced."""
-    b = JS.bundle("ward29")
-    r = hood.hood(b, RF.get("ward29"), _mc())["routing"]
+    b = JS.bundle(OLD)
+    r = hood.hood(b, RF.get(OLD), _mc())["routing"]
     kinds = {t["key"]: t for t in r["tasks"]}
     use = {x["route"]: x for x in kinds["use"]["routes"]}
     assert (use["local"]["n"], use["cloud"]["n"]) == (193, 73)
@@ -53,13 +55,13 @@ def test_live_run_counter_equals_recount():
 def test_trust_lists_the_model_card_cost_row(client):
     rows = client.get("/trust/consistency").json()["rows"]
     row = next(x for x in rows if x["field"] == "model_card.cost_time.ward29_vlm_usd_with_router")
-    assert row["stored"] == "$0.056" and row["jump"] == {"page": "hood", "section": "routing"}
+    assert row["stored"] == "$0.056" and row["jump"] == {"page": "trust", "section": "cost"} and row["area"] == OLD
 
 
 # ------------------------------------------------------------------------------------------------ 3 imagery age
 def test_imagery_dates_and_outdated_flags():
-    b = JS.bundle("ward29")
-    r = imagery.imagery(b, RF.get("ward29"), today=dt.date(2026, 10, 2))
+    b = JS.bundle(OLD)
+    r = imagery.imagery(b, RF.get(OLD), today=dt.date(2026, 10, 2))
     s = r["summary"]
     assert (s["oldest"], s["newest"], s["cutoff"]) == ("2018-06", "2026-02", "2023-10")
     # only "missing" / "not in register" findings are marked, and only when their NEWEST photo is older than the cutoff
@@ -70,9 +72,9 @@ def test_imagery_dates_and_outdated_flags():
 
 
 def test_evidence_photos_carry_their_date(client):
-    v = client.get("/areas/ward29/evidence/building/w1252505151").json()["views"]
+    v = client.get(f"/areas/{OLD}/evidence/building/w1252505151").json()["views"]
     assert v and all(isinstance(x["date"], str) and len(x["date"]) == 7 for x in v)
-    im = client.get("/areas/ward29/imagery").json()
+    im = client.get(f"/areas/{OLD}/imagery").json()
     assert im["objects"]["building:w1252505151"]["newest"] == "2022-11"
 
 

@@ -235,7 +235,7 @@ def test_report_offline_builds_and_says_so(offline):
     wb = load_workbook(io.BytesIO(r.content))
     rows = list(wb["Possible dark stretches"].iter_rows(min_row=2, values_only=True))
     assert len(rows) == 11 and all(x[1] == "not available" and x[2] == lighting.OFFLINE_NOTE for x in rows)
-    assert len(list(wb["Assets"].iter_rows(min_row=2))) == 268
+    assert len(list(wb["Assets"].iter_rows(min_row=2))) == 262                 # D64 re-run
     assert offline.get("/areas/ward29/report.pdf?street=Sathy Main Road").status_code == 200
 
 
@@ -243,11 +243,11 @@ def test_camera_only_count_is_shown_next_to_the_building_count(api):
     """D56: "+ N seen only by camera" comes from building_positions.json no_footprint, is the same in the area card, Hood
     and the report, and is never added to the building count"""
     cards = {a["slug"]: a for a in api.get("/areas").json()["areas"]}
-    expect = {"ward29": 9, "trichy_bharathidasan_salai": 79, "tiruppur_uthukuli_road": 12}
+    expect = {"ward29": 47, "trichy_bharathidasan_salai": 79, "tiruppur_uthukuli_road": 12}    # ward29: D64 re-run (Sep run: 9)
     for slug, n in expect.items():
         assert cards[slug]["counts"]["camera_only_buildings"] == n
         assert api.get(f"/areas/{slug}/camera-buildings").json()["count"] == n
         assert api.get(f"/areas/{slug}/hood").json()["n"]["camera_only_buildings"] == n
     c = _content(api, "ward29")
-    assert c["numbers"][0]["value"] == 381 and c["numbers"][0]["note"] == "+ 9 seen only by camera (no map outline)"
+    assert c["numbers"][0]["value"] == 373 and c["numbers"][0]["note"] == "+ 47 seen only by camera (no map outline)"   # D64 re-run
     assert _content(api, "ward29", "Sathy Main Road")["numbers"][0].get("note") == ""      # no street on camera-only points

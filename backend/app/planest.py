@@ -67,7 +67,8 @@ def measured_rates(areas_dir, model_card):
     # P7 R2 (F1): time = fixed start-up + images x per-image rate. Per-image rate: the Ward 29 full run (model_card GPU
     # minutes over the photos counted from its run files). Start-up: each small completed GPU job's time minus its images x
     # that rate; the median over those jobs. Not fitted: two measured inputs, one formula.
-    ward = photos_of_run(os.path.join(areas_dir, "ward29"))
+    from .derived import MODEL_CARD_AREA                    # D64: the Sep 2026 run the model card's GPU minutes describe
+    ward = photos_of_run(os.path.join(areas_dir, MODEL_CARD_AREA)) or photos_of_run(os.path.join(areas_dir, "ward29"))
     gpu_min = ct.get("ward29_full_run_gpu_minutes")
     if ward and gpu_min:
         rate = gpu_min * 60 / ward["photos"]

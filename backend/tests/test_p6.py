@@ -285,7 +285,8 @@ def test_clicked_street_keeps_the_picker_name_everywhere(tmp_path):             
     for n, o in (("streets.json", streets), ("street_names.json", {"(unnamed residential #7)": "Kattabomman Street"}),
                  ("export.json", exp)):
         (tmp_path / n).write_text(json.dumps(o), encoding="utf-8")
-    J.fill_street_names(str(tmp_path), {"way_ids": [7], "street": "Unnamed road near Kattabomman Street"})
+    J.fill_street_names(str(tmp_path), {"click": {"lat": 11.0, "lon": 77.0}, "way_ids": [7],
+                                        "street": "Unnamed road near Kattabomman Street"})
     names = json.loads((tmp_path / "street_names.json").read_text(encoding="utf-8"))
     out = json.loads((tmp_path / "export.json").read_text(encoding="utf-8"))
     assert names == {"(unnamed residential #7)": "Unnamed road near Kattabomman Street"}
