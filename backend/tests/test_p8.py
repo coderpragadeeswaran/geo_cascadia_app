@@ -36,9 +36,9 @@ def test_ward29_cost_recount_explains_the_model_card():
     assert use["cloud"]["n"] + kinds["floors"]["routes"][0]["n"] == 339 == b["meta"]["run"]["vlm_calls"]
     assert r["totals"]["calls"] == 589
     assert r["all_cloud"]["calls"] == 782
-    assert abs(r["all_cloud"]["usd"] - 0.089) < 0.0005            # the model card's "without router", reproduced
+    assert abs(r["all_cloud"]["usd"] - 0.089) < 0.0005            # the model card's old "without router", reproduced
     assert abs(r["totals"]["usd"] - 0.0702) < 0.0005
-    assert r["model_card_check"]["stored_with"] == 0.056 and r["model_card_check"]["computed_calls_with"] == 589
+    assert r["model_card_check"] is None                          # D65: those figures left the model card
     assert r["every_view"]["photos"] == 1154 and r["every_view"]["status"] == "estimate"
     assert [a["n"] for a in r["accuracy"]] == [31, 31]
 

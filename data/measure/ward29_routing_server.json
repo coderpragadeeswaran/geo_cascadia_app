@@ -1,0 +1,879 @@
+{
+ "area": "ward29",
+ "device": "gpu",
+ "machine": "AWS g4dn.xlarge (NVIDIA T4)",
+ "n": 30,
+ "measured": "2026-10-08T17:58:42Z",
+ "street_view": {
+  "photos": 90,
+  "n": 30,
+  "median_s": 0.3504,
+  "mean_s": 0.3442,
+  "max_s": 0.6769,
+  "photos_note": "30 per run, three runs"
+ },
+ "all_cloud": {
+  "wall_s": 17.44,
+  "workers": 4,
+  "floors_examples": true,
+  "calls": [
+   {
+    "kind": "use",
+    "lat_s": 0.8721776008605957,
+    "in": 864,
+    "out": 77,
+    "images": 1
+   },
+   {
+    "kind": "use",
+    "lat_s": 0.9508593082427979,
+    "in": 816,
+    "out": 76,
+    "images": 1
+   },
+   {
+    "kind": "use",
+    "lat_s": 1.0057203769683838,
+    "in": 1499,
+    "out": 72,
+    "images": 1
+   },
+   {
+    "kind": "use",
+    "lat_s": 1.0386247634887695,
+    "in": 1104,
+    "out": 74,
+    "images": 1
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.1316571235656738,
+    "in": 3263,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.2994434833526611,
+    "in": 2628,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.521643877029419,
+    "in": 2580,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "use",
+    "lat_s": 0.680255651473999,
+    "in": 710,
+    "out": 73,
+    "images": 1
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.8350605964660645,
+    "in": 2868,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "use",
+    "lat_s": 0.8463222980499268,
+    "in": 880,
+    "out": 77,
+    "images": 1
+   },
+   {
+    "kind": "use",
+    "lat_s": 0.9620208740234375,
+    "in": 846,
+    "out": 76,
+    "images": 1
+   },
+   {
+    "kind": "floors",
+    "lat_s": 0.9337432384490967,
+    "in": 2474,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.015106439590454,
+    "in": 2644,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "use",
+    "lat_s": 1.3731303215026855,
+    "in": 1664,
+    "out": 78,
+    "images": 1
+   },
+   {
+    "kind": "floors",
+    "lat_s": 0.9987657070159912,
+    "in": 2610,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "use",
+    "lat_s": 0.6443934440612793,
+    "in": 727,
+    "out": 73,
+    "images": 1
+   },
+   {
+    "kind": "use",
+    "lat_s": 0.773963212966919,
+    "in": 832,
+    "out": 72,
+    "images": 1
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.1005322933197021,
+    "in": 3428,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "use",
+    "lat_s": 0.8842453956604004,
+    "in": 1136,
+    "out": 74,
+    "images": 1
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.0446922779083252,
+    "in": 2596,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.7112219333648682,
+    "in": 2491,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "use",
+    "lat_s": 0.642906904220581,
+    "in": 761,
+    "out": 73,
+    "images": 1
+   },
+   {
+    "kind": "floors",
+    "lat_s": 0.9919660091400146,
+    "in": 2900,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "use",
+    "lat_s": 3.583261251449585,
+    "in": 1600,
+    "out": 73,
+    "images": 1
+   },
+   {
+    "kind": "use",
+    "lat_s": 0.9909663200378418,
+    "in": 1920,
+    "out": 74,
+    "images": 1
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.2541146278381348,
+    "in": 2525,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "use",
+    "lat_s": 1.0362052917480469,
+    "in": 1895,
+    "out": 73,
+    "images": 1
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.0620355606079102,
+    "in": 3364,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.2777948379516602,
+    "in": 3684,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "use",
+    "lat_s": 0.7141928672790527,
+    "in": 832,
+    "out": 78,
+    "images": 1
+   },
+   {
+    "kind": "use",
+    "lat_s": 1.1172723770141602,
+    "in": 1536,
+    "out": 75,
+    "images": 1
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.125906229019165,
+    "in": 3659,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "use",
+    "lat_s": 0.830425500869751,
+    "in": 784,
+    "out": 75,
+    "images": 1
+   },
+   {
+    "kind": "floors",
+    "lat_s": 0.8973941802978516,
+    "in": 2596,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "use",
+    "lat_s": 0.8780601024627686,
+    "in": 1118,
+    "out": 77,
+    "images": 1
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.073753833770752,
+    "in": 3300,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "floors",
+    "lat_s": 0.9897189140319824,
+    "in": 2548,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "use",
+    "lat_s": 0.8285953998565674,
+    "in": 880,
+    "out": 83,
+    "images": 1
+   },
+   {
+    "kind": "use",
+    "lat_s": 0.8277328014373779,
+    "in": 744,
+    "out": 74,
+    "images": 1
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.0465795993804932,
+    "in": 2882,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "use",
+    "lat_s": 1.4503109455108643,
+    "in": 1928,
+    "out": 73,
+    "images": 1
+   },
+   {
+    "kind": "use",
+    "lat_s": 0.8352522850036621,
+    "in": 1536,
+    "out": 75,
+    "images": 1
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.0136823654174805,
+    "in": 2508,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.5224380493164062,
+    "in": 2644,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.1397552490234375,
+    "in": 3692,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "use",
+    "lat_s": 0.7449076175689697,
+    "in": 1376,
+    "out": 77,
+    "images": 1
+   },
+   {
+    "kind": "use",
+    "lat_s": 1.3931653499603271,
+    "in": 1136,
+    "out": 75,
+    "images": 1
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.719989538192749,
+    "in": 3300,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "use",
+    "lat_s": 0.8953287601470947,
+    "in": 1980,
+    "out": 78,
+    "images": 1
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.010612964630127,
+    "in": 3140,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.0238018035888672,
+    "in": 2900,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.0678374767303467,
+    "in": 3744,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "use",
+    "lat_s": 1.5175957679748535,
+    "in": 1664,
+    "out": 77,
+    "images": 1
+   },
+   {
+    "kind": "use",
+    "lat_s": 1.3139395713806152,
+    "in": 1631,
+    "out": 80,
+    "images": 1
+   },
+   {
+    "kind": "use",
+    "lat_s": 1.1121995449066162,
+    "in": 1532,
+    "out": 80,
+    "images": 1
+   },
+   {
+    "kind": "use",
+    "lat_s": 0.7898736000061035,
+    "in": 761,
+    "out": 73,
+    "images": 1
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.0480363368988037,
+    "in": 3296,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.6862983703613281,
+    "in": 3428,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.8851897716522217,
+    "in": 3395,
+    "out": 3,
+    "images": 3
+   },
+   {
+    "kind": "floors",
+    "lat_s": 1.5509436130523682,
+    "in": 2525,
+    "out": 3,
+    "images": 3
+   }
+  ],
+  "use": {
+   "n": 30,
+   "median_s": 0.8898,
+   "mean_s": 1.0511,
+   "max_s": 3.5833
+  },
+  "floors": {
+   "n": 30,
+   "median_s": 1.0871,
+   "mean_s": 1.2327,
+   "max_s": 1.8852
+  },
+  "buildings": [
+   {
+    "fp": "w1251626341",
+    "use": "commercial",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 1,
+    "in": 1499,
+    "out": 72,
+    "use_lat_s": 1.0057203769683838,
+    "floors_in": 3263,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1236978077",
+    "use": "commercial",
+    "wrong_target": false,
+    "roofline_visible": false,
+    "floors_confident": true,
+    "floors": 2,
+    "in": 864,
+    "out": 77,
+    "use_lat_s": 0.8721776008605957,
+    "floors_in": 2628,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1252504509",
+    "use": "commercial",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 3,
+    "in": 816,
+    "out": 76,
+    "use_lat_s": 0.9508593082427979,
+    "floors_in": 2580,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1247745303",
+    "use": "industrial",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 1,
+    "in": 1104,
+    "out": 74,
+    "use_lat_s": 1.0386247634887695,
+    "floors_in": 2868,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1247745321",
+    "use": "under_construction",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 2,
+    "in": 710,
+    "out": 73,
+    "use_lat_s": 0.680255651473999,
+    "floors_in": 2474,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1252504638",
+    "use": "residential",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 1,
+    "in": 880,
+    "out": 77,
+    "use_lat_s": 0.8463222980499268,
+    "floors_in": 2644,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1236978680",
+    "use": "residential",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 2,
+    "in": 846,
+    "out": 76,
+    "use_lat_s": 0.9620208740234375,
+    "floors_in": 2610,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1247745339",
+    "use": "residential",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 3,
+    "in": 1664,
+    "out": 78,
+    "use_lat_s": 1.3731303215026855,
+    "floors_in": 3428,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1247745338",
+    "use": "commercial",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 1,
+    "in": 1600,
+    "out": 73,
+    "use_lat_s": 3.583261251449585,
+    "floors_in": 3364,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1252504103",
+    "use": "commercial",
+    "wrong_target": false,
+    "roofline_visible": false,
+    "floors_confident": true,
+    "floors": 2,
+    "in": 727,
+    "out": 73,
+    "use_lat_s": 0.6443934440612793,
+    "floors_in": 2491,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1236978576",
+    "use": "commercial",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 3,
+    "in": 832,
+    "out": 72,
+    "use_lat_s": 0.773963212966919,
+    "floors_in": 2596,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1252506259",
+    "use": "industrial",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 1,
+    "in": 1136,
+    "out": 74,
+    "use_lat_s": 0.8842453956604004,
+    "floors_in": 2900,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1247745336",
+    "use": "institutional",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 2,
+    "in": 761,
+    "out": 73,
+    "use_lat_s": 0.642906904220581,
+    "floors_in": 2525,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1236978653",
+    "use": "residential",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 1,
+    "in": 1920,
+    "out": 74,
+    "use_lat_s": 0.9909663200378418,
+    "floors_in": 3684,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1251626332",
+    "use": "residential",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 2,
+    "in": 1895,
+    "out": 73,
+    "use_lat_s": 1.0362052917480469,
+    "floors_in": 3659,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1251626330",
+    "use": "residential",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 3,
+    "in": 1536,
+    "out": 75,
+    "use_lat_s": 1.1172723770141602,
+    "floors_in": 3300,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1251630440",
+    "use": "commercial",
+    "wrong_target": false,
+    "roofline_visible": false,
+    "floors_confident": true,
+    "floors": 1,
+    "in": 832,
+    "out": 78,
+    "use_lat_s": 0.7141928672790527,
+    "floors_in": 2596,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1236978349",
+    "use": "commercial",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 2,
+    "in": 784,
+    "out": 75,
+    "use_lat_s": 0.830425500869751,
+    "floors_in": 2548,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1236978266",
+    "use": "mixed",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 3,
+    "in": 1118,
+    "out": 77,
+    "use_lat_s": 0.8780601024627686,
+    "floors_in": 2882,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1247745207",
+    "use": "industrial",
+    "wrong_target": false,
+    "roofline_visible": false,
+    "floors_confident": true,
+    "floors": 1,
+    "in": 880,
+    "out": 83,
+    "use_lat_s": 0.8285953998565674,
+    "floors_in": 2644,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1251626539",
+    "use": "residential",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 2,
+    "in": 744,
+    "out": 74,
+    "use_lat_s": 0.8277328014373779,
+    "floors_in": 2508,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1247745057",
+    "use": "residential",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 1,
+    "in": 1928,
+    "out": 73,
+    "use_lat_s": 1.4503109455108643,
+    "floors_in": 3692,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1236977959",
+    "use": "residential",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 2,
+    "in": 1536,
+    "out": 75,
+    "use_lat_s": 0.8352522850036621,
+    "floors_in": 3300,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1236978683",
+    "use": "residential",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 3,
+    "in": 1136,
+    "out": 75,
+    "use_lat_s": 1.3931653499603271,
+    "floors_in": 2900,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1252504169",
+    "use": "commercial",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 1,
+    "in": 1376,
+    "out": 77,
+    "use_lat_s": 0.7449076175689697,
+    "floors_in": 3140,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1236977934",
+    "use": "commercial",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 2,
+    "in": 1980,
+    "out": 78,
+    "use_lat_s": 0.8953287601470947,
+    "floors_in": 3744,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1247745114",
+    "use": "mixed",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 3,
+    "in": 1664,
+    "out": 77,
+    "use_lat_s": 1.5175957679748535,
+    "floors_in": 3428,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1252504807",
+    "use": "industrial",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 1,
+    "in": 1631,
+    "out": 80,
+    "use_lat_s": 1.3139395713806152,
+    "floors_in": 3395,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1247745351",
+    "use": "institutional",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 2,
+    "in": 1532,
+    "out": 80,
+    "use_lat_s": 1.1121995449066162,
+    "floors_in": 3296,
+    "floors_out": 3
+   },
+   {
+    "fp": "w1247745301",
+    "use": "residential",
+    "wrong_target": false,
+    "roofline_visible": true,
+    "floors_confident": true,
+    "floors": 1,
+    "in": 761,
+    "out": 73,
+    "use_lat_s": 0.7898736000061035,
+    "floors_in": 2525,
+    "floors_out": 3
+   }
+  ]
+ },
+ "router": {
+  "call_1_crop_s": 3.354,
+  "call_all_crops_s": 3.58,
+  "n": 30,
+  "per_crop_s": 0.0078,
+  "per_building_in_a_run_s": 0.1193,
+  "threshold": 0.6,
+  "decided_locally": 16
+ },
+ "detector": {
+  "load_s": 0.05,
+  "per_photo": {
+   "n": 30,
+   "median_s": 0.0103,
+   "mean_s": 0.0104,
+   "max_s": 0.0125
+  },
+  "photos": 30
+ },
+ "deleted_images": 30,
+ "ocr": {
+  "load_s": 9.95,
+  "n": 72,
+  "median_s": 0.1396,
+  "mean_s": 0.1438,
+  "max_s": 0.3168,
+  "crops": 72
+ },
+ "runs": [
+  "2026-10-08T17:58Z: all-cloud path + router (30 photos, 60 Nova calls); the detector stage failed (folder permission)",
+  "2026-10-08T18:00Z: local steps only (30 photos, no Nova call); OCR failed (folder permission)",
+  "2026-10-08T18:01Z: local steps only (30 photos, no Nova call): router, detector and OCR timings used"
+ ]
+}

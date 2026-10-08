@@ -1,0 +1,706 @@
+{
+ "area": "ward29",
+ "measured": "2026-10-08T17:58:42Z",
+ "machine": "AWS g4dn.xlarge (NVIDIA T4)",
+ "device": "gpu",
+ "n": 30,
+ "sample": {
+  "rule": "stratified by use route x use category x floors (1/2/3+), round robin, streets spread; buildings with an analysis photo and a floor count",
+  "seed": 20261009,
+  "labeller": "Claude Code, by viewing each building's analysis photo with the analysed box (an AI check, not a human one), before seeing any model output; use as commercial (incl. mixed) / residential / other; floors counted with the ground floor as 1",
+  "labelled": "2026-10-09"
+ },
+ "paths": {
+  "routed": {
+   "label": "As run (routed): local router first, the cloud model when it is unsure; floors by the cloud model",
+   "source": "this run's own answers and tokens (vlm_buildings.json)",
+   "n": 30,
+   "use_correct": 23,
+   "use_accuracy": 0.767,
+   "use_no_answer": 0,
+   "floors_n": 30,
+   "floors_exact": 0.733,
+   "floors_within_1": 1.0,
+   "floors_no_answer": 0,
+   "usd_per_building": 0.0002271,
+   "usd_sample": 0.006813,
+   "cloud_calls": 44,
+   "s_per_building": 1.21,
+   "s_per_building_mean": 1.64
+  },
+  "all_cloud": {
+   "label": "Cloud model on everything: every building's use and floors by Nova Lite",
+   "source": "measured 2026-10-08: the pipeline's own use and floors calls with the router off",
+   "n": 30,
+   "use_correct": 22,
+   "use_accuracy": 0.733,
+   "use_no_answer": 0,
+   "floors_n": 30,
+   "floors_exact": 0.733,
+   "floors_within_1": 1.0,
+   "floors_no_answer": 0,
+   "usd_per_building": 0.0002714,
+   "usd_sample": 0.008143,
+   "cloud_calls": 60,
+   "s_per_building": 1.98,
+   "s_per_building_mean": 2.14
+  }
+ },
+ "routed_decided_locally": 16,
+ "latency": [
+  {
+   "step": "Find objects in a photo",
+   "model": "YOLOv8s",
+   "route": "local",
+   "unit": "photo",
+   "s": 0.0103,
+   "n": 30,
+   "where": "AWS g4dn.xlarge (NVIDIA T4), GPU"
+  },
+  {
+   "step": "Read a sign crop",
+   "model": "PaddleOCR (full, English + Tamil)",
+   "route": "local",
+   "unit": "sign crop",
+   "s": 0.1396,
+   "n": 72,
+   "where": "AWS g4dn.xlarge (NVIDIA T4), GPU"
+  },
+  {
+   "step": "Building use, local",
+   "model": "CLIP + logistic regression",
+   "route": "local",
+   "unit": "building",
+   "s": 0.0078,
+   "n": 30,
+   "where": "AWS g4dn.xlarge (NVIDIA T4), GPU",
+   "note": "+ 3.354 s to load the model once per run"
+  },
+  {
+   "step": "Building use, cloud",
+   "model": "Amazon Nova Lite",
+   "route": "cloud",
+   "unit": "building",
+   "s": 0.89,
+   "n": 30,
+   "where": "AWS Bedrock (ap-south-1), called from the server"
+  },
+  {
+   "step": "Floors, cloud (3 images per call)",
+   "model": "Amazon Nova Lite",
+   "route": "cloud",
+   "unit": "building",
+   "s": 1.087,
+   "n": 30,
+   "where": "AWS Bedrock (ap-south-1), called from the server"
+  }
+ ],
+ "spend": {
+  "street_view_photos": 90,
+  "street_view_usd": 0.63,
+  "nova_usd": 0.00814,
+  "nova_calls": 60
+ },
+ "rows": [
+  {
+   "id": "w1251626341",
+   "label_use": "commercial",
+   "label_floors": 1,
+   "routed": {
+    "route": "local",
+    "use": "commercial",
+    "floors": 1,
+    "usd": 0.00019649999999999998,
+    "calls": 1,
+    "use_s": null
+   },
+   "all_cloud": {
+    "use": "commercial",
+    "floors": 1,
+    "usd": 0.00030371999999999994,
+    "calls": 2,
+    "use_s": 1.0057203769683838
+   }
+  },
+  {
+   "id": "w1236978077",
+   "label_use": "residential",
+   "label_floors": 2,
+   "routed": {
+    "route": "local",
+    "use": "commercial",
+    "floors": 2,
+    "usd": 0.0001584,
+    "calls": 1,
+    "use_s": null
+   },
+   "all_cloud": {
+    "use": "commercial",
+    "floors": 2,
+    "usd": 0.00022872,
+    "calls": 2,
+    "use_s": 0.8721776008605957
+   }
+  },
+  {
+   "id": "w1252504509",
+   "label_use": "commercial",
+   "label_floors": 3,
+   "routed": {
+    "route": "local",
+    "use": "commercial",
+    "floors": 3,
+    "usd": 0.00015552,
+    "calls": 1,
+    "use_s": null
+   },
+   "all_cloud": {
+    "use": "commercial",
+    "floors": 3,
+    "usd": 0.00022272,
+    "calls": 2,
+    "use_s": 0.9508593082427979
+   }
+  },
+  {
+   "id": "w1247745303",
+   "label_use": "other",
+   "label_floors": 1,
+   "routed": {
+    "route": "local",
+    "use": "other",
+    "floors": 1,
+    "usd": 0.0001728,
+    "calls": 1,
+    "use_s": null
+   },
+   "all_cloud": {
+    "use": "industrial",
+    "floors": 1,
+    "usd": 0.00025679999999999995,
+    "calls": 2,
+    "use_s": 1.0386247634887695
+   }
+  },
+  {
+   "id": "w1247745321",
+   "label_use": "other",
+   "label_floors": 2,
+   "routed": {
+    "route": "local",
+    "use": "other",
+    "floors": 2,
+    "usd": 0.00014916000000000002,
+    "calls": 1,
+    "use_s": null
+   },
+   "all_cloud": {
+    "use": "under_construction",
+    "floors": 2,
+    "usd": 0.00020928,
+    "calls": 2,
+    "use_s": 0.680255651473999
+   }
+  },
+  {
+   "id": "w1252504638",
+   "label_use": "residential",
+   "label_floors": 1,
+   "routed": {
+    "route": "local",
+    "use": "residential",
+    "floors": 1,
+    "usd": 0.00015936000000000002,
+    "calls": 1,
+    "use_s": null
+   },
+   "all_cloud": {
+    "use": "residential",
+    "floors": 1,
+    "usd": 0.00023064000000000003,
+    "calls": 2,
+    "use_s": 0.8463222980499268
+   }
+  },
+  {
+   "id": "w1236978680",
+   "label_use": "residential",
+   "label_floors": 2,
+   "routed": {
+    "route": "local",
+    "use": "residential",
+    "floors": 2,
+    "usd": 0.00015732,
+    "calls": 1,
+    "use_s": null
+   },
+   "all_cloud": {
+    "use": "residential",
+    "floors": 2,
+    "usd": 0.00022632,
+    "calls": 2,
+    "use_s": 0.9620208740234375
+   }
+  },
+  {
+   "id": "w1247745339",
+   "label_use": "residential",
+   "label_floors": 2,
+   "routed": {
+    "route": "local",
+    "use": "residential",
+    "floors": 3,
+    "usd": 0.0002064,
+    "calls": 1,
+    "use_s": null
+   },
+   "all_cloud": {
+    "use": "residential",
+    "floors": 3,
+    "usd": 0.00032496,
+    "calls": 2,
+    "use_s": 1.3731303215026855
+   }
+  },
+  {
+   "id": "w1247745338",
+   "label_use": "commercial",
+   "label_floors": 1,
+   "routed": {
+    "route": "cloud",
+    "use": "commercial",
+    "floors": 1,
+    "usd": 0.00031608,
+    "calls": 2,
+    "use_s": 0.8383157253265381
+   },
+   "all_cloud": {
+    "use": "commercial",
+    "floors": 1,
+    "usd": 0.00031608,
+    "calls": 2,
+    "use_s": 3.583261251449585
+   }
+  },
+  {
+   "id": "w1252504103",
+   "label_use": "commercial",
+   "label_floors": 2,
+   "routed": {
+    "route": "cloud",
+    "use": "commercial",
+    "floors": 2,
+    "usd": 0.00021132,
+    "calls": 2,
+    "use_s": 0.7085742950439453
+   },
+   "all_cloud": {
+    "use": "commercial",
+    "floors": 2,
+    "usd": 0.00021132,
+    "calls": 2,
+    "use_s": 0.6443934440612793
+   }
+  },
+  {
+   "id": "w1236978576",
+   "label_use": "commercial",
+   "label_floors": 4,
+   "routed": {
+    "route": "cloud",
+    "use": "commercial",
+    "floors": 3,
+    "usd": 0.00022367999999999997,
+    "calls": 2,
+    "use_s": 0.7722389698028564
+   },
+   "all_cloud": {
+    "use": "commercial",
+    "floors": 3,
+    "usd": 0.00022367999999999997,
+    "calls": 2,
+    "use_s": 0.773963212966919
+   }
+  },
+  {
+   "id": "w1252506259",
+   "label_use": "other",
+   "label_floors": 1,
+   "routed": {
+    "route": "cloud",
+    "use": "industrial",
+    "floors": 1,
+    "usd": 0.00026088,
+    "calls": 2,
+    "use_s": 0.8897783756256104
+   },
+   "all_cloud": {
+    "use": "industrial",
+    "floors": 1,
+    "usd": 0.00026063999999999997,
+    "calls": 2,
+    "use_s": 0.8842453956604004
+   }
+  },
+  {
+   "id": "w1247745336",
+   "label_use": "other",
+   "label_floors": 2,
+   "routed": {
+    "route": "cloud",
+    "use": "institutional",
+    "floors": 2,
+    "usd": 0.00021539999999999998,
+    "calls": 2,
+    "use_s": 0.6311278343200684
+   },
+   "all_cloud": {
+    "use": "institutional",
+    "floors": 2,
+    "usd": 0.00021539999999999998,
+    "calls": 2,
+    "use_s": 0.642906904220581
+   }
+  },
+  {
+   "id": "w1236978653",
+   "label_use": "residential",
+   "label_floors": 1,
+   "routed": {
+    "route": "cloud",
+    "use": "residential",
+    "floors": 1,
+    "usd": 0.00035472,
+    "calls": 2,
+    "use_s": 0.9005749225616455
+   },
+   "all_cloud": {
+    "use": "residential",
+    "floors": 1,
+    "usd": 0.00035472,
+    "calls": 2,
+    "use_s": 0.9909663200378418
+   }
+  },
+  {
+   "id": "w1251626332",
+   "label_use": "other",
+   "label_floors": 1,
+   "routed": {
+    "route": "cloud",
+    "use": "residential",
+    "floors": 2,
+    "usd": 0.00035148,
+    "calls": 2,
+    "use_s": 1.406735897064209
+   },
+   "all_cloud": {
+    "use": "residential",
+    "floors": 2,
+    "usd": 0.00035148,
+    "calls": 2,
+    "use_s": 1.0362052917480469
+   }
+  },
+  {
+   "id": "w1251626330",
+   "label_use": "commercial",
+   "label_floors": 3,
+   "routed": {
+    "route": "cloud",
+    "use": "residential",
+    "floors": 3,
+    "usd": 0.00030888,
+    "calls": 2,
+    "use_s": 1.0043671131134033
+   },
+   "all_cloud": {
+    "use": "residential",
+    "floors": 3,
+    "usd": 0.00030888,
+    "calls": 2,
+    "use_s": 1.1172723770141602
+   }
+  },
+  {
+   "id": "w1251630440",
+   "label_use": "commercial",
+   "label_floors": 2,
+   "routed": {
+    "route": "local",
+    "use": "commercial",
+    "floors": 1,
+    "usd": 0.00015648,
+    "calls": 1,
+    "use_s": null
+   },
+   "all_cloud": {
+    "use": "commercial",
+    "floors": 1,
+    "usd": 0.00022511999999999999,
+    "calls": 2,
+    "use_s": 0.7141928672790527
+   }
+  },
+  {
+   "id": "w1236978349",
+   "label_use": "commercial",
+   "label_floors": 3,
+   "routed": {
+    "route": "local",
+    "use": "commercial",
+    "floors": 2,
+    "usd": 0.0001536,
+    "calls": 1,
+    "use_s": null
+   },
+   "all_cloud": {
+    "use": "commercial",
+    "floors": 2,
+    "usd": 0.00021863999999999998,
+    "calls": 2,
+    "use_s": 0.830425500869751
+   }
+  },
+  {
+   "id": "w1236978266",
+   "label_use": "commercial",
+   "label_floors": 4,
+   "routed": {
+    "route": "local",
+    "use": "commercial",
+    "floors": 3,
+    "usd": 0.00017364,
+    "calls": 1,
+    "use_s": null
+   },
+   "all_cloud": {
+    "use": "mixed",
+    "floors": 3,
+    "usd": 0.0002592,
+    "calls": 2,
+    "use_s": 0.8780601024627686
+   }
+  },
+  {
+   "id": "w1247745207",
+   "label_use": "other",
+   "label_floors": 1,
+   "routed": {
+    "route": "local",
+    "use": "other",
+    "floors": 1,
+    "usd": 0.00015936000000000002,
+    "calls": 1,
+    "use_s": null
+   },
+   "all_cloud": {
+    "use": "industrial",
+    "floors": 1,
+    "usd": 0.00023208000000000001,
+    "calls": 2,
+    "use_s": 0.8285953998565674
+   }
+  },
+  {
+   "id": "w1251626539",
+   "label_use": "other",
+   "label_floors": 2,
+   "routed": {
+    "route": "local",
+    "use": "other",
+    "floors": 2,
+    "usd": 0.0001512,
+    "calls": 1,
+    "use_s": null
+   },
+   "all_cloud": {
+    "use": "residential",
+    "floors": 2,
+    "usd": 0.0002136,
+    "calls": 2,
+    "use_s": 0.8277328014373779
+   }
+  },
+  {
+   "id": "w1247745057",
+   "label_use": "residential",
+   "label_floors": 1,
+   "routed": {
+    "route": "local",
+    "use": "residential",
+    "floors": 1,
+    "usd": 0.00022223999999999999,
+    "calls": 1,
+    "use_s": null
+   },
+   "all_cloud": {
+    "use": "residential",
+    "floors": 1,
+    "usd": 0.00035544,
+    "calls": 2,
+    "use_s": 1.4503109455108643
+   }
+  },
+  {
+   "id": "w1236977959",
+   "label_use": "residential",
+   "label_floors": 2,
+   "routed": {
+    "route": "local",
+    "use": "residential",
+    "floors": 2,
+    "usd": 0.00019872,
+    "calls": 1,
+    "use_s": null
+   },
+   "all_cloud": {
+    "use": "residential",
+    "floors": 2,
+    "usd": 0.00030888,
+    "calls": 2,
+    "use_s": 0.8352522850036621
+   }
+  },
+  {
+   "id": "w1236978683",
+   "label_use": "residential",
+   "label_floors": 2,
+   "routed": {
+    "route": "local",
+    "use": "residential",
+    "floors": 3,
+    "usd": 0.00017471999999999998,
+    "calls": 1,
+    "use_s": null
+   },
+   "all_cloud": {
+    "use": "residential",
+    "floors": 3,
+    "usd": 0.00026088,
+    "calls": 2,
+    "use_s": 1.3931653499603271
+   }
+  },
+  {
+   "id": "w1252504169",
+   "label_use": "other",
+   "label_floors": 1,
+   "routed": {
+    "route": "cloud",
+    "use": "commercial",
+    "floors": 1,
+    "usd": 0.00029016000000000003,
+    "calls": 2,
+    "use_s": 0.8423645496368408
+   },
+   "all_cloud": {
+    "use": "commercial",
+    "floors": 1,
+    "usd": 0.00029016000000000003,
+    "calls": 2,
+    "use_s": 0.7449076175689697
+   }
+  },
+  {
+   "id": "w1236977934",
+   "label_use": "residential",
+   "label_floors": 1,
+   "routed": {
+    "route": "cloud",
+    "use": "commercial",
+    "floors": 2,
+    "usd": 0.00036288,
+    "calls": 2,
+    "use_s": 0.899486780166626
+   },
+   "all_cloud": {
+    "use": "commercial",
+    "floors": 2,
+    "usd": 0.00036288,
+    "calls": 2,
+    "use_s": 0.8953287601470947
+   }
+  },
+  {
+   "id": "w1247745114",
+   "label_use": "commercial",
+   "label_floors": 3,
+   "routed": {
+    "route": "cloud",
+    "use": "mixed",
+    "floors": 3,
+    "usd": 0.00032496,
+    "calls": 2,
+    "use_s": 1.4122662544250488
+   },
+   "all_cloud": {
+    "use": "mixed",
+    "floors": 3,
+    "usd": 0.00032472,
+    "calls": 2,
+    "use_s": 1.5175957679748535
+   }
+  },
+  {
+   "id": "w1252504807",
+   "label_use": "commercial",
+   "label_floors": 1,
+   "routed": {
+    "route": "cloud",
+    "use": "industrial",
+    "floors": 1,
+    "usd": 0.00032148,
+    "calls": 2,
+    "use_s": 0.8944051265716553
+   },
+   "all_cloud": {
+    "use": "industrial",
+    "floors": 1,
+    "usd": 0.00032148,
+    "calls": 2,
+    "use_s": 1.3139395713806152
+   }
+  },
+  {
+   "id": "w1247745351",
+   "label_use": "other",
+   "label_floors": 2,
+   "routed": {
+    "route": "cloud",
+    "use": "institutional",
+    "floors": 2,
+    "usd": 0.00031032,
+    "calls": 2,
+    "use_s": 1.0769643783569336
+   },
+   "all_cloud": {
+    "use": "institutional",
+    "floors": 2,
+    "usd": 0.0003096,
+    "calls": 2,
+    "use_s": 1.1121995449066162
+   }
+  },
+  {
+   "id": "w1247745301",
+   "label_use": "other",
+   "label_floors": 1,
+   "routed": {
+    "route": "cloud",
+    "use": "residential",
+    "floors": 1,
+    "usd": 0.00021539999999999998,
+    "calls": 2,
+    "use_s": 0.7722194194793701
+   },
+   "all_cloud": {
+    "use": "residential",
+    "floors": 1,
+    "usd": 0.00021539999999999998,
+    "calls": 2,
+    "use_s": 0.7898736000061035
+   }
+  }
+ ]
+}

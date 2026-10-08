@@ -6,6 +6,11 @@ import type { HowLink } from '@/components/HowWeKnow'
 import type { ModelCard } from '@/types/modelCard'
 
 const pct = (v: unknown) => (typeof v === 'number' ? `${Math.round(v * 100)}%` : String(v ?? '—'))
+/** D65: the same comparison measured on 30 of the current Ward 29 run's buildings (labelled by viewing the photos) */
+const mr30 = (m: ModelCard) => {
+  const r = (m.building_use.local_router as Record<string, { n: number; routed: { use_accuracy: number }; all_cloud: { use_accuracy: number } } | undefined>).measured_ward29_n30
+  return r ? ` On ${r.n} of this run's buildings: ${pct(r.routed.use_accuracy)} routed, ${pct(r.all_cloud.use_accuracy)} with the AI check on every building.` : ''
+}
 // model_card sections are typed loosely in the zod schema; these notes read known paths only
 type MC = any   // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -15,16 +20,16 @@ interface RouteInfo { tier: 1 | 2 | 3; label: string; plain: string; note: (mc: 
 const ROUTES: Record<string, RouteInfo> = {
   // use: the production system is the built-in model with AI fallback (routed); lead with ITS number, then the path used
   tier1_local_clip: { tier: 1, label: 'T1 · local CLIP router', plain: 'Decided by a small built-in model (no cloud AI)', link: { page: 'trust', section: 'use', label: 'Building use accuracy' },
-    note: (m) => { const h = m.building_use.local_router.ward29_heldout; return `The production system (built-in model with AI fallback) was right ${pct(h.routed)} of the time on ${h.n} hand-checked Ward 29 buildings. For comparison: built-in model alone ${pct(h.local_only)}, AI image check alone ${pct(h.vlm_only)}.` } },
+    note: (m) => { const h = m.building_use.local_router.ward29_heldout; return `The production system (built-in model with AI fallback) was right ${pct(h.routed)} of the time on ${h.n} earlier labelled photos. For comparison: built-in model alone ${pct(h.local_only)}, AI image check alone ${pct(h.vlm_only)}.${mr30(m)}` } },
   tier3_vlm: { tier: 3, label: 'T3 · VLM (Nova Lite)', plain: 'Decided by the AI image check', link: { page: 'trust', section: 'use', label: 'Building use accuracy' },
-    note: (m) => { const h = m.building_use.local_router.ward29_heldout; return `The AI image check was right ${pct(m.building_use.vlm_accuracy.value)} of the time on ${m.building_use.vlm_accuracy.n} hand-checked buildings (${m.building_use.vlm_accuracy.metric}). The production system (built-in model with AI fallback) was right ${pct(h.routed)} on ${h.n} hand-checked Ward 29 buildings.` } },
+    note: (m) => { const h = m.building_use.local_router.ward29_heldout; return `The AI image check was right ${pct(m.building_use.vlm_accuracy.value)} of the time on ${m.building_use.vlm_accuracy.n} hand-checked buildings (${m.building_use.vlm_accuracy.metric}). The production system (built-in model with AI fallback) was right ${pct(h.routed)} on ${h.n} earlier labelled photos.${mr30(m)}` } },
   // D32: use filled from a readable business sign when no building photo was usable (rule, no model; not measured)
   sign_text: { tier: 2, label: 'T2 · sign text rule', plain: 'Read from the shop sign on the building', link: { page: 'hood', section: 'routed', label: 'How use is decided' },
     note: () => 'No clear photo of the building itself, but a readable business sign is linked to it, so it is counted as a shop or business. This rule has not been checked against hand labels.' },
   tier3_vlm_fewshot: { tier: 3, label: 'T3 · VLM few-shot', plain: 'AI image check, shown two example buildings first', link: { page: 'trust', section: 'floors', label: 'Floor count accuracy' },
-    note: (m) => `On ${m.floors.ward29.n} Ward 29 buildings checked by hand: exact floor count ${pct(m.floors.ward29.exact)} of the time, within one floor ${pct(m.floors.ward29.within_1)}; without the examples ${pct(m.floors.ward29.baseline_exact)} exact.` },
+    note: (m) => `On ${m.floors.ward29.n} earlier labelled photos: exact floor count ${pct(m.floors.ward29.exact)} of the time, within one floor ${pct(m.floors.ward29.within_1)}; without the examples ${pct(m.floors.ward29.baseline_exact)} exact.${m.floors.measured_ward29_n30 ? ` On 30 of this run's buildings: ${pct(m.floors.measured_ward29_n30.exact)} exact, ${pct(m.floors.measured_ward29_n30.within_1)} within one.` : ''}` },
   tier2_ocr: { tier: 2, label: 'T2 · OCR (PaddleOCR)', plain: 'Text reader', link: { page: 'trust', section: 'names', label: 'Shop name accuracy' },
-    note: (m) => `On 31 sign photos checked by hand: the text reader alone got the name right ${pct(m.names.crop_level_n31.ocr_only)} of the time, text reader then AI ${pct(m.names.crop_level_n31.routed_ocr_then_vlm)}.` },
+    note: (m) => `On 31 earlier labelled sign photos: the text reader alone got the name right ${pct(m.names.crop_level_n31.ocr_only)} of the time, text reader then AI ${pct(m.names.crop_level_n31.routed_ocr_then_vlm)}.` },
   'tier3_vlm+ocr_gate': { tier: 3, label: 'T3 · VLM + OCR gate', plain: 'AI read, confirmed by the text reader', link: { page: 'trust', section: 'names', label: 'Shop name accuracy' },
     note: (m) => `Kept because the text reader saw the same words. This way names were right ${pct(m.names.crop_level_n31.routed_ocr_then_vlm)} of the time vs ${pct(m.names.crop_level_n31.all_vlm)} for the AI alone (31 sign photos). ${m.names.vlm_only_names_confirmed}.` },
   tier3_vlm_unverified: { tier: 3, label: 'T3 · VLM, not supported by OCR', plain: 'AI read only, not confirmed', link: { page: 'trust', section: 'names', label: 'Shop name accuracy' },

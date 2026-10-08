@@ -24,6 +24,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import traceback
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -68,6 +69,13 @@ def ocr_child(crop_dir, out):
     json.dump({"load_s": round(load_s, 2), **stats(ts)}, open(out, "w"))
 
 
+def stage(out, path, name):
+    """partial results after each stage, so a later failure never loses the paid calls"""
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(out, f, indent=1)
+    print("stage done:", name, flush=True)
+
+
 def main(sample_path, out_path):
     from geo_cascadia.config import Config
     from geo_cascadia.streetview import StreetView
@@ -83,6 +91,7 @@ def main(sample_path, out_path):
     cfg.maps_key = keys()
     cfg = cfg.resolve()
     tmp = tempfile.mkdtemp(prefix="gc-measure-")
+    os.chdir(tmp)                   # Ultralytics and Paddle write next to the working folder: the worker user's temp one
     out = {"area": slug, "device": cfg.device, "machine": "AWS g4dn.xlarge (NVIDIA T4)", "n": len(views),
            "measured": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     try:
@@ -104,11 +113,15 @@ def main(sample_path, out_path):
         out["street_view"] = {"photos": sv.n_images, **stats(fetch_s)}
 
         # all-cloud path: the pipeline's own use + floors calls for every building (router off), each call timed
+        # (LOCAL_ONLY=1: skip it — the local steps only, e.g. after a local step failed; the crops are still made)
+        local_only = os.environ.get("LOCAL_ONLY") == "1"
         vlm = VLM(cfg)
         calls = []
         conv = vlm.converse
 
         def converse(content, max_tokens=400):
+            if local_only:
+                return '{"wrong_target": true}', {"in": 0, "out": 0, "lat_s": 0.0}
             txt, u = conv(content, max_tokens)
             calls.append({"kind": "floors" if max_tokens <= 20 else "use", "lat_s": u.get("lat_s"), "in": u.get("in", 0),
                           "out": u.get("out", 0), "images": sum(1 for c in content if isinstance(c, dict) and "image" in c)})
@@ -130,47 +143,56 @@ def main(sample_path, out_path):
         # local router on the same crops (GPU): load once, warm up, then time the batch and one crop at a time
         crops = [os.path.join(tmp, "crops_building", f"{q['fp']}.jpg") for q in views]
         crops = [c for c in crops if os.path.isfile(c)]
-        # UseRouter.predict loads CLIP on every call; the pipeline calls it once per run for all crops. So: one call
-        # with 1 crop (≈ the load) and one with all crops; per-crop compute = the difference / (n - 1)
-        router = UseRouter(cfg.use_router_path, cfg.device)
-        router.predict(crops[:1])                                     # first ever load (model download / CUDA init)
-        t = time.time(); router.predict(crops[:1]); t1 = time.time() - t
-        t = time.time(); pr = router.predict(crops); tn = time.time() - t
-        out["router"] = {"call_1_crop_s": round(t1, 3), "call_all_crops_s": round(tn, 3), "n": len(crops),
-                         "per_crop_s": round((tn - t1) / max(len(crops) - 1, 1), 4),
-                         "per_building_in_a_run_s": round(tn / max(len(crops), 1), 4), "threshold": router.t,
-                         "decided_locally": sum(p >= router.t for _, p in pr)}
+        stage(out, out_path, "all_cloud")
+        try:
+            # UseRouter.predict loads CLIP on every call; the pipeline calls it once per run for all crops. So: one call
+            # with 1 crop (≈ the load) and one with all crops; per-crop compute = the difference / (n - 1)
+            router = UseRouter(cfg.use_router_path, cfg.device)
+            router.predict(crops[:1])                                     # first ever load (model download / CUDA init)
+            t = time.time(); router.predict(crops[:1]); t1 = time.time() - t
+            t = time.time(); pr = router.predict(crops); tn = time.time() - t
+            out["router"] = {"call_1_crop_s": round(t1, 3), "call_all_crops_s": round(tn, 3), "n": len(crops),
+                             "per_crop_s": round((tn - t1) / max(len(crops) - 1, 1), 4),
+                             "per_building_in_a_run_s": round(tn / max(len(crops), 1), 4), "threshold": router.t,
+                             "decided_locally": sum(p >= router.t for _, p in pr)}
+        except Exception:
+            out["router"] = {"error": traceback.format_exc()[-1500:]}
+        stage(out, out_path, "router")
 
-        # detector on the same full photos (GPU), the pipeline's predict settings; sign boxes cut for OCR
-        from ultralytics import YOLO
-        t = time.time()
-        model = YOLO(cfg.yolo_weights)
-        yload = time.time() - t
-        imgs = [cache[(q["pano_id"], q["heading"], q["pitch"], q["fov"])] for q in views]
-        imgs = [i for i in imgs if i is not None]
-        kw = dict(conf=cfg.base_conf, imgsz=640, iou=cfg.nms_iou, agnostic_nms=True, device=0, verbose=False)
-        model.predict(imgs[0], **kw)
-        ts, sign_dir, n_sign = [], os.path.join(tmp, "signs"), 0
-        os.makedirs(sign_dir)
-        for k, img in enumerate(imgs):
-            t = time.time(); res = model.predict(img, **kw)[0]; ts.append(time.time() - t)
-            for b in res.boxes:
-                cls = cfg.classes[int(b.cls)]
-                if cls == "signboard" and float(b.conf) >= cfg.conf_th[cls]:
-                    x1, y1, x2, y2 = [float(v) for v in b.xyxy[0]]
-                    W, H = img.size
-                    img.crop((max(0, int(x1) - 4), max(0, int(y1) - 4), min(W, int(x2) + 4), min(H, int(y2) + 4))
-                             ).save(os.path.join(sign_dir, f"{k:02d}_{n_sign}.jpg"), quality=92)
-                    n_sign += 1
-        out["detector"] = {"load_s": round(yload, 2), "per_photo": stats(ts), "photos": len(imgs)}
+        try:
+            # detector on the same full photos (GPU), the pipeline's predict settings; sign boxes cut for OCR
+            from ultralytics import YOLO
+            t = time.time()
+            model = YOLO(cfg.yolo_weights)
+            yload = time.time() - t
+            imgs = [cache[(q["pano_id"], q["heading"], q["pitch"], q["fov"])] for q in views]
+            imgs = [i for i in imgs if i is not None]
+            kw = dict(conf=cfg.base_conf, imgsz=640, iou=cfg.nms_iou, agnostic_nms=True, device=0, verbose=False,
+                      project=os.path.join(tmp, "yolo"), save=False)   # Ultralytics wants a writable folder
+            model.predict(imgs[0], **kw)
+            ts, sign_dir, n_sign = [], os.path.join(tmp, "signs"), 0
+            os.makedirs(sign_dir)
+            for k, img in enumerate(imgs):
+                t = time.time(); res = model.predict(img, **kw)[0]; ts.append(time.time() - t)
+                for b in res.boxes:
+                    cls = cfg.classes[int(b.cls)]
+                    if cls == "signboard" and float(b.conf) >= cfg.conf_th[cls]:
+                        x1, y1, x2, y2 = [float(v) for v in b.xyxy[0]]
+                        W, H = img.size
+                        img.crop((max(0, int(x1) - 4), max(0, int(y1) - 4), min(W, int(x2) + 4), min(H, int(y2) + 4))
+                                 ).save(os.path.join(sign_dir, f"{k:02d}_{n_sign}.jpg"), quality=92)
+                        n_sign += 1
+            out["detector"] = {"load_s": round(yload, 2), "per_photo": stats(ts), "photos": len(imgs)}
 
-        # OCR in its own venv (as the worker runs it)
-        res_path = os.path.join(tmp, "ocr.json")
-        env = {**os.environ, "PYTHONPATH": os.path.join(ROOT, "pipeline")}
-        p = subprocess.run([OCR_PY, os.path.abspath(__file__), "--ocr", sign_dir, res_path], env=env,
-                           capture_output=True, text=True, timeout=1800)
-        out["ocr"] = ({**json.load(open(res_path)), "crops": n_sign} if p.returncode == 0 and os.path.isfile(res_path)
-                      else {"error": (p.stderr or "").strip().splitlines()[-1:] or ["?"], "crops": n_sign})
+            # OCR in its own venv (as the worker runs it)
+            res_path = os.path.join(tmp, "ocr.json")
+            env = {**os.environ, "PYTHONPATH": os.path.join(ROOT, "pipeline")}
+            p = subprocess.run([OCR_PY, os.path.abspath(__file__), "--ocr", sign_dir, res_path], env=env, cwd=tmp,
+                               capture_output=True, text=True, timeout=1800)
+            out["ocr"] = ({**json.load(open(res_path)), "crops": n_sign} if p.returncode == 0 and os.path.isfile(res_path)
+                          else {"error": (p.stderr or "").strip().splitlines()[-8:] or ["?"], "crops": n_sign})
+        except Exception:
+            out.setdefault("detector", {})["error"] = traceback.format_exc()[-1500:]
     finally:
         n_img = sum(1 for r, _, fs in os.walk(tmp) for f in fs if f.endswith(".jpg"))
         shutil.rmtree(tmp, ignore_errors=True)

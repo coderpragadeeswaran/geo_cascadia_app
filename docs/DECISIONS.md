@@ -2558,3 +2558,26 @@ checked on http://65.1.253.18/ (map, photos with boxes, Review, PDF, Trust), ser
 expired). Server time today ≈ 55 min.
 
 Old → new table, limits and files: explainer 07, D64 entry.
+
+## 2026-10-09 — pre-review fixes (branch prereview-fixes)
+
+### D65. Measured routed vs all-cloud; time per step; no trace of the old Ward 29; camera-only inside the area; ±2.6 m
+**Owner decisions (9 Oct):** measure "cloud model on everything" vs routed on ~30 labelled buildings of the current run
+(cost, accuracy, latency) and replace the estimates; show latency per route; remove every old-Ward-29 number or reference
+from what judges can see (`ward29_v1` stays a hidden backup); count camera-only buildings only inside the area boundary
+(every area); fix the server worker's start line. Follow-ups decided the same day: **the 0–8 m single-camera circle becomes
+±2.6 m** (the re-measured 80th percentile, n = 71; was ±2.4 m since D45) so the map and Trust agree, re-applied to every
+area; the hand-label accuracy figures stay but are labelled "measured on earlier labelled photos", with today's measured
+numbers next to them where they cover the same thing (use, floors); no relabelling round.
+
+- Sample: 30 buildings, stratified (use route × use × floors 1/2/3+), every street; labels by viewing each analysis photo
+  before seeing any model output (AI check, Claude Code). All-cloud path = the pipeline's `run_building_attrs(router=None)`
+  on the server; routed = the run's own answers.
+- Result (n = 30): use 77 % routed vs 73 % all-cloud; floors 73 % exact / 100 % within one either way; $0.000227 vs
+  $0.000271 per building; 1.21 s vs 1.98 s per building; 44 vs 60 cloud calls. Time per item on the T4: YOLO 10 ms per
+  photo, OCR 140 ms per sign crop, CLIP 8 ms per building (+ 3.4 s load per run), Nova use call 0.89 s, floors call 1.09 s.
+- Camera-only inside the area: Ward 29 47 → 9, Tiruppur 12 → 11, others unchanged.
+- Measurement cost: 90 Street View photos (three server runs; the first two failed on folder permissions) and 60 Nova calls
+  ($0.0081).
+
+Details, the full list of traces removed, files and limits: explainer 07, D65 entry.

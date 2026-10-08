@@ -47,33 +47,41 @@ def cards(mc):
     out.append({
         "id": "use", "title": "Building use", "measured": get(mc, "building_use.vlm_accuracy.metric"),
         "method": get(mc, f"{lr}.method"),
-        "result": _num(mc, f"{lr}.ward29_heldout.routed", "routed (local model first, VLM when unsure)", n_src=f"{lr}.ward29_heldout.n"),
-        "baseline": _num(mc, f"{lr}.ward29_heldout.vlm_only", "every building sent to the VLM", n_src=f"{lr}.ward29_heldout.n"),
-        "more": [_num(mc, f"{lr}.ward29_heldout.local_only", "local model only", n_src=f"{lr}.ward29_heldout.n"),
+        "result": _num(mc, f"{lr}.ward29_heldout.routed", "routed (local model first, VLM when unsure) · measured on earlier labelled photos", n_src=f"{lr}.ward29_heldout.n"),
+        "baseline": _num(mc, f"{lr}.ward29_heldout.vlm_only", "every building sent to the VLM · measured on earlier labelled photos", n_src=f"{lr}.ward29_heldout.n"),
+        "more": [_num(mc, f"{lr}.measured_ward29_n30.routed.use_accuracy", "this run, routed (30 labelled buildings, AI check)", n_src=f"{lr}.measured_ward29_n30.n"),
+                 _num(mc, f"{lr}.measured_ward29_n30.all_cloud.use_accuracy", "this run, every building to the VLM (same 30)", n_src=f"{lr}.measured_ward29_n30.n"),
+                 _num(mc, f"{lr}.ward29_heldout.local_only", "local model only · measured on earlier labelled photos", n_src=f"{lr}.ward29_heldout.n"),
                  _num(mc, f"{lr}.ward29_heldout.escalated", "share sent on to the VLM"),
                  _num(mc, "building_use.vlm_accuracy.value", "VLM on hand-labelled buildings", n_src="building_use.vlm_accuracy.n"),
                  _num(mc, f"{lr}.trichy_unseen.routed", "routed, unseen city (Trichy)", n_src=f"{lr}.trichy_unseen.n")],
         "verdict": (f"Right on {_pct(get(mc, f'{lr}.ward29_heldout.routed'))} of {get(mc, f'{lr}.ward29_heldout.n')} held-out "
                     f"buildings, the same as sending every building to the cloud model ({_pct(get(mc, f'{lr}.ward29_heldout.vlm_only'))}), "
+                    f"on earlier labelled photos; on 30 of this run's buildings {_pct(get(mc, f'{lr}.measured_ward29_n30.routed.use_accuracy'))} "
+                    f"routed vs {_pct(get(mc, f'{lr}.measured_ward29_n30.all_cloud.use_accuracy'))} with the VLM on everything, "
                     f"and {_pct(get(mc, f'{lr}.trichy_unseen.routed'))} of {get(mc, f'{lr}.trichy_unseen.n')} in a city it never saw."),
         "caveat": "Small samples: a few buildings either way move these percentages a lot.", "section": "use"})
     out.append({
-        "id": "floors", "title": "Number of floors", "measured": "visible floors vs hand labels, Ward 29",
+        "id": "floors", "title": "Number of floors", "measured": "visible floors vs labels: earlier labelled photos (n=36) and 30 of this run's buildings",
         "method": get(mc, "floors.method"),
-        "result": _num(mc, "floors.ward29.exact", "exactly right", n_src="floors.ward29.n"),
-        "baseline": _num(mc, "floors.ward29.baseline_exact", "exactly right before the few-shot prompt", n_src="floors.ward29.n"),
-        "more": [_num(mc, "floors.ward29.within_1", "within one floor", n_src="floors.ward29.n"),
+        "result": _num(mc, "floors.ward29.exact", "exactly right · measured on earlier labelled photos", n_src="floors.ward29.n"),
+        "baseline": _num(mc, "floors.ward29.baseline_exact", "exactly right before the few-shot prompt · measured on earlier labelled photos", n_src="floors.ward29.n"),
+        "more": [_num(mc, "floors.measured_ward29_n30.exact", "this run, exactly right (30 labelled buildings, AI check)", n_src="floors.measured_ward29_n30.n"),
+                 _num(mc, "floors.measured_ward29_n30.within_1", "this run, within one floor (same 30)", n_src="floors.measured_ward29_n30.n"),
+                 _num(mc, "floors.ward29.within_1", "within one floor · measured on earlier labelled photos", n_src="floors.ward29.n"),
                  _num(mc, "floors.trichy_unseen.exact", "exactly right, unseen city (Trichy)", n_src="floors.trichy_unseen.n"),
                  _num(mc, "floors.trichy_unseen.note", "note (Trichy)")],
         "verdict": (f"Exactly right on {_pct(get(mc, 'floors.ward29.exact'))} of {get(mc, 'floors.ward29.n')} buildings and within one "
-                    f"floor on {_pct(get(mc, 'floors.ward29.within_1'))}; the plain prompt managed {_pct(get(mc, 'floors.ward29.baseline_exact'))}."),
+                    f"floor on {_pct(get(mc, 'floors.ward29.within_1'))} of the earlier labelled photos; the plain prompt managed "
+                    f"{_pct(get(mc, 'floors.ward29.baseline_exact'))}. On 30 of this run's buildings: {_pct(get(mc, 'floors.measured_ward29_n30.exact'))} "
+                    f"exact, {_pct(get(mc, 'floors.measured_ward29_n30.within_1'))} within one."),
         "caveat": "Counts behind low roofs or trees are marked as estimates and go to review.", "section": "floors"})
     cl = "names.crop_level_n31"
     out.append({
-        "id": "names", "title": "Shop names", "measured": "sign crops read correctly vs hand labels",
+        "id": "names", "title": "Shop names", "measured": "sign crops read correctly vs hand labels, measured on earlier labelled photos (n=31)",
         "method": get(mc, "ocr.engine") + "; VLM only when OCR is unsure, and a VLM name is kept only if OCR supports it",
-        "result": _num(mc, f"{cl}.routed_ocr_then_vlm", "OCR first, VLM when unsure", n=_key_n("crop_level_n31"), n_src=cl),
-        "baseline": _num(mc, f"{cl}.all_vlm", "every crop sent to the VLM", n=_key_n("crop_level_n31"), n_src=cl),
+        "result": _num(mc, f"{cl}.routed_ocr_then_vlm", "OCR first, VLM when unsure · measured on earlier labelled photos", n=_key_n("crop_level_n31"), n_src=cl),
+        "baseline": _num(mc, f"{cl}.all_vlm", "every crop sent to the VLM · measured on earlier labelled photos", n=_key_n("crop_level_n31"), n_src=cl),
         "more": [_num(mc, f"{cl}.ocr_only", "OCR only", n=_key_n("crop_level_n31"), n_src=cl),
                  _num(mc, "names.full_view_n16.routed", "whole photos, routed", n=_key_n("full_view_n16"), n_src="names.full_view_n16"),
                  _num(mc, "names.full_view_n16.cost_ratio", "all-VLM cost vs routed (whole photos)"),
@@ -165,17 +173,17 @@ def experiments(mc):
     item("Building use", "Google Places type as the use", "rejected",
          [{"label": "accuracy", "value": get(mc, f"{gp}.value"), "kind": "pct", "src": f"{gp}.value"},
           {"label": "n", "value": get(mc, f"{gp}.n"), "kind": "num", "src": f"{gp}.n"}], "less accurate than looking at the photo", gp)
-    fr = "building_use.local_router.full_ward29_run"
-    item("Building use", "every building to the VLM", "replaced",
-         [{"label": "VLM calls", "value": get(mc, f"{fr}.vlm_calls_before"), "kind": "num", "src": f"{fr}.vlm_calls_before"},
-          {"label": "accuracy", "value": get(mc, f"{fr}.use_accuracy_before"), "kind": "pct", "src": f"{fr}.use_accuracy_before"}],
-         "the local router gives the same accuracy with fewer cloud calls", fr)
-    item("Building use", "local router (CLIP) first, VLM when unsure", "production",
-         [{"label": "VLM calls (use + floors only, see note)", "value": get(mc, f"{fr}.vlm_calls_after"), "kind": "num", "src": f"{fr}.vlm_calls_after"},
-          {"label": "accuracy", "value": get(mc, f"{fr}.use_accuracy_after"), "kind": "pct", "src": f"{fr}.use_accuracy_after"},
-          {"label": "n", "value": get(mc, f"{fr}.n"), "kind": "num", "src": f"{fr}.n"}],
-         "the 'after' call count is a resumed run's counter and leaves out the name and business-sign checks; like for like "
-         "the router removes one cloud call per locally decided building (Under the Hood › Routing and cost)", fr)
+    fr = "building_use.local_router.measured_ward29_n30"
+    for key, name, status, why in (
+            ("all_cloud", "every building's use and floors to the VLM", "replaced",
+             "measured on 30 of this run's buildings: no more accurate, more cloud calls, slower per building"),
+            ("routed", "local router (CLIP) first, VLM when unsure", "production", None)):
+        item("Building use", name, status,
+             [{"label": "use right", "value": get(mc, f"{fr}.{key}.use_accuracy"), "kind": "pct", "src": f"{fr}.{key}.use_accuracy"},
+              {"label": "floors exact", "value": get(mc, f"{fr}.{key}.floors_exact"), "kind": "pct", "src": f"{fr}.{key}.floors_exact"},
+              {"label": "cloud $ per building", "value": get(mc, f"{fr}.{key}.usd_per_building"), "kind": "num", "src": f"{fr}.{key}.usd_per_building"},
+              {"label": "s per building", "value": get(mc, f"{fr}.{key}.s_per_building"), "kind": "num", "src": f"{fr}.{key}.s_per_building"},
+              {"label": "n", "value": get(mc, f"{fr}.n"), "kind": "num", "src": f"{fr}.n"}], why, fr)
     item("Shop names", "every photo to the VLM", "rejected",
          [{"label": "accuracy", "value": get(mc, "names.full_view_n16.all_vlm_per_view"), "kind": "pct", "src": "names.full_view_n16.all_vlm_per_view"},
           {"label": "cost vs routed", "value": get(mc, "names.full_view_n16.cost_ratio"), "kind": "text", "src": "names.full_view_n16.cost_ratio"}],

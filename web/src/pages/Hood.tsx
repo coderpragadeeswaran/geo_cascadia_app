@@ -538,7 +538,7 @@ function RoutingCost({ r, billing }: { r: RoutingData; billing?: string }) {
           </tbody>
         </table>
       </div>
-      <p className="t-small ink3 mt-2">Hover a number for its source. “Time each” is the median seconds per cloud call, or the model card’s speed for the detector (T4 GPU). Local models use GPU time, not a per-call fee. Derived = the run’s own cost counter minus the calls measured one by one; estimate = calls × the measured cost of the same prompt.</p>
+      <p className="t-small ink3 mt-2">Hover a number for its source. “Time each” is the median seconds per item: measured on the analysis server where the hover says so, else per cloud call from this run’s files. Local models use GPU time, not a per-call fee. Derived = the run’s own cost counter minus the calls measured one by one; estimate = calls × the measured cost of the same prompt.</p>
 
       {r.measured && <MeasuredCompare m={r.measured} />}
 
@@ -554,8 +554,8 @@ function RoutingCost({ r, billing }: { r: RoutingData; billing?: string }) {
       </>}
 
       {!!r.accuracy.length && <>
-        <h3 className="t-title mt-6">Accuracy: routed vs cloud only</h3>
-        <p className="t-small ink2 mt-1">Hand-labelled samples from the team’s model card. Small samples: one item either way moves a result by about 3 points.</p>
+        <h3 className="t-title mt-6">Accuracy: routed vs cloud only · earlier labelled photos</h3>
+        <p className="t-small ink2 mt-1">Measured on earlier labelled photos (the team’s model card), n as shown. Small samples: one item either way moves a result by about 3 points.</p>
         <div className="mt-3 grid gap-6 md:grid-cols-2">
           {r.accuracy.map((a) => (
             <div key={a.task}>
