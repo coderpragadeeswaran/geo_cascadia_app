@@ -414,4 +414,100 @@
 
 ---
 
+## 8 Oct 2026 · D63 — One AWS GPU server for the app, the API and the worker: preparation and read-only checks (not launched yet)
+
+### What
+1. **The plan:** one g4dn.xlarge (4 vCPU, 16 GB, NVIDIA T4) in ap-south-1 runs the website, the API and the analysis
+   worker; the database stays on Supabase. The site is open to anyone with the link (port 80); SSH only from the owner's
+   IP. This entry covers the preparation (Phase 0) and the read-only AWS checks (Phase 1). **Nothing has been launched
+   and nothing has cost money yet** (one Amazon Nova test call, $0.0000011).
+2. **Scripts** in `tools\deploy\` (laptop, PowerShell): `make_bundle.ps1`, `launch.ps1` (asks first; refuses a second
+   instance), `deploy.ps1`, `start.ps1`, `stop.ps1`, `extend.ps1`, `refresh_keys.ps1`, `status.ps1`; AWS calls go through
+   `aws_ops.py` in its own small venv (`C:\projects\gc-deploy\.venv`, boto3 only).
+3. **Server files** in `tools\deploy\server\`: `setup.sh` (idempotent), `install_release.sh`, `put_env.sh`, nginx site,
+   two systemd services (API, worker), the auto-stop (`gc-autostop` + a boot unit + a one-minute timer), and the worker's
+   requirement lists.
+4. **The worker as a service:** `worker/server_worker.py` runs the Colab cell's own code (`colab_worker.py` without its
+   last line, the way the tests load it) with no questions, no Drive and no tunnel. The Colab cell keeps working as the
+   fallback; its only change is one setting, `OCR_PYTHON` (None = as before).
+5. **PDF reports on Linux:** the four symbols Anek Tamil lacks (≤ ≥ → ↑) come from DejaVu Sans when Arial isn't there
+   (before: they would have been replaced by "<=", ">=" …).
+
+### Why
+- The owner wants the app reachable by anyone with a link, with the GPU worker always next to it, instead of the laptop +
+  Colab + tunnel.
+- Money safety first: the server must stop by itself, and every paid step must be asked for.
+
+### How it works
+- **Bundle** (`make_bundle.py`): only files git tracks (no `.env`, venvs, caches by accident) — backend without tests,
+  `pipeline/geo_cascadia`, the two worker files, five server-side tools (`build_run_report`, `box_choice`,
+  `fetch_osm_tags`, `check_photos`, `detect_photos`), the server files, the app data the API reads (`data/areas` incl.
+  `photo_check.json` and `box_choice.json`, `model_card.json`, `billing.json`, the study area) — plus the production web
+  build made with `VITE_API_URL=/api`, and three runtime caches as seeds (`streetview_meta.json`, `streetpick/`,
+  `planest/`). It refuses any image file, any file over 40 MB, and uncommitted changes. Text files get LF. Sorted
+  entries, fixed owner and times, gzip without a timestamp: the same commit gives the same bytes (checked: two builds,
+  same sha256). The model files go in a separate `gc-assets.tar.gz` (the detector `best.pt`, `use_router.joblib`, the
+  two floor-count example photos — the only images, because the floors prompt needs them).
+- **Server layout:** `/opt/geo-cascadia/releases/<time>` (code; the last 3 kept), `current` → the newest,
+  `/opt/geo-cascadia/data` (persistent; each release links `data` to it), `/opt/geo-cascadia/assets` (models). A deploy
+  overwrites the bundle's data files and never deletes, so areas analysed on the server survive updates; caches are
+  seeded only where missing.
+- **Secrets on the server** (`/etc/geo-cascadia`, all 600): `app.env` (API: Supabase, Google keys, worker token; made
+  by `deploy.ps1 -Env` from `backend\.env`, only the needed names, plus `CORS_ORIGINS`), `worker.env` (worker token +
+  Google server key, derived from `app.env`), `aws_builder.env` (Builder role, worker user only, `refresh_keys.ps1`). The
+  API runs as `gcapp`, the worker as `gcworker`; the API and the website never get AWS keys.
+- **nginx:** the web build at `/`, the API at `/api/` (prefix stripped; uvicorn `--root-path /api`, checked locally:
+  routes and `/docs` answer), the worker's endpoints are not reachable from outside (only the read-only
+  `/api/worker/status`).
+- **Worker service:** two venvs — `venv-worker` (torch, ultralytics, transformers 4.57.6, boto3 …; D37) and `venv-ocr`
+  (Paddle + PaddleOCR) — so torch and Paddle never share CUDA libraries; the OCR process runs with `GC_OCR_PYTHON`.
+  TensorFlow is uninstalled from both, `USE_TF=0`, `TRANSFORMERS_NO_TF=1` (D39). It reads the AWS key file before each
+  job, and after "AWS token expired" it waits for the file to change, then continues the same job (as on Colab). Systemd
+  restarts it after a crash; a job it was running is "interrupted" and resumes from its files.
+- **Auto-stop:** the instance is launched with "shutdown = stop". `gc-autostop` keeps a stop time; every boot arms 90
+  minutes, a timer checks every minute and powers off when it has passed; a stop time from before the current boot is
+  never acted on (re-armed instead). The launch's user data installs it on first boot, from the same files `setup.sh`
+  installs. `extend.ps1` adds 60 minutes.
+
+### Phase 1: AWS read-only checks (8 Oct 2026)
+- EC2 role: identity OK (account …6700, role FAI-TCE-Team22-EC2-Task5). g4dn.xlarge offered in ap-south-1a/b/c. Running
+  G-instance vCPU quota **4** = exactly one g4dn.xlarge.
+- Latest **Deep Learning Base OSS Nvidia Driver GPU AMI (Ubuntu 22.04)**: `ami-04a61a72eafe2d8ab` (2 Oct 2026 build;
+  root 75 GB by default, launched with 100 GB).
+- **Dry run:** the role allows the full launch (100 GB gp3, shutdown = stop, IMDSv2, user data, tags on the instance)
+  but **refuses tags at creation on anything except the instance** (volume, network interface, Elastic IP, key pair,
+  security group: UnauthorizedOperation; untagged they pass). The role refuses t3.micro: the type is pinned. So the
+  launch tags the instance at creation and tags the rest right after with CreateTags (reported if refused).
+- RDS: not visible to this role (DescribeDBInstances: AccessDenied); not creatable from here. The AWS price API: refused.
+- Builder role: one Amazon Nova Lite call (`apac.amazon.nova-lite-v1:0`, ap-south-1): answered, 7 + 3 tokens,
+  $0.0000011, 1.1 s.
+
+### Key numbers
+- **Prices** (AWS public price files, 7 Oct 2026 publication, ap-south-1): g4dn.xlarge Linux **$0.579/hour**; gp3
+  **$0.0912 per GB-month** → 100 GB **$9.12/month**; public IPv4 (Elastic IP) **$0.005/hour** in use or idle →
+  **$3.65/month**. Stopped: disk + IP only, **$12.77/month**. Running 3 h a day for 30 days: 90 × $0.579 = $52.11 +
+  $12.77 = **$64.88/month**.
+- **Bundle:** 3.5 MB (1,024 files, 21.7 MB unpacked): data 14.0 MB (298 files), cache seeds 4.2 MB (604), web 2.3 MB (24),
+  backend 0.85 MB (54), pipeline 0.18 MB (24), worker 2, tools 5, server files 12. Model files: `best.pt` 21.5 MB.
+- **Checks on main** (before these changes): backend 505 passed, 1 skipped; typecheck, build, test:ui 25, check:data and
+  the audit (both themes) pass; regression (production preview) ALL PASSED, 291 checks, 0 retries (`run-2026-10-08_0802.log`). After the changes: 8 new tests (`test_d63_server_worker.py`) and the worker + report tests (106 passed, 1 skipped) pass.
+
+### Limits
+- `use_router.joblib` and the two floor-count example photos are **not on this laptop** (only on the Drive folder
+  `MyDrive/alldataset`): copy them to `C:\projects\geo-cascadia-assets\models\` and `…\crops_building_v1\` before the
+  first deploy. Without the router every building's use goes to the cloud model (costs more); without the photos the
+  floors step can't run, so the worker refuses to start.
+- The server scripts have not run on Ubuntu yet (no Linux here): syntax-checked, the auto-stop logic tested with stubs in
+  seven cases. The exact Paddle / torch versions on the server are whatever pip resolves on the day (recorded in
+  `/opt/geo-cascadia/freeze-*.txt`); the router was pickled with Colab's scikit-learn — `setup.sh` reports whether it
+  loads cleanly.
+- The laptop API and the server API share one Supabase database. An area analysed on the server keeps its run files on
+  the server (`/opt/geo-cascadia/data/areas`), not on the laptop.
+- Plain HTTP (no domain, no certificate): the site is not encrypted.
+
+### Lines that are now out of date in 00–06
+- None yet (README "Deployment" and the worker README follow after the launch).
+
+---
+
 [← 06 Updates](06_updates.md) · [Start here](00_START_HERE.md) · (this is the last file) →

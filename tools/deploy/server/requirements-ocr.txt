@@ -1,0 +1,5 @@
+# GEO-CASCADIA sign reading on the AWS GPU server (D63): its own venv, so Paddle's CUDA libraries never meet torch's.
+# paddlepaddle-gpu itself is installed by setup.sh from Paddle's CUDA 12.6 index (it is not on PyPI).
+paddleocr
+numpy
+pillow

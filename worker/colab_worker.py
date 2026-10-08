@@ -20,6 +20,7 @@ SAVE_TO_DRIVE = True            # with Drive mounted, each street's progress is 
 DRIVE_JOBS_DIR = "/content/drive/MyDrive/gc_worker_jobs"   # worker on the same account continues (no photo bought twice)
 OCR_SELF_TEST = "ask"           # at start: load the sign reader once, read one test image, free it. "ask" | True | False
 OVERPASS_RETRY_S = (30, 60, 120)  # OpenStreetMap busy at the area stage: wait this long and try again, then fail (Retry)
+OCR_PYTHON = None               # the Python that runs the sign-reading process (None: this one; the AWS server, D63, uses its own Paddle venv)
 
 import _thread, collections, dataclasses, gc, getpass, glob, inspect, json, os, platform, re, shutil, socket, subprocess, sys, \
     threading, time, traceback, uuid
@@ -572,7 +573,7 @@ def run_child(mode, cfg, extra=None, progress=None, script=None, label=""):
     if cfg.device == "cpu":
         env["CUDA_VISIBLE_DEVICES"] = ""                           # the CPU fallback never touches the GPU
     tail = collections.deque(maxlen=30)
-    proc = subprocess.Popen([sys.executable, script, spec_p], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env,
+    proc = subprocess.Popen([OCR_PYTHON or sys.executable, script, spec_p], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env,
                             text=True, encoding="utf-8", errors="replace", bufsize=1)
     try:
         for line in proc.stdout:
