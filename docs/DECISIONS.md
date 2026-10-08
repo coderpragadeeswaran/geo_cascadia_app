@@ -2513,4 +2513,12 @@ bundle script stops and says where to put them.
 
 **Checks (8 Oct, main before these changes):** backend 505 passed, 1 skipped; typecheck, build, test:ui 25, check:data, audit (both themes) pass; regression ALL PASSED, 291 checks, 0 retries (`run-2026-10-08_0802.log`). After: `test_d63_server_worker.py` 8 new; worker + report tests 106 passed, 1 skipped.
 
+**Launched and deployed (8 Oct, owner's "go launch"):** instance `i-09e10c6bc76bb84dc`, Elastic IP `65.1.253.18`, site
+http://65.1.253.18/. Owner decisions on the day: scikit-learn pinned to 1.6.1 (the router's pickle version); browser map
+key gets the website restriction `http://65.1.253.18/*`; server key unchanged (works from the server, no IP restriction);
+one live analysis approved ("Unnamed road near 5th Street", 50 m: 20 photos $0.14 at list price, Nova $0.0008, 2 min 19 s,
+5 buildings / 3 poles). Only the instance could be tagged: the role refuses CreateTags on the volume, network interface,
+security group, Elastic IP and key pair, also after creation. The instance is kept **stopped** between uses
+(`start.ps1` / `stop.ps1`; 90-minute auto-stop). The laptop + Colab + tunnel set-up stays as the fallback.
+
 Details, numbers and limits: explainer 07, D63 entry.

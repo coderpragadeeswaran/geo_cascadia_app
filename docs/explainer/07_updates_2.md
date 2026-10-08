@@ -414,13 +414,13 @@
 
 ---
 
-## 8 Oct 2026 · D63 — One AWS GPU server for the app, the API and the worker: preparation and read-only checks (not launched yet)
+## 8 Oct 2026 · D63 — One AWS GPU server for the website, the API and the GPU worker (http://65.1.253.18/)
 
 ### What
 1. **The plan:** one g4dn.xlarge (4 vCPU, 16 GB, NVIDIA T4) in ap-south-1 runs the website, the API and the analysis
    worker; the database stays on Supabase. The site is open to anyone with the link (port 80); SSH only from the owner's
-   IP. This entry covers the preparation (Phase 0) and the read-only AWS checks (Phase 1). **Nothing has been launched
-   and nothing has cost money yet** (one Amazon Nova test call, $0.0000011).
+   IP. **Live since 8 Oct 2026: http://65.1.253.18/**, instance `i-09e10c6bc76bb84dc`, Elastic IP `65.1.253.18`. It is
+   **stopped** between uses; `tools\deploy\start.ps1` starts it (README, Deployment).
 2. **Scripts** in `tools\deploy\` (laptop, PowerShell): `make_bundle.ps1`, `launch.ps1` (asks first; refuses a second
    instance), `deploy.ps1`, `start.ps1`, `stop.ps1`, `extend.ps1`, `refresh_keys.ps1`, `status.ps1`; AWS calls go through
    `aws_ops.py` in its own small venv (`C:\projects\gc-deploy\.venv`, boto3 only).
@@ -482,6 +482,44 @@
 - Builder role: one Amazon Nova Lite call (`apac.amazon.nova-lite-v1:0`, ap-south-1): answered, 7 + 3 tokens,
   $0.0000011, 1.1 s.
 
+### Phases 2–4: launch, deploy, live test, Google keys (8 Oct 2026)
+- **Launch** (owner's "go launch"): one g4dn.xlarge, AMI above, 100 GB gp3, shutdown = stop, IMDSv2; the user data armed
+  the 90-minute auto-stop on first boot (checked: timer active, boot re-arm enabled, `gc-autostop show`). Tesla T4,
+  driver 595.91.07, 15 GB GPU; 4 vCPU, 15 GB RAM; 48 GB of the disk free after setup's AMI (it uses 50 GB).
+- **Tags:** only the instance carries `Project=fai-tce-team-22-geo-cascadia`. The role refuses CreateTags after creation
+  too (UnauthorizedOperation) on the volume `vol-06dbd13680d798527`, network interface `eni-0ad9f79d099edce28`, security
+  group `sg-09328e0a6344a1184`, Elastic IP `eipalloc-0924f956730fb1b42` and key pair `key-0316a3ecdb4bb304e`. Whoever
+  manages the role would have to allow `ec2:CreateTags` on them.
+- **Setup** (first run ~15 min, most of it Paddle's 2–3 GB download from its own index at ~11 MB/s): uv 0.12.23,
+  Python 3.12.15; torch 2.14.1 (CUDA, sees the T4), transformers 4.57.6, scikit-learn 1.6.1 (pinned: the router was
+  pickled with 1.6.1 and warns on 1.9.1; on 1.6.1 it loads cleanly), ultralytics 8.4.174; Paddle 3.3.1 (CUDA build, 1
+  GPU), PaddleOCR 3.7.0 (PP-OCRv6 models); venv sizes: worker 6.0 GB, API 0.2 GB. A re-run of setup takes ~1 min.
+- **Fixes found on the first launch** (committed): ssh's stderr ended the PowerShell scripts (PS 5.1 under
+  `ErrorActionPreference = Stop`) → the remote helpers use `Continue` and the exit code; `sudo` works only once cloud-init
+  has finished → launch waits for it; PowerShell's pipe put a UTF-8 BOM in front of the env files (the API still connected)
+  → `put_env.sh` strips it; setup's OCR check ran as the worker user from a folder it can't read → it runs from the
+  worker's home; Ultralytics' config folder → `YOLO_CONFIG_DIR` in the service.
+- **Live checks** (the running server, through nginx): `/api/health` ok, database online, worker online (GPU); 9 areas;
+  Ward 29 and Uthukuli Road (Tiruppur): area, Under the Hood, buildings, review queue all 200; PDF (Ward 29 19 pages, ≤ drawn
+  from DejaVu, SYNTHETIC on every register page; Tiruppur 8 pages) and Excel (6 sheets) download in 10.3 s / 1.1 s and
+  1.4 s / 0.3 s; `POST /api/worker/next` from outside → 404. Playwright, 1366×768, Night: Explore, Review, Under the Hood,
+  Trust, Jobs for both areas load with 0 console errors (WebGL on); checked by eye: the 3D map with Ward 29's layers, a
+  Street View evidence photo with its orange box in Review, Under the Hood. Screenshots: `docs/screenshots/deploy/`.
+- **Worker:** OCR self-test on the T4 in full mode read "HOTEL" in 10.9 s; refresh_keys checked the Builder keys with one
+  Nova call and restarted the idle worker.
+- **Google keys:** before the browser key allowed the site, every page logged `RefererNotAllowedMapError` and Explore had
+  no map. The owner added the website restriction `http://65.1.253.18/*`; after that the map and Street View photos load.
+  The server key needed no change: a Street View metadata call from the server answered OK (no IP restriction).
+- **Live analysis** (owner approved; "Unnamed road near 5th Street", Coimbatore, 50 m; estimate 21 photos $0.15, Nova
+  $0.0013, 3 Places look-ups, 4 GPU min): job `6eeca41b…` ran 2 min 19 s (claimed 06:53:04, delivered 06:55:23 UTC) —
+  panoramas 0.7 s, area 0.2 s (the app's OpenStreetMap snapshot), plan 0.1 s, detect 99.1 s, geometry 0.3 s, OCR 12.0 s
+  (full, GPU), cloud AI 25.3 s, the rest < 1 s. Result: area `unnamed_road_near_5th_street_6eeca4` — 5 buildings, 3 poles,
+  0 not in register, 0 differ, 0 dark stretches, 1 review item; **20 Street View photos ($0.14 at list price), 4 Nova calls
+  ($0.0008), 1 Places look-up**; use router local. It appears in Explore, Under the Hood and Jobs. The worker deleted its 6
+  photo crops after delivery; no Street View image is left on the server (the only image is the self-test's drawn word).
+- **Stopped** with `stop.ps1` at the end (AWS: "stopped"). Running time today ≈ 60 min (05:56–06:31 and 06:42–07:04 UTC)
+  ≈ $0.58.
+
 ### Key numbers
 - **Prices** (AWS public price files, 7 Oct 2026 publication, ap-south-1): g4dn.xlarge Linux **$0.579/hour**; gp3
   **$0.0912 per GB-month** → 100 GB **$9.12/month**; public IPv4 (Elastic IP) **$0.005/hour** in use or idle →
@@ -497,16 +535,22 @@
   `MyDrive/alldataset`): copy them to `C:\projects\geo-cascadia-assets\models\` and `…\crops_building_v1\` before the
   first deploy. Without the router every building's use goes to the cloud model (costs more); without the photos the
   floors step can't run, so the worker refuses to start.
-- The server scripts have not run on Ubuntu yet (no Linux here): syntax-checked, the auto-stop logic tested with stubs in
-  seven cases. The exact Paddle / torch versions on the server are whatever pip resolves on the day (recorded in
-  `/opt/geo-cascadia/freeze-*.txt`); the router was pickled with Colab's scikit-learn — `setup.sh` reports whether it
-  loads cleanly.
+- Torch and Paddle are not pinned (only transformers and scikit-learn are): a fresh setup takes what pip resolves that day;
+  the versions in use are in `/opt/geo-cascadia/freeze-*.txt`.
+- Detection took 99 s for 20 photos on the first job after a boot (Ultralytics warned "NMS time limit exceeded"): the
+  first job pays for model loading and CUDA warm-up. Not measured on a second job.
+- The worker's start line still says "Drive is not mounted: an interrupted street starts again from the beginning" (the
+  Colab cell's wording). On the server the job files stay on disk, so an interrupted street does continue.
+- Only the instance is tagged (see above).
+- Not checked live: the 2-minute "interrupted" resume after a worker crash, and "AWS token expired" mid-job (both are
+  the Colab cell's tested code paths).
 - The laptop API and the server API share one Supabase database. An area analysed on the server keeps its run files on
   the server (`/opt/geo-cascadia/data/areas`), not on the laptop.
 - Plain HTTP (no domain, no certificate): the site is not encrypted.
 
 ### Lines that are now out of date in 00–06
-- None yet (README "Deployment" and the worker README follow after the launch).
+- README's architecture sketch at the top and "Demo day" describe the laptop + Colab + tunnel set-up; it stays as the
+  fallback. The new "Deployment" section describes the server.
 
 ---
 
