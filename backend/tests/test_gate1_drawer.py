@@ -33,7 +33,7 @@ def _stats(v):
 
 @pytest.mark.parametrize("slug", TRUST_AREAS)
 def test_camera_case_is_trusts_set_with_trusts_numbers(slug):
-    """case 1 = Trust's camera-derived row: same buildings, same distances, same n / median / % (Ward 29 n = 260)"""
+    """case 1 = Trust's camera-derived row: same buildings, same distances, same n / median / % (Ward 29 n = 240 since the D64 re-run)"""
     b, res = _checks(slug)
     cam = [r for r in res if r["case"] == "camera"]
     trust = _mc()["gate1_position"]["vs OSM front-wall centre"][slug][CAM_ROW]
@@ -41,7 +41,7 @@ def test_camera_case_is_trusts_set_with_trusts_numbers(slug):
     assert _stats([r["distance_m"] for r in cam]) == {k: trust[k] for k in ("n", "median_m", "within_3_5_m_pct")}
     assert all(r["area_stats"] == {k: trust[k] for k in ("n", "median_m", "within_3_5_m_pct")} for r in res)
     if slug == "ward29":
-        assert len(cam) == 260
+        assert len(cam) == 240
 
 
 def test_backend_wall_reproduces_the_stored_distances():
@@ -68,7 +68,7 @@ def test_ward29_cases_and_corners():
     roads = minimap.roads(b, None, os.path.join(S.data_dir, "cache", "streetpick"), bb=minimap.area_bounds(
         b, json.load(open(os.path.join(S.areas_dir, "ward29", "plan.json")))))
     _, res = _checks("ward29", roads["roads"] if roads["available"] else None)
-    assert sum(r["case"] == "camera" for r in res) == 260 and sum(r["case"] == "map" for r in res) == 121
+    assert sum(r["case"] == "camera" for r in res) == 240 and sum(r["case"] == "map" for r in res) == 133
     assert all(r["front_street"] for r in res)
     for r in res:                                                       # corner ⇔ a side wall; street behind ⇔ a back wall
         assert r["corner"] == any(w["side"] == "side" for w in r["other_walls"])
@@ -99,4 +99,4 @@ def test_detail_endpoint_carries_the_check(client):
     cam = next(x["id"] for x, r in zip(b["buildings"], res) if r["case"] == "camera")
     pc = c.get(f"/buildings/ward29/{cam}").json()["position_check"]
     assert pc["case"] == "camera" and pc["from_trust"] and math.isclose(pc["distance_m"], ER.get("ward29")[cam]["official_front_m"])
-    assert pc["area_stats"]["n"] == 260
+    assert pc["area_stats"]["n"] == 240

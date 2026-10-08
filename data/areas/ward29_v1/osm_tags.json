@@ -1,5 +1,5 @@
 {
- "fetched": "2026-10-08T12:31:07Z",
+ "fetched": "2026-10-04T08:26:41Z",
  "source": "OpenStreetMap: point positions from the app's copy (snapshot 2026-10-02); names and tags from the Overpass API on the fetch date",
  "osm_snapshot": "2026-10-02",
  "scope_m": 30,
@@ -234,6 +234,11 @@
   }
  ],
  "buildings": {
+  "w1252504515": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
   "w1252504250": {
    "levels": null,
    "building": "yes",
@@ -400,6 +405,11 @@
    "found": true
   },
   "w1252504905": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1252504760": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -609,22 +619,17 @@
    "building": "yes",
    "found": true
   },
-  "w1236978311": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
-  "w1236978282": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
   "w1236977963": {
    "levels": null,
    "building": "yes",
    "found": true
   },
   "w1236978847": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1236978080": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -684,17 +689,22 @@
    "building": "yes",
    "found": true
   },
+  "w1236977918": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
   "w1236978713": {
    "levels": null,
    "building": "yes",
    "found": true
   },
-  "w1236978654": {
+  "w1236978484": {
    "levels": null,
    "building": "yes",
    "found": true
   },
-  "w1236977925": {
+  "w1236978052": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -734,12 +744,27 @@
    "building": "yes",
    "found": true
   },
+  "w1236978842": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
   "w1236977888": {
    "levels": null,
    "building": "yes",
    "found": true
   },
   "w1236978323": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1236978730": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1236978564": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -789,11 +814,6 @@
    "building": "yes",
    "found": true
   },
-  "w1236978780": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
   "w1236978466": {
    "levels": null,
    "building": "yes",
@@ -809,12 +829,12 @@
    "building": "yes",
    "found": true
   },
-  "w1236978494": {
+  "w1236978741": {
    "levels": null,
    "building": "yes",
    "found": true
   },
-  "w1236978586": {
+  "w1236978494": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -839,6 +859,11 @@
    "building": "yes",
    "found": true
   },
+  "w1236978019": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
   "w1236978271": {
    "levels": null,
    "building": "yes",
@@ -849,12 +874,17 @@
    "building": "yes",
    "found": true
   },
+  "w1236978489": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
   "w1236978455": {
    "levels": null,
    "building": "yes",
    "found": true
   },
-  "w1236978653": {
+  "w1236978188": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -869,17 +899,17 @@
    "building": "yes",
    "found": true
   },
+  "w1236978594": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
   "w1236977960": {
    "levels": null,
    "building": "yes",
    "found": true
   },
   "w1236978553": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
-  "w1236978037": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -1019,11 +1049,6 @@
    "building": "yes",
    "found": true
   },
-  "w1247745280": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
   "w1247745069": {
    "levels": null,
    "building": "yes",
@@ -1035,16 +1060,6 @@
    "found": true
   },
   "w1247745132": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
-  "w1247745054": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
-  "w1247745130": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -1064,6 +1079,11 @@
    "building": "yes",
    "found": true
   },
+  "w1247745133": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
   "w1247742069": {
    "levels": null,
    "building": "yes",
@@ -1074,17 +1094,7 @@
    "building": "yes",
    "found": true
   },
-  "w1247745243": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
   "w1247745284": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
-  "w1247745107": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -1095,11 +1105,6 @@
    "found": true
   },
   "w1247745067": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
-  "w1247745151": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -1135,11 +1140,6 @@
    "found": true
   },
   "w1247745013": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
-  "w1247745142": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -1189,11 +1189,6 @@
    "building": "yes",
    "found": true
   },
-  "w1236978693": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
   "w1247745299": {
    "levels": null,
    "building": "yes",
@@ -1205,11 +1200,6 @@
    "found": true
   },
   "w1247745240": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
-  "w1236978330": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -1254,22 +1244,7 @@
    "building": "yes",
    "found": true
   },
-  "w1236978576": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
   "w1247745027": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
-  "w1247745041": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
-  "w1247745020": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -1304,12 +1279,7 @@
    "building": "yes",
    "found": true
   },
-  "w1236978702": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
-  "w1236978638": {
+  "w1247745213": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -1320,6 +1290,11 @@
    "found": true
   },
   "w1247745051": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1247745285": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -1335,11 +1310,6 @@
    "found": true
   },
   "w1236978736": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
-  "w1236978280": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -1389,7 +1359,17 @@
    "building": "yes",
    "found": true
   },
+  "w1236978807": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
   "w1247745257": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1236978157": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -1414,6 +1394,11 @@
    "building": "yes",
    "found": true
   },
+  "w1236978301": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
   "w1236978476": {
    "levels": null,
    "building": "yes",
@@ -1429,12 +1414,17 @@
    "building": "yes",
    "found": true
   },
+  "w1236978328": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
   "w1247745021": {
    "levels": null,
    "building": "yes",
    "found": true
   },
-  "w1236978314": {
+  "w1236978276": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -1464,6 +1454,11 @@
    "building": "yes",
    "found": true
   },
+  "w1236977916": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
   "w1247745155": {
    "levels": null,
    "building": "yes",
@@ -1484,6 +1479,16 @@
    "building": "yes",
    "found": true
   },
+  "w1236978554": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1236978298": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
   "w1247745241": {
    "levels": null,
    "building": "yes",
@@ -1494,7 +1499,17 @@
    "building": "yes",
    "found": true
   },
+  "w1236978470": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
   "w1236978733": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1236978192": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -1534,16 +1549,6 @@
    "building": "yes",
    "found": true
   },
-  "w1247742143": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
-  "w1247744773": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
   "w1237043961": {
    "levels": null,
    "building": "yes",
@@ -1559,6 +1564,16 @@
    "building": "yes",
    "found": true
   },
+  "w1237039392": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1247744994": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
   "w1247745169": {
    "levels": null,
    "building": "yes",
@@ -1569,12 +1584,22 @@
    "building": "yes",
    "found": true
   },
-  "w1247745332": {
+  "w1247744978": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1247744997": {
    "levels": null,
    "building": "yes",
    "found": true
   },
   "w1237039377": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1247745195": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -1599,6 +1624,16 @@
    "building": "yes",
    "found": true
   },
+  "w1237283596": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1247745136": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
   "w1247745105": {
    "levels": null,
    "building": "yes",
@@ -1615,11 +1650,6 @@
    "found": true
   },
   "w1247744932": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
-  "w1237283605": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -1654,7 +1684,17 @@
    "building": "yes",
    "found": true
   },
+  "w1247745249": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
   "w1237039431": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1237283586": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -1674,6 +1714,11 @@
    "building": "yes",
    "found": true
   },
+  "w1237043956": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
   "w1247745298": {
    "levels": null,
    "building": "yes",
@@ -1685,6 +1730,11 @@
    "found": true
   },
   "w1237039383": {
+   "levels": null,
+   "building": "yes",
+   "found": true
+  },
+  "w1247744969": {
    "levels": null,
    "building": "yes",
    "found": true
@@ -2024,11 +2074,6 @@
    "building": "yes",
    "found": true
   },
-  "w1247744948": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
   "w1252504180": {
    "levels": null,
    "building": "yes",
@@ -2079,17 +2124,12 @@
    "building": "yes",
    "found": true
   },
-  "w1252505243": {
+  "w1247744645": {
    "levels": null,
    "building": "yes",
    "found": true
   },
   "w1252504929": {
-   "levels": null,
-   "building": "yes",
-   "found": true
-  },
-  "w1251630418": {
    "levels": null,
    "building": "yes",
    "found": true

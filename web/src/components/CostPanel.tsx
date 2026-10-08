@@ -42,7 +42,7 @@ export function CostPanel() {
       <p className="t-small ink2 mb-4 max-w-[640px]">Routing sends only uncertain cases to the vision-language model. Measured on Ward 29 by the team; all numbers come from the team’s model card.</p>
       <div className="grid gap-8 md:grid-cols-2">
         <div className="space-y-3">
-          <Pair label="Building use · VLM spend (Ward 29 run)" routed={ct.ward29_vlm_usd_with_router} all={ct.ward29_vlm_usd_without_router} fmtV={usd} better="lower" />
+          <Pair label="Building use · VLM spend (Ward 29, Sep 2026 run)" routed={ct.ward29_vlm_usd_with_router} all={ct.ward29_vlm_usd_without_router} fmtV={usd} better="lower" />
           <p className="t-small ink2">Accuracy unchanged: {pct(bu.local_router.full_ward29_run.use_accuracy_before)} → {pct(bu.local_router.full_ward29_run.use_accuracy_after)} (n={bu.local_router.full_ward29_run.n});
             held-out: routed {pct(bu.local_router.ward29_heldout.routed)} vs VLM-only {pct(bu.local_router.ward29_heldout.vlm_only)} (n={bu.local_router.ward29_heldout.n}).
             VLM calls {bu.local_router.full_ward29_run.vlm_calls_before} → {bu.local_router.full_ward29_run.vlm_calls_after}.</p>
@@ -54,12 +54,12 @@ export function CostPanel() {
         </div>
       </div>
       <div className="mt-5 flex flex-wrap gap-x-8 gap-y-2">
-        <div><div className="t-micro">Ward 29 full run</div><div className="t-figure mt-1" style={{ fontSize: 21.5 }}>{ct.ward29_full_run_gpu_minutes} <span className="t-small ink3">GPU min</span></div></div>
+        <div><div className="t-micro">Ward 29 full run (Sep 2026, Colab T4)</div><div className="t-figure mt-1" style={{ fontSize: 21.5 }}>{ct.ward29_full_run_gpu_minutes} <span className="t-small ink3">GPU min</span></div></div>
         <div><div className="t-micro">Street View image</div><div className="t-figure mt-1" style={{ fontSize: 21.5 }}>${ct.street_view_price_usd_per_image} <span className="t-small ink3">each</span></div></div>
         {!measured && gen?.vlm_usd != null && <div><div className="t-micro">This area · VLM cost</div><div className="t-figure mt-1" style={{ fontSize: 21.5 }}>${gen.vlm_usd}</div></div>}
       </div>
       <div className="mt-4 max-w-[640px] rounded-[var(--ns-r-control)] px-3 py-2 opacity-70" style={{ boxShadow: 'inset 0 0 0 1px var(--ns-line-strong)' }} aria-label="Resumed run counters, not representative">
-        <div className="flex items-center justify-between gap-2"><span className="t-small">This area’s own run counters</span><span className="tag">{detail.cost.run_stats_badge}</span></div>
+        <div className="flex items-center justify-between gap-2"><span className="t-small">This area’s own run counters</span>{detail.cost.run_stats_badge && <span className="tag">{detail.cost.run_stats_badge}</span>}</div>
         <div className="t-data ink2 mt-1">VLM {usd(run.vlm_cost_usd)} · {run.vlm_calls != null ? plural(run.vlm_calls, 'call') : '— calls'} · {run.total_minutes ?? '—'} min · {run.street_view_requests ?? '—'} Street View requests</div>
       </div>
     </section>

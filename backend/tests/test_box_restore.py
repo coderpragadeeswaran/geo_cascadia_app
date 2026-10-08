@@ -14,6 +14,7 @@ from app.settings import ROOT
 from app.store import JsonStore
 
 AREAS = os.path.join(ROOT, "data", "areas")
+OLD = "ward29_v1"       # D64: the Sep 2026 Ward 29 run (its retired panoramas), a hidden backup since the switch
 CAM = {"lat": 11.03561906110748, "lon": 76.98019144932174}
 GONE_ID = "IzK35muPb34GUZjakVoDOg"          # transport india pvt ltd (w1236978849), 2nd Street, Gandhi Nagar
 NEW = {"status": "OK", "pano_id": "NEWPANO", "date": "2026-02", "location": {"lat": CAM["lat"] + 1e-6, "lng": CAM["lon"]}}
@@ -77,7 +78,7 @@ def test_metadata_half_of_the_rule():
 
 def test_candidate_views_most_confident_first(ward29):
     _b, D = ward29
-    c = sameimage.candidate_views(D.index("ward29"), GONE_ID)
+    c = sameimage.candidate_views(D.index(OLD), GONE_ID)
     assert c and all(set(v) == {"heading", "pitch", "fov"} for v, _ in c)
     strong = [sum(x["conf"] >= sameimage.STRONG_CONF for x in bx) for _v, bx in c]
     assert strong == sorted(strong, reverse=True)
@@ -85,7 +86,7 @@ def test_candidate_views_most_confident_first(ward29):
 
 @pytest.fixture(scope="module")
 def ward29():
-    return JsonStore(AREAS).bundle("ward29"), evidence.Detections(AREAS)
+    return JsonStore(AREAS).bundle(OLD), evidence.Detections(AREAS)
 
 
 def _areas_with(tmp_path, rows, restore=True):
@@ -162,11 +163,11 @@ def test_monthly_check_keeps_verdicts_and_never_guesses(ward29):
             "OLDER": {"current": {**cur, "date": "2025-01"}, "stored_date": "2026-02"},
             "NONE": {"current": None, "stored_date": "2026-02"}}
     prev = {GONE_ID: {"pano_id": "NEWPANO", "verdict": "same", "metrics": {"median_iou": 0.97}}}
-    rows, fetched = tool.spot_check(gone, D.index("ward29"), prev, None, None)
+    rows, fetched = tool.spot_check(gone, D.index(OLD), prev, None, None)
     assert rows[GONE_ID] == prev[GONE_ID] and fetched == 0               # already checked against this replacement
     assert rows["OLDER"]["verdict"] == "different" and rows["NONE"]["verdict"] == "no_replacement"
     # re-issued again (new id) and no detector: not checked, so no boxes
-    rows, _ = tool.spot_check(gone, D.index("ward29"), {GONE_ID: {**prev[GONE_ID], "pano_id": "OTHER"}}, None, None)
+    rows, _ = tool.spot_check(gone, D.index(OLD), {GONE_ID: {**prev[GONE_ID], "pano_id": "OTHER"}}, None, None)
     assert rows[GONE_ID]["verdict"] == "not_checked"
 
 
@@ -189,7 +190,7 @@ def test_committed_check_files_are_consistent():
 
 def test_ward29_study_result_restores_nothing():
     """7 Oct 2026: the replacements are neighbouring frames of the same drive, not the same photo (D61): no boxes back"""
-    with open(os.path.join(AREAS, "ward29", "photo_check.json"), encoding="utf-8") as f:
+    with open(os.path.join(AREAS, OLD, "photo_check.json"), encoding="utf-8") as f:
         c = json.load(f)
     assert c["same_image_restore"]["restore"] is False and c["gone_same_image"] == 0
     assert photos.same_images(AREAS) == {}

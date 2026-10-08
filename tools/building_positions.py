@@ -44,8 +44,28 @@ def area_slugs():
     return sorted(s for s in os.listdir(base) if all(os.path.isfile(os.path.join(base, s, n)) for n in need))
 
 
+def _local_map_source():
+    """D64: the app's local OpenStreetMap copy (D53) answers first when the database is reachable; else Overpass + the
+    cache, as before. Set once per process, only when nothing else set a source."""
+    import geo_cascadia.area as GA
+    if GA.MAP_SOURCE is not None or getattr(_local_map_source, "tried", False):
+        return
+    _local_map_source.tried = True
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "backend"))
+        from app import db, mapdata
+        from app.settings import Settings
+        st = Settings()
+        if st.local_map_data and st.database_url:
+            mapdata.configure(db.Pool(st.database_url))
+            GA.MAP_SOURCE = mapdata.pipeline_source(os.path.join(st.data_dir, "cache", "streetpick"))
+    except Exception as e:                                        # noqa: BLE001 - fall back to Overpass
+        print(f"local map data not used ({type(e).__name__}); Overpass + cache")
+
+
 def area_model(slug, cfg):
     """The saved run files of an area + an Area with the OSM footprints around its cameras (ray grouping only)."""
+    _local_map_source()
     dets, blds = load(slug, "detections.json"), load(slug, "buildings.json")
     la = [d["camera_lat"] for d in dets] or [b["lat"] for b in blds]
     lo = [d["camera_lon"] for d in dets] or [b["lon"] for b in blds]

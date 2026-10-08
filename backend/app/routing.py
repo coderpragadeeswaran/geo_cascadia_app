@@ -173,7 +173,8 @@ def routing(bundle, F, n, model_card=None):
     check = None
     ct = mc.get("cost_time") or {}
     fr = lr.get("full_ward29_run") or {}
-    if bundle["slug"] == "ward29" and ct.get("ward29_vlm_usd_with_router") is not None:
+    from .derived import MODEL_CARD_AREA
+    if bundle["slug"] == MODEL_CARD_AREA and ct.get("ward29_vlm_usd_with_router") is not None:
         check = {"stored_with": ct.get("ward29_vlm_usd_with_router"), "stored_without": ct.get("ward29_vlm_usd_without_router"),
                  "stored_calls_with": fr.get("vlm_calls_after"), "stored_calls_without": fr.get("vlm_calls_before"),
                  "computed_with": totals["usd"], "computed_calls_with": routed_n,

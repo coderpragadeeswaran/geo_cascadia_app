@@ -554,4 +554,124 @@
 
 ---
 
+## 8 Oct 2026 · D64 — Ward 29 re-run on the AWS server, with M3 at level 2 (the box shown is the box used)
+
+### What
+1. **M3 in the pipeline (level 2).** For every building and every photo in which a building box's centre line of sight
+   meets that building (the pairs the old rule made), the pipeline now picks the building's box with M3 (D62's rule, the
+   frozen experiment parameters, "none" below 0.4 overlap). That one box is the box shown on the building's Front photo,
+   the box the cloud model reads use and floors from, and the camera ray for the building's position. "None" = no box and
+   no camera position from that photo; its other photos, or the map outline, still place it.
+2. **One rule.** `pipeline/geo_cascadia/boxpick.py` holds the rule; the backend's `box_choice` imports it. For a level-2
+   run the backend takes the run's own choice (every Front / Best photo "same"); older runs keep the D62 display choice.
+3. **Ward 29 re-run** on the AWS GPU server (same boundary, same 10 streets, same method), every photo with fresh boxes.
+4. **The switch.** The app's Ward 29 is the re-run; the Sep 2026 run is kept as a hidden backup `ward29_v1` (not in the
+   area list; `/areas/ward29_v1` answers). Rollback: `tools\switch_ward29.py --rollback`, then commit and deploy.
+5. **Its register** is a synthetic register made from the re-run's own buildings, with the same method (D42) and the same
+   number of planted mistakes (78) as the Sep run.
+6. **Hidden areas and jobs** (new): a `hidden.json` marker in an area folder (database column `areas.hidden`, migration
+   010) keeps an area out of every list; a job with `hidden: true` is not listed in Jobs or the top bar.
+
+### Why
+- About a third of the Sep run's photos were on panoramas Google no longer serves (D60, D61), so they showed no boxes.
+- The Part 2 experiment found the old box rule wrong on about a quarter of photos; D62 fixed what is drawn (level 1) but
+  the analysis still read and positioned the old box. The owner asked for level 2 and a fresh run.
+
+### How it works
+- **Run** (owner's "yes run"): `tools\ward29_rerun.py` queued one hidden polygon job: the Ward 29 study area, the OSM way
+  ids of the Sep run's streets, `register_from: ward29` (the worker fetched those records over `POST /worker/register`).
+  The worker on the server claimed it at 12:21:15 UTC and delivered at 12:31:05 (**9 min 50 s**): panoramas 36 s, area
+  1 s, plan 0.2 s, detect 59 s, geometry 22 s, OCR 265 s, cloud AI 137 s, reference 68 s. It read the app's OpenStreetMap
+  snapshot (2 Oct). The worker deleted its 2,242 photo crops after delivery. The area files were copied to the laptop
+  (`data/areas/ward29/`, as other worker runs are stored); row counts equal `meta.counts`.
+- **Street names repaired:** the delivery step named every street whose OSM way was in the job's list after the job (it
+  treats them as "the clicked street"), so 7 streets were called "Ward 29, Coimbatore (re-run, Oct 2026) (n)". The run's
+  own names (`street_names_pipeline.json`) were put back on the 668 records; the code now does this only for a real
+  street click.
+- **Register** (`tools\rebuild_register.py`): first the kept Sep register was re-applied from the saved files and had to
+  reproduce the delivered export exactly (it did); then `observed_register` made records from the run's own buildings.
+  The method plants a mistake with probability 0.22 per building, seeded by the area name: the name alone gave a different
+  count, the first key with exactly 78 was "<name> #42" (43 keys tried; recorded in `meta.run.register_rebuilt`).
+- **Switch** (`tools\switch_ward29.py`): folders and database rows renamed in one go (ward29 → ward29_v1 hidden,
+  ward29_v2 → ward29), so each keeps its own review items and history; both reloaded. Area label "Ward 29, Coimbatore
+  (v3)" (shown as "Ward 29, Coimbatore").
+- **Gate 1** recomputed for Ward 29 without Google look-ups (`tools\eval_gate1.py --no-places`); Trichy and Tiruppur came
+  out identical. The Google-pin block for Ward 29 says "not re-run" (it needs paid look-ups).
+- **Model card figures from the Sep run** (cost, GPU minutes, router counts, sign spot-check) now point at `ward29_v1`
+  (`MODEL_CARD_AREA`); the new Ward 29 shows its own measured costs, like every worker area.
+
+### Old → new (Ward 29)
+| | Sep 2026 run (now ward29_v1) | Oct 2026 re-run (Ward 29) |
+|---|---|---|
+| Buildings (+ seen only by camera) | 381 (+9) | 373 (+47; 38 of them just outside the ward, see Limits) |
+| Not in register / differ from register | 27 / 50 | 22 / 54 |
+| Use not known | 139 | 168 |
+| Names read clearly | 96 | 87 |
+| Review items | 218 | 221 |
+| Possible dark stretches (High / Medium / Low) | 11 (3 / 3 / 5) | 11 (5 / 1 / 5) |
+| Poles / streetlights | 230 / 38 | 224 / 38 |
+| Gate 1 camera-derived (n, median, ≤ 3.5 m) | 260, 2.80 m, 60.4 % | 240, 2.52 m, 67.5 % |
+| Building photos with boxes / without | 219 / 119 (retired by Google) | 316 / 0 |
+| M3 "can't tell" on the shown photo / "none" pairs | 30 / 158 of 1,385 (preview) | 0 (by construction) / 153 of 1,282 |
+| Planted-mistake test (caught / false alarms) | 68 of 78 / 11 | 72 of 78 / 5 |
+| Register paired with its building | 98.6 % | 98.6 % (pin not moved 99.7 %) |
+| Use: local / cloud / from sign | 163 / 58 / 21 | 109 / 67 / 29 |
+| Names: OCR / cloud checked by OCR / cloud unchecked | 71 / 73 / 1 | 66 / 79 / 3 |
+| Street View photos · cloud calls, $ · Places look-ups | 1,420 · 339, $0.056 (resumed run) | 1,343 · 534, $0.061 · 137 |
+| Spec question 1 / high-priority dark stretches | 0 rows (funnel 381 → 27 → 5 → 2 → 0) / 3 | 1 building / 5 |
+
+### Key numbers
+- **Offline preview** (the Sep run's files, `tools\m3_level2_preview.py`): Gate 1 260 / 2.80 m / 60.4 % → **247 /
+  2.74 m / 64.0 %**, 149 boxes changed, 158 none of 1,385: the experiment's M3 what-if exactly. The figure the brief quoted
+  (246 / 2.61 / 64.2 %) is the experiment's **M3 + M9** column (M3 plus linked signs), not M3.
+- **Spot-check** (Claude Code's AI check, not a human one): 20 random Front photos of the re-run, each with a map sketch
+  of camera, view and outline: 17 clearly this building, 3 unsure (a rooftop room of a corner shop; a photo taken along the
+  street; a building half behind another), 0 clearly wrong. All 20 still served by Google. Photos deleted after viewing.
+- **Earlier register comparison** (before the rebuild, Sep register kept): pairing 88.7 %, 49 of 78 caught, 71 false
+  alarms — because the two runs registered different buildings (342 shared, 39 only in Sep, 31 only in Oct), not because
+  the comparison got worse.
+- **Old review decisions:** 1 decided item (approved) and 65 review history events stay with `ward29_v1`; none copied to
+  the new items.
+- **Costs:** Street View (Google) 1,343 photos for the run + 20 for the spot-check (≈ $9.54 at list price; billed under
+  India pricing, D60), 137 Places look-ups, a few geocoding calls; Amazon Nova (AWS) $0.061 + $0.000002 key checks; EC2
+  (AWS) about 21 min for the run (≈ $0.20) plus the final deploy and live check.
+- **Checks:** see DECISIONS D64.
+
+### Limits
+- **Gate 1 is still measured against the OSM wall** that the positions themselves use (partly circular); the rise to
+  67.5 % is mostly buildings whose old box was wrong now falling back to the wall centre or getting a better box, not a
+  measured accuracy gain.
+- **Use not known 139 → 168:** where the correct box is a sliver cut at the photo edge, the quality gate rejects it; before,
+  the cloud model read the wrong, bigger box. Plus buildings where M3 says none in every photo.
+- **"Seen only by camera" 9 → 47:** the run's map stops at the ward boundary, so lines of sight to buildings across the
+  boundary roads meet no outline and become camera-only points (38 of 47 are outside the ward; the Sep run's positions
+  were recomputed later with a padded map, hence its 9). Not changed here (it would change Tiruppur's count too); the
+  owner decides.
+- Spec question 1 now finds one building, so its "why empty" funnel is no longer shown.
+- "buildings on Gandhi nagar" is now ambiguous (the re-run names two streets in Gandhi Nagar) and is not guessed.
+- The Sep run's sign spot-check, rule-variant comparison and street-name candidates were not redone for the re-run.
+- `tools\eval_gate1.py` used to drop every model-card key after `gate1_position` (it dropped `sign_links` here); fixed and
+  restored from git.
+
+### Files changed
+- Pipeline: new `boxpick.py`; `geometry.py` (`building_views(chosen=…)`; scikit-learn imported where used), `run_area.py`
+  (M3, `register_records`), `config.py` (`box_rule`), `export.py` (meta), version 0.2.2.
+- Backend: `boxchoice.py` (shared rule, `from_pipeline`), `loader.py` / `store.py` (hidden), `jobs.py` (hidden jobs,
+  `/worker/register`, street names only for a click, backup undeletable), `derived.py` / `views.py` / `hood.py` /
+  `routing.py` / `planest.py` / `trust.py` / `main.py` (`MODEL_CARD_AREA` = ward29_v1), migration 010. Worker:
+  `colab_worker.py` (fetches a kept register).
+- Tools: new `ward29_rerun.py`, `rebuild_register.py`, `switch_ward29.py`, `m3_level2_preview.py`; `building_positions.py`
+  (level 2, local map data), `eval_gate1.py` (keeps later keys), `regression.py` (expected answers).
+- Web: `types/export.ts` (new optional fields), `CostPanel.tsx` (labels say "Sep 2026 run").
+- Data: `data/areas/ward29` (the re-run), `data/areas/ward29_v1` (the Sep run + `hidden.json`), `data/model_card.json`
+  (Gate 1 for Ward 29). Tests: new `test_d64_m3_level2.py`; Sep-run-specific tests point at `ward29_v1`; Ward 29
+  constants updated to the re-run.
+
+### Lines that are now out of date in 00–06
+- Every Ward 29 count quoted in 00–06 (381 buildings, 27 not in register, 50 differ, 218 review items, 9 OSM pairs, 260 /
+  2.80 m Gate 1 …) describes the Sep 2026 run, now `ward29_v1`.
+- Descriptions of the box rule as "the box whose centre line of sight hits the building first" describe runs before D64.
+
+---
+
 [← 06 Updates](06_updates.md) · [Start here](00_START_HERE.md) · (this is the last file) →

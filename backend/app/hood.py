@@ -22,6 +22,7 @@ from .evidence import view_key
 from .minimap import street_lines
 from .imagery import imagery
 from .routing import routing
+from .derived import MODEL_CARD_AREA
 
 RESUMED_BADGE = "resumed run, not representative"
 TIER = {-1: "skipped", 0: "watermark", 1: "no_text", 2: "ocr", 3: "vlm"}
@@ -412,7 +413,7 @@ def cost(bundle, n, model_card, live_run=None, rt=None):
     calls = sum(((b.get("cost") or {}).get("vlm_calls") or 0) for b in B)
     usd = sum(((b.get("cost") or {}).get("vlm_usd") or 0) for b in B)
     unrecorded = sum(1 for b in B if ((b.get("cost") or {}).get("vlm_calls") or 0) > 0 and not (b.get("cost") or {}).get("vlm_usd"))
-    ward = bundle["slug"] == "ward29"
+    ward = bundle["slug"] == MODEL_CARD_AREA          # D64: the run the model card's cost figures describe
     gen = ((mc.get("generalisation") or {}).get(bundle["slug"]) or {})
     if bundle.get("live"):
         # P6: a fresh run from the app — its counters, timings and cloud-AI cost are real (no "resumed run" badge).

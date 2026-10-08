@@ -16,8 +16,8 @@ def test_offline_mode_serves_json_read_only(offline):
     assert r.status_code == 200 and r.json()["offline"] is True
     assert set(AREAS) <= {a["slug"] for a in r.json()["areas"]}      # plus any street analysed from the app (P6)
     w = next(a for a in r.json()["areas"] if a["slug"] == "ward29")
-    unknown = sum(b["attributes"]["use"]["value"] is None for b in raw_export("ward29")["buildings"])   # 135 after D32
-    assert w["counts"]["buildings"] == 381 and w["counts"]["assets_triangulated"] == 20 and w["counts"]["use_not_classified"] == unknown
+    unknown = sum(b["attributes"]["use"]["value"] is None for b in raw_export("ward29")["buildings"])   # the D64 re-run
+    assert w["counts"]["buildings"] == 373 and w["counts"]["assets_triangulated"] == 19 and w["counts"]["use_not_classified"] == unknown
     for path in ("/areas/ward29", "/areas/ward29/geojson", "/areas/ward29/buildings", "/areas/ward29/assets",
                  "/buildings/ward29/w1252504337", "/review?area=ward29", "/jobs", "/config/public", "/model-card"):
         res = offline.get(path)

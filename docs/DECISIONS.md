@@ -2522,3 +2522,33 @@ security group, Elastic IP and key pair, also after creation. The instance is ke
 (`start.ps1` / `stop.ps1`; 90-minute auto-stop). The laptop + Colab + tunnel set-up stays as the fallback.
 
 Details, numbers and limits: explainer 07, D63 entry.
+
+## 2026-10-08 — Ward 29 re-run (branch ward29-rerun)
+
+### D64. M3 at level 2 in the pipeline; Ward 29 re-run on the server; switch with a hidden backup
+**Owner decisions (8 Oct):** port M3 into the pipeline at level 2 (the box shown is the box used for the read and the
+position; frozen parameters; "none" below 0.4 = no camera position from that photo); re-run Ward 29 on the AWS server as a
+hidden area until approved ("yes run", then "yes switch"); its register made from the re-run's own buildings with the
+same method and the same number of planted mistakes (78); no Trichy re-run.
+
+- **Rule:** `pipeline/geo_cascadia/boxpick.py` (one copy; the backend's box_choice imports it). Pairs decided = the pairs
+  the old rule made (a box's centre line of sight meets the building first); candidates = every building box in that photo.
+  `Config.box_rule = "m3"` (default), `"m0"` = the old rule. A level-2 run's box_choice.json is the run's own choice.
+- **Preview** on the Sep run's files reproduces the experiment's M3 Gate 1 what-if exactly (247 / 2.74 m / 64.0 %). The
+  brief's 246 / 2.61 / 64.2 % is the experiment's M3 + M9 column.
+- **Hidden areas** (`hidden.json` marker → `areas.hidden`, migration 010) and hidden jobs (`input.hidden`): out of every list,
+  served by their own address. `POST /worker/register`: a job's `register_from` area's records + planted list.
+- **Run:** 9 min 50 s on the g4dn.xlarge (job claimed 12:21:15, delivered 12:31:05 UTC); 1,343 Street View photos, 534
+  cloud calls $0.061, 137 Places look-ups. Street names repaired (the delivery step had named 7 listed streets after the
+  job; now only a street click does that).
+- **Register:** `tools/rebuild_register.py` (re-applying the kept register first reproduced the export exactly); seed key
+  "<area name> #42", the first of 43 giving 78 planted. Result: 72 of 78 caught, 5 false alarms, pairing 98.6 % (pin not
+  moved 99.7 %); Sep run 68 / 11 / 98.6 %.
+- **Switch:** `tools/switch_ward29.py` (rollback: `--rollback`): ward29 = the re-run ("Ward 29, Coimbatore (v3)"),
+  ward29_v1 = the Sep run, hidden, undeletable, with its 1 decided review item and 65 review events. Model-card figures from
+  the Sep run (cost, GPU minutes, router counts, sign spot-check) point at `MODEL_CARD_AREA = "ward29_v1"`.
+- **Deviation:** "seen only by camera" is 47 for the re-run (38 just outside the ward, an artefact of the run's map ending at
+  the boundary); left as delivered, flagged to the owner.
+- **Fixed on the way:** `tools/eval_gate1.py` dropped every model-card key after `gate1_position` (sign_links restored).
+
+Old → new table, limits and files: explainer 07, D64 entry.

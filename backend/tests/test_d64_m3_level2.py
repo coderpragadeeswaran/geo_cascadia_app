@@ -97,6 +97,20 @@ def test_level2_area_box_choice_is_the_runs_own(tmp_path):
     assert rows["w2"]["view"] == "best" and rows["w2"]["score"] == 0.55
 
 
+def test_a_polygon_job_with_way_ids_keeps_the_pipelines_street_names(tmp_path):
+    """the Ward 29 re-run listed every street's way ids: only a street CLICK renames its street after the job"""
+    from app import jobs as J
+    streets = [{"name": "(unnamed residential #7)", "way_ids": [7], "lines_latlon": [[[11.0, 77.0], [11.001, 77.0]]]}]
+    exp = {"meta": {}, "buildings": [{"id": "w1", "street": "Kattabomman Street"}], "assets": [],
+           "dashboard": {"streets": ["Kattabomman Street"], "charts": {"by_street": {"Kattabomman Street": {"buildings": 1}}}}}
+    for n, o in (("streets.json", streets), ("street_names.json", {"(unnamed residential #7)": "Kattabomman Street"}),
+                 ("export.json", exp)):
+        (tmp_path / n).write_text(json.dumps(o), encoding="utf-8")
+    J.fill_street_names(str(tmp_path), {"polygon": {}, "way_ids": [7], "street": "Ward 29 re-run"})
+    assert json.loads((tmp_path / "street_names.json").read_text(encoding="utf-8")) == {"(unnamed residential #7)": "Kattabomman Street"}
+    assert json.loads((tmp_path / "export.json").read_text(encoding="utf-8"))["buildings"][0]["street"] == "Kattabomman Street"
+
+
 # ------------------------------------------------------------------ hidden areas
 def test_hidden_marker_keeps_an_area_out_of_the_offline_list(tmp_path):
     for s in ("a1", "a2"):

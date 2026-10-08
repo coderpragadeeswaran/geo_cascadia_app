@@ -7,6 +7,10 @@ Pure stdlib — safe to import anywhere (loader, API, tools).
 import re
 from collections import Counter
 
+MODEL_CARD_AREA = "ward29_v1"       # model_card cost_time figures describe the Sep 2026 Ward 29 run (D1); since the D64
+                                   # switch its files are the hidden backup ward29_v1; the app's ward29 is the Oct 2026 re-run
+MODEL_CARD_AREA_NAME = "Ward 29, Coimbatore (v2)"   # that run's meta.area
+
 
 def _count(xs):
     return dict(Counter(x for x in xs))
@@ -83,7 +87,7 @@ def consistency(exp, run_report=None, model_card=None):
         if rb is not None:
             chk("run_report.buildings.use_route", rb, ur, "run_report.json", "report counts VLM-stage records, not exported buildings")
 
-    if model_card and "ward 29" in (meta.get("area") or "").lower():
+    if model_card and meta.get("area") == MODEL_CARD_AREA_NAME:     # D64: the run the model card counts describe
         fr = (((model_card.get("building_use") or {}).get("local_router") or {}).get("full_ward29_run") or {})
         chk("model_card.building_use.local_router.full_ward29_run.local", fr.get("local"), ur.get("tier1_local_clip", 0),
             "model_card.json", "count, so the export wins (D2); the model_card accuracy figures are unaffected")

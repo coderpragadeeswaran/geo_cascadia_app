@@ -10,6 +10,7 @@ from app.settings import ROOT
 from app.store import JsonStore
 
 AREAS = os.path.join(ROOT, "data", "areas")
+OLD = "ward29_v1"           # D64: the Sep 2026 Ward 29 run (display-only M3, level 1), a hidden backup since the switch
 
 
 def box(x1, x2, conf=0.5):
@@ -54,11 +55,11 @@ def test_committed_choices_cover_every_building_photo():
 
 @pytest.fixture(scope="module")
 def ward29():
-    return JsonStore(AREAS).bundle("ward29"), evidence.Detections(AREAS)
+    return JsonStore(AREAS).bundle(OLD), evidence.Detections(AREAS)       # D64: the pre-D64 run (level 1) is ward29_v1
 
 
 def _one(D, status):
-    for bid, vs in D.box_choice("ward29").items():
+    for bid, vs in D.box_choice(OLD).items():
         for k, v in vs.items():
             if v["status"] == status:
                 return bid, k, v
@@ -105,6 +106,6 @@ def test_no_file_means_the_analysis_box(ward29):
 def test_numbers_do_not_change(client):
     """display only: the dashboard and the review queue are computed from the records, never from box_choice"""
     d = client.get("/areas/ward29").json()["dashboard"]["kpi"]
-    assert d["buildings_analysed"] == 381
+    assert d["buildings_analysed"] == 373                                 # the D64 re-run
     rq = client.get("/review?area=ward29").json()
     assert len(rq.get("rows") or rq.get("items") or []) >= 1

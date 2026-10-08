@@ -51,7 +51,7 @@ SUB_STAGES = {"vlm_names": "vlm", "building_crops": "vlm", "vlm_buildings": "vlm
 # statuses a worker leaves open (the job is not finished): no finished_at
 OPEN_STATUSES = ("expired_token", "needs_approval")
 ACTIVE_SQL = "('queued', 'running', 'expired_token', 'needs_approval')"      # not finished: blocks a new street
-ORIGINAL_AREAS = {"ward29", "trichy_bharathidasan_salai", "tiruppur_uthukuli_road"}   # never deletable
+ORIGINAL_AREAS = {"ward29", "ward29_v1", "trichy_bharathidasan_salai", "tiruppur_uthukuli_road"}   # never deletable (D64: + the backup)
 FILE_OK = re.compile(r"^[A-Za-z0-9_.-]{1,80}\.(json|geojson|csv)$")
 MAX_FILE = 40 * 1024 * 1024
 CANCELLED = "cancelled by user"
@@ -881,7 +881,9 @@ def fill_street_names(folder, job_input=None):
         ways[st["name"]] = set(json.loads(w) if isinstance(w, str) else (w or []))
     display = lambda raw: names.get(raw, raw)
     ji = job_input or {}
-    job_ways, job_name = set(ji.get("way_ids") or []), ji.get("street")
+    # only a street CLICK names its street after the job (D64: a polygon job listing way ids, e.g. a re-run of an area,
+    # keeps the pipeline's names)
+    job_ways, job_name = set(ji.get("way_ids") or []) if ji.get("click") else set(), ji.get("street")
     new, used = {}, set(names.values())
     for raw in geo:
         clicked = bool(job_name and ways.get(raw, set()) & job_ways)

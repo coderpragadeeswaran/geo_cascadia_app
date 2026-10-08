@@ -190,7 +190,7 @@ def test_mapdata_and_hood_lines(local, online):
     st = online.get("/mapdata").json()
     assert st["available"] and len(st["cities"]) == 4 and "OpenStreetMap contributors" in st["attribution"]["osm"]
     h = online.get("/areas/ward29/hood").json()["map_data"]
-    assert h["city"]["city"] == "coimbatore" and h["run"]["kind"] == "live"
+    assert h["city"]["city"] == "coimbatore" and h["run"]["kind"] == "snapshot"     # D64 re-run: read the app's OSM copy
 
 
 def test_spatial_phrase():

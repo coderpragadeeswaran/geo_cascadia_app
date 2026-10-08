@@ -214,9 +214,24 @@ def _jump(field):
     return {"page": "hood", "section": "story"}
 
 
-def consistency(bundles, files, model_card):
-    """Every stored-vs-computed difference in every area, plus each corrected story sentence."""
+def consistency(bundles, files, model_card, model_card_bundle=None):
+    """Every stored-vs-computed difference in every area, plus each corrected story sentence. model_card_bundle (D64):
+    the run the model card's cost figures describe when it is not listed (the hidden Sep 2026 Ward 29 run): only its
+    model-card rows are added."""
     rows = []
+    listed = {b["slug"] for b in bundles}
+    if model_card_bundle is not None and model_card_bundle["slug"] not in listed:
+        b = model_card_bundle
+        chk = (hood.hood(b, files.get(b["slug"]), model_card).get("routing") or {}).get("model_card_check")
+        if chk:
+            for field, stored, computed in (
+                    ("model_card.cost_time.ward29_vlm_usd_with_router", f"${chk['stored_with']}", f"≈ ${chk['computed_with']}"),
+                    ("model_card.building_use.local_router.full_ward29_run.vlm_calls_after", chk["stored_calls_with"],
+                     chk["computed_calls_with"])):
+                rows.append({"area": b["slug"], "area_name": "Ward 29, Sep 2026 run (kept as a backup)", "field": field,
+                             "stored": stored, "computed": computed,
+                             "source": "model_card.json vs that run's cloud-call files", "note": chk["why"], "kind": "numbers",
+                             "jump": {"page": "trust", "section": "cost"}})
     for b in bundles:
         exp = views.export_view(b)
         base = views.consistency(exp, b["run_report"], model_card) + gap_consistency(b["streetlight_gaps"], b.get("gap_display") or {})

@@ -39,26 +39,26 @@ APP = os.environ.get("APP_URL", "http://localhost:5173/")
 OUT = os.path.join(ROOT, "docs", "screenshots", "regression")
 PY = sys.executable
 
-# ---------------------------------------------------------------- expected answers (Ward 29; D53-D56 baseline)
+# ---------------------------------------------------------------- expected answers (Ward 29 Oct 2026 re-run, D64)
 QUESTIONS = [
     ("Show commercial buildings with more than two visible floors that do not have a matching property record",
-     {"intent": "buildings", "use": "commercial", "floors_op": ">", "floors_n": 2, "match_status": "no_record"}, 0, [381, 27, 5, 2, 0]),
+     {"intent": "buildings", "use": "commercial", "floors_op": ">", "floors_n": 2, "match_status": "no_record"}, 1, None),
     ("Show streets where no streetlight is detected within 60 m", {"intent": "streetlight_gaps", "interval_m": 60}, 11, None),
     ("Display only low-confidence floor-count predictions and create a review queue",
-     {"intent": "review", "reason_has": "floor count low confidence"}, 4, None),
-    ("Chart of unmatched buildings by street", {"intent": "buildings", "match_status": "no_record", "group_by": "street"}, 27, None),
-    ("பதிவேட்டில் இல்லாத கடைகள்", {"intent": "buildings", "use": "commercial", "match_status": "no_record"}, 5, None),
+     {"intent": "review", "reason_has": "floor count low confidence"}, 3, None),
+    ("Chart of unmatched buildings by street", {"intent": "buildings", "match_status": "no_record", "group_by": "street"}, 22, None),
+    ("பதிவேட்டில் இல்லாத கடைகள்", {"intent": "buildings", "use": "commercial", "match_status": "no_record"}, 6, None),
     ("60 மீட்டருக்குள் தெருவிளக்கு இல்லாத தெருக்களைக் காட்டு", {"intent": "streetlight_gaps", "interval_m": 60}, 11, None),
-    ("High priority dark stretches", {"intent": "streetlight_gaps", "interval_m": 60, "priority": "high"}, 3, None),
+    ("High priority dark stretches", {"intent": "streetlight_gaps", "interval_m": 60, "priority": "high"}, 5, None),
     ("Show not-in-register buildings within 50 m of a possible dark stretch",
-     {"intent": "buildings", "match_status": "no_record", "near_dark_m": 50}, 15, [27, 15]),
-    ("Poles on Sathy Main Road", {"intent": "assets", "asset_type": "pole", "street": "Sathy Main Road"}, 40, None),
+     {"intent": "buildings", "match_status": "no_record", "near_dark_m": 50}, 15, [22, 15]),
+    ("Poles on Sathy Main Road", {"intent": "assets", "asset_type": "pole", "street": "Sathy Main Road"}, 46, None),
     ("Streets where no streetlight is detected within 100 m", {"intent": "streetlight_gaps", "interval_m": 100}, 7, None),
     ("Show possible dark stretches", {"intent": "streetlight_gaps", "interval_m": 60}, 11, None),
     # extras (added with the OpenStreetMap comparison, an intended addition): our businesses not on OpenStreetMap
-    ("Businesses not in OpenStreetMap", {"intent": "osm_businesses", "osm": "camera_only"}, 138, None),
-    # ui-polish-2 (D59, an intended addition): the 9 pairs, renamed "near each other (location only)"; no name matches
-    ("Businesses near an OpenStreetMap point", {"intent": "osm_businesses", "osm": "matched"}, 9, None),
+    ("Businesses not in OpenStreetMap", {"intent": "osm_businesses", "osm": "camera_only"}, 131, None),
+    # ui-polish-2 (D59, an intended addition): the pairs (9 in the Sep run, 10 in the D64 re-run), renamed "near each other (location only)"; no name matches
+    ("Businesses near an OpenStreetMap point", {"intent": "osm_businesses", "osm": "matched"}, 10, None),
 ]
 INSIDE = ("Sakthi Main Road (Coimbatore, local map data)", 11.042553, 76.9841361)
 OUTSIDE = ("a road in Erode (outside the four cities: OpenStreetMap's public servers)", 11.3410, 77.7172)

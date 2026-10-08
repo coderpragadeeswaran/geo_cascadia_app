@@ -1,35 +1,36 @@
 {
  "run_dir": "ward29",
- "area": "Ward 29, Coimbatore (v2)",
- "generated": "2026-09-24T06:45:14.199379+00:00",
+ "area": "Ward 29, Coimbatore (v3)",
+ "generated": "2026-10-08T12:31:03.664990+00:00",
  "pipeline": {
   "detector": "YOLOv8s v8s_640_s2",
   "ocr": "PaddleOCR en+ta (full)",
   "vlm": "apac.amazon.nova-lite-v1:0",
   "name_gate": 0.7,
   "footprints": "OSM",
-  "reference": "Google Places (New)"
+  "reference": "Google Places (New)",
+  "box_rule": "M3 visible span (D64): the box shown is the box read and positioned"
  },
  "imagery": {
-  "panoramas_found": 733,
-  "google_car": 731,
-  "user_photospheres": 2,
-  "cameras_planned": 203,
+  "panoramas_found": 742,
+  "google_car": 729,
+  "user_photospheres": 13,
+  "cameras_planned": 201,
   "cameras_dropped": {
-   "camera_inside_footprint": 13
+   "camera_inside_footprint": 16
   },
-  "views_planned": 1154,
+  "views_planned": 1132,
   "views_by_type": {
-   "perpendicular": 295,
-   "tilt": 211,
-   "oblique": 537,
-   "unmapped": 111
+   "perpendicular": 283,
+   "tilt": 210,
+   "oblique": 520,
+   "unmapped": 119
   },
-  "views_facing_mapped_building": 1043,
-  "views_facing_no_mapped_building": 111,
-  "views_fetched_ok": 1154,
-  "street_view_requests": 0,
-  "street_view_cost_usd_notional": 0.0,
+  "views_facing_mapped_building": 1013,
+  "views_facing_no_mapped_building": 119,
+  "views_fetched_ok": 1132,
+  "street_view_requests": 1343,
+  "street_view_cost_usd_notional": 9.4,
   "by_street": {
    "(unnamed residential #134792895)": {
     "cameras": 13,
@@ -40,24 +41,24 @@
     "views": 67
    },
    "(unnamed residential #206801340)": {
-    "cameras": 27,
-    "views": 176
+    "cameras": 26,
+    "views": 164
    },
    "(unnamed residential #29810143)": {
-    "cameras": 31,
-    "views": 177
+    "cameras": 32,
+    "views": 185
    },
    "(unnamed residential #592678586)": {
-    "cameras": 20,
-    "views": 109
+    "cameras": 21,
+    "views": 115
    },
    "(unnamed residential #66068589)": {
-    "cameras": 21,
-    "views": 129
+    "cameras": 19,
+    "views": 107
    },
    "(unnamed residential #907980850)": {
-    "cameras": 19,
-    "views": 112
+    "cameras": 18,
+    "views": 106
    },
    "Ganapathy - Avarampalayam Road": {
     "cameras": 15,
@@ -69,7 +70,7 @@
    },
    "Sathy Main Road": {
     "cameras": 40,
-    "views": 184
+    "views": 188
    }
   }
  },
@@ -79,254 +80,253 @@
    "microsoft": 0
   },
   "osm_built_fraction": 0.358,
-  "buildings_registered": 381,
+  "buildings_registered": 373,
   "buildings_by_source": {
-   "osm": 381
+   "osm": 373
   },
   "verdict": "full: footprints on most frontages"
  },
  "detection": {
-  "boxes_total": 5554,
+  "boxes_total": 5418,
   "by_class": {
-   "building": 2411,
-   "pole": 958,
-   "signboard": 2065,
-   "lamp_head": 120
+   "building": 2369,
+   "pole": 890,
+   "signboard": 2031,
+   "lamp_head": 128
   },
-  "used_for_geometry": 4617,
+  "used_for_geometry": 4489,
   "excluded_from_geometry": {
-   "tilted view": 839,
+   "tilted view": 831,
    "user photosphere": 98
   },
   "mean_conf_by_class": {
-   "building": 0.633,
-   "lamp_head": 0.391,
-   "pole": 0.509,
-   "signboard": 0.605
+   "building": 0.634,
+   "lamp_head": 0.399,
+   "pole": 0.507,
+   "signboard": 0.609
   }
  },
  "assets": {
-  "located": 268,
+  "located": 262,
   "by_type": {
-   "streetlight": 38,
-   "pole": 230
+   "pole": 224,
+   "streetlight": 38
   },
   "by_confidence": {
-   "low": 157,
-   "high": 29,
-   "medium": 82
+   "low": 158,
+   "high": 27,
+   "medium": 77
   },
-  "triangulated_2plus_cameras": 29,
-  "single_camera_approximate": 239,
+  "triangulated_2plus_cameras": 27,
+  "single_camera_approximate": 235,
   "register_status": {
-   "unconfirmed_detection": 157,
-   "discrepancy": 28,
-   "matched": 66,
+   "unconfirmed_detection": 156,
+   "discrepancy": 24,
+   "matched": 65,
    "unrecorded_asset": 17
   },
   "streetlight_gaps_60m": 11,
-  "missing_asset_records": 9
+  "missing_asset_records": 8
  },
  "buildings": {
-  "registered": 381,
-  "with_a_building_box": 418,
+  "registered": 373,
+  "with_a_building_box": 379,
   "no_building_box_detected": 0,
   "box_rejected_by_quality_gate": {
-   "base cut off at bottom": 10,
-   "roof cut off at top": 49,
-   "thin sliver at image edge": 88,
-   "box fills the whole photo": 1,
-   "implausibly tall box": 4
+   "base cut off at bottom": 12,
+   "roof cut off at top": 70,
+   "thin sliver at image edge": 81,
+   "implausibly tall box": 5
   },
-  "usable_view": 266,
+  "usable_view": 211,
   "vlm_said_wrong_target": 0,
   "use_route": {
-   "tier1_local_clip": 193,
-   "tier3_vlm": 73
+   "tier1_local_clip": 128,
+   "tier3_vlm": 83
   },
   "use_values": {
-   "residential": 140,
-   "commercial": 85,
-   "not observed": 139,
-   "other": 12,
+   "residential": 107,
+   "not observed": 168,
+   "commercial": 82,
+   "industrial": 2,
    "institutional": 3,
-   "under_construction": 1,
+   "other": 10,
    "mixed": 1
   },
   "floors_status": {
-   "low_confidence": 4,
-   "measured": 217,
-   "not_measured": 160
+   "measured": 173,
+   "not_measured": 197,
+   "low_confidence": 3
   },
   "floor_values": {
-   "2": 145,
-   "1": 53,
+   "2": 113,
+   "1": 40,
    "3": 21,
    "4": 2
   }
  },
  "signs": {
-  "crops": 2065,
+  "crops": 2031,
   "tiers": {
-   "no readable text": 1065,
-   "escalated to VLM (Tier 3)": 180,
-   "read by OCR (Tier 2)": 807,
-   "Google watermark": 13
+   "no readable text": 1029,
+   "escalated to VLM (Tier 3)": 188,
+   "read by OCR (Tier 2)": 802,
+   "Google watermark": 12
   },
-  "ocr_seconds_per_crop": 0.06,
+  "ocr_seconds_per_crop": 0.12,
   "ocr_mode": "full",
-  "vlm_name_calls": 166,
+  "vlm_name_calls": 162,
   "vlm_name_verdicts": {
-   "none": 12,
-   "business": 108,
-   "advertisement": 32,
-   "notice": 11,
+   "none": 6,
+   "business": 111,
+   "advertisement": 34,
+   "notice": 8,
    "street_name": 3
   },
-  "buildings_named": 145,
+  "buildings_named": 148,
   "name_route": {
-   "tier3_vlm+ocr_gate": 73,
-   "tier2_ocr": 71,
-   "tier3_vlm_unverified": 1
+   "tier3_vlm+ocr_gate": 79,
+   "tier2_ocr": 66,
+   "tier3_vlm_unverified": 3
   },
   "name_quality": {
-   "good": 96,
-   "fragment": 44,
-   "tamil_unverified": 5
+   "good": 87,
+   "fragment": 52,
+   "tamil_unverified": 9
   },
-  "google_confirmed": 25
+  "google_confirmed": 21
  },
  "unmapped_businesses": {
-  "sign_candidates_checked_by_vlm": 84,
-  "kept": 26,
-  "vlm_said_not_business": 23,
+  "sign_candidates_checked_by_vlm": 78,
+  "kept": 23,
+  "vlm_said_not_business": 24,
   "examples": [
-   "multi brands",
-   "walmark ply",
+   "dsk associates",
    "ponmani steel house",
-   "Royal Baths",
-   "super polish",
-   "s.m. power tools",
    "laxmi textile",
+   "s.m. power tools",
    "baalaj metal screens",
+   "buddha",
    "bride wear",
-   "sri lakshmi",
-   "cvm associates",
-   "mizu footwear"
+   "bar & grill",
+   "Olo Infinity Organics",
+   "nvn sofa works",
+   "mizu footwear",
+   "gold 10"
   ]
  },
  "matching": {
   "match_status": {
-   "matched": 304,
-   "no_record": 27,
-   "discrepancy": 50
+   "matched": 297,
+   "discrepancy": 54,
+   "no_record": 22
   },
   "discrepancy_types": {
-   "missing_record": 27,
-   "location_shift": 14,
-   "area_understated": 22,
-   "extra_floor": 8,
-   "use_change": 6
+   "use_change": 8,
+   "location_shift": 18,
+   "area_understated": 18,
+   "missing_record": 22,
+   "extra_floor": 11
   },
   "planted_error_scores": {
    "missing_record": {
-    "planted": 27,
-    "caught": 22,
-    "missed": 5,
-    "false_alarms": 5
+    "planted": 22,
+    "caught": 20,
+    "missed": 2,
+    "false_alarms": 2
    },
    "location_shift": {
-    "planted": 17,
-    "caught": 12,
-    "missed": 5,
+    "planted": 19,
+    "caught": 16,
+    "missed": 3,
     "false_alarms": 2
    },
    "area_understated": {
-    "planted": 20,
-    "caught": 20,
-    "missed": 0,
-    "false_alarms": 2
+    "planted": 18,
+    "caught": 17,
+    "missed": 1,
+    "false_alarms": 1
    },
    "use_change": {
-    "planted": 6,
-    "caught": 6,
+    "planted": 8,
+    "caught": 8,
     "missed": 0,
     "false_alarms": 0
    },
    "extra_floor": {
-    "planted": 8,
-    "caught": 8,
+    "planted": 11,
+    "caught": 11,
     "missed": 0,
     "false_alarms": 0
    }
   },
   "asset_register_scores": {
    "location_shift": {
-    "planted": 15,
-    "tp": 15,
+    "planted": 13,
+    "tp": 10,
     "fp": 1
    },
    "type_mismatch": {
-    "planted": 12,
-    "tp": 12,
-    "fp": 1
+    "planted": 11,
+    "tp": 11,
+    "fp": 2
    },
    "missing_asset": {
-    "planted": 10,
-    "tp": 9,
+    "planted": 9,
+    "tp": 8,
     "fp": 0
    }
   },
-  "register_note": "SYNTHETIC property register copying the observations + planted mistakes (D42); matched by location (D43); SYNTHETIC asset register"
+  "register_note": "SYNTHETIC property + asset registers with planted errors (no open municipal data)"
  },
  "review": {
-  "items": 218,
+  "items": 221,
   "by_priority": {
-   "1": 27,
-   "2": 14,
-   "3": 1,
-   "4": 3,
+   "1": 23,
+   "2": 19,
+   "3": 3,
+   "4": 2,
    "5": 16,
-   "6": 157
+   "6": 158
   },
   "by_reason": {
-   "high-severity discrepancy": 27,
-   "building seen from one view only": 29,
-   "floor count low confidence (roofline not visible)": 4,
-   "attribute discrepancy \u2014 verify on imagery": 14,
-   "name read by VLM only (not supported by OCR)": 1,
-   "single-detection asset": 157
+   "high-severity discrepancy": 23,
+   "building seen from one view only": 27,
+   "attribute discrepancy \u2014 verify on imagery": 19,
+   "floor count low confidence (roofline not visible)": 3,
+   "name read by VLM only (not supported by OCR)": 3,
+   "single-detection asset": 158
   }
  },
  "cost_time": {
   "stage_seconds": {
-   "panoramas": 0.0,
-   "area": 2.8,
-   "plan": 0.0,
-   "detect": 0.3,
-   "geometry": 1.7,
-   "ocr": 4.5,
-   "vlm": 187.1,
-   "reference": 0.6,
+   "panoramas": 36.0,
+   "area": 1.2,
+   "plan": 0.2,
+   "detect": 59.2,
+   "geometry": 21.8,
+   "ocr": 265.0,
+   "vlm": 136.6,
+   "reference": 67.9,
    "match": 0.2
   },
-  "total_minutes": 3.3,
-  "vlm_calls": 339,
-  "vlm_cost_usd": 0.0564,
-  "places_calls": 0,
+  "total_minutes": 9.8,
+  "vlm_calls": 534,
+  "vlm_cost_usd": 0.0606,
+  "places_calls": 137,
   "device": "gpu",
-  "buildings_use_local": 193,
-  "buildings_use_vlm": 73
+  "buildings_use_local": 128,
+  "buildings_use_vlm": 83
  },
  "story": [
-  "Found 733 Street View panoramas (2 user photospheres, excluded from geometry).",
-  "Planned 203 camera stops and 1154 views instead of a full 12-heading sweep.",
-  "111 views face frontage with no building outline in OSM \u2014 map coverage verdict: full: footprints on most frontages.",
-  "The detector drew 5554 boxes; 4617 were usable for positioning.",
-  "Located 268 poles/streetlights; 29 triangulated from 2+ cameras, 239 approximate (single camera).",
-  "381 buildings registered; 266 had a usable view for use/floors, 0 had no building box at all.",
-  "2065 sign crops: 807 read locally, 180 escalated; 145 buildings named, 25 confirmed by Google.",
-  "26 businesses found with no analysed building (signs on frontage with no analysed building outline).",
-  "218 items sent to human review."
+  "Found 742 Street View panoramas (13 user photospheres, excluded from geometry).",
+  "Planned 201 camera stops and 1132 views instead of a full 12-heading sweep.",
+  "119 views face frontage with no building outline in OSM \u2014 map coverage verdict: full: footprints on most frontages.",
+  "The detector drew 5418 boxes; 4489 were usable for positioning.",
+  "Located 262 poles/streetlights; 27 triangulated from 2+ cameras, 235 approximate (single camera).",
+  "373 buildings registered; 211 had a usable view for use/floors, 0 had no building box at all.",
+  "2031 sign crops: 802 read locally, 188 escalated; 148 buildings named, 21 confirmed by Google.",
+  "23 businesses found with no analysed building (signs on frontage with no analysed building outline).",
+  "221 items sent to human review."
  ]
 }

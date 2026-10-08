@@ -10,11 +10,10 @@ from collections import Counter
 from geo_cascadia.workspace import QueryEngine, build_dashboard
 
 from . import camonly, lighting, osmref, queryparse, spatial
-from .derived import computed_counts, consistency
+from .derived import MODEL_CARD_AREA, MODEL_CARD_AREA_NAME, computed_counts, consistency  # noqa: F401
 from .streetgeo import gap_consistency
 
 NOT_CLASSIFIED = "not classified"   # D9: unclassified use is shown, never hidden
-MODEL_CARD_AREA = "ward29"          # model_card cost_time figures are Ward 29 figures (D1)
 RESUMED_BADGE = "resumed run, not representative"
 
 
@@ -84,8 +83,22 @@ def cost(bundle, model_card):
     keys = ("street_view_requests", "street_view_cost_usd_notional", "vlm_calls", "vlm_cost_usd", "places_calls",
             "total_minutes", "stage_seconds", "device", "ocr_mode")
     mc = (model_card or {}).get("cost_time") if bundle["slug"] == MODEL_CARD_AREA else None
+    rep = bool(bundle.get("live")) and not _resumed(bundle["slug"])      # D64: a fresh run from the app is representative
     return {"model_card": {"source": "model_card", **mc} if mc else None,
-            "run_stats": {k: run.get(k) for k in keys}, "run_stats_representative": False, "run_stats_badge": RESUMED_BADGE}
+            "run_stats": {k: run.get(k) for k in keys}, "run_stats_representative": rep,
+            "run_stats_badge": None if rep else RESUMED_BADGE}
+
+
+def _resumed(slug):
+    """live_run.json says the run continued from files saved by an earlier attempt (as Under the Hood reads it)"""
+    import json
+    import os
+    d = camonly._DIR.get("areas")
+    try:
+        with open(os.path.join(d, slug, "live_run.json"), encoding="utf-8") as f:
+            return bool(json.load(f).get("resumed_from_saved_files"))
+    except (OSError, ValueError, TypeError):
+        return True
 
 
 def area_card(bundle):

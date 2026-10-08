@@ -257,7 +257,7 @@ def test_osm_question_on_ward29(online):
     assert s["parsed_filters"]["street"] == "Sathy Main Road" and all(x["street"] == "Sathy Main Road" for x in s["rows"])
     # the spec questions are untouched
     q = online.post("/query", json={"area": "ward29", "text": "Chart of unmatched buildings by street"}).json()
-    assert q["intent"] == "buildings" and q["total"] == 27
+    assert q["intent"] == "buildings" and q["total"] == 22                         # the D64 re-run (Sep run: 27)
 
 
 # ------------------------------------------------------------------------------------------------ extras 4: floors

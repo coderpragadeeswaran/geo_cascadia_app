@@ -292,8 +292,13 @@ def write_model_card(results):
                   for r in results},
     }
     block = json.dumps(entry, ensure_ascii=False, indent=1).replace("\n", "\n ")
+    # D64: keys stored AFTER gate1_position (e.g. sign_links) are kept; before, everything after it was dropped
+    whole = json.loads(text)
+    keys = list(whole)
+    later = keys[keys.index("gate1_position") + 1:] if "gate1_position" in keys else []
+    rest = "".join(',\n "' + k + '": ' + json.dumps(whole[k], ensure_ascii=False, indent=1).replace("\n", "\n ") for k in later)
     with open(path, "w", encoding="utf-8") as f:
-        f.write(body + ',\n "gate1_position": ' + block + "\n}\n")
+        f.write(body + ',\n "gate1_position": ' + block + rest + "\n}\n")
     json.load(open(path, encoding="utf-8"))                       # still valid JSON
 
 

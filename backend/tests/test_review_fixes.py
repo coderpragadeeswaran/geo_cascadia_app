@@ -102,7 +102,7 @@ def test_question_answered_on_selected_street(offline, ward29):
     # a question that names its own street keeps it; a by-street chart covers every street
     assert q(offline, "buildings not in the register on Korathottam Road", scope_street=st)["parsed_filters"]["street"] == "Korathottam Road"
     chart = q(offline, "chart of unmatched buildings by street", scope_street=st)
-    assert "street" not in chart["parsed_filters"] and chart["total"] == sum(b["match_status"] == "no_record" for b in ward29["buildings"]) == 27
+    assert "street" not in chart["parsed_filters"] and chart["total"] == sum(b["match_status"] == "no_record" for b in ward29["buildings"]) == 22
 
 
 # ------------------------------------------------------------------ 4. a stale pooled connection is retried, the reason logged
@@ -168,7 +168,7 @@ def test_tamil_word_is_reported_ignored(offline):
     ("buildings on SATHY  MAIN RD", "Sathy Main Road"),
     ("streetlights on korathottam rd", "Korathottam Road"),
     ("buildings on vinobaji st", "4th Street, Tatabad / Vinobaji Street"),
-    ("buildings on Gandhi nagar", "2nd Street, Gandhi Nagar"),
+    ("buildings on 2nd street gandhi nagar", "2nd Street, Gandhi Nagar"),     # D64: two streets in Gandhi Nagar now
 ])
 def test_loose_street_names(offline, text, street):
     r = q(offline, text)

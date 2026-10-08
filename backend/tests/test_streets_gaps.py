@@ -39,17 +39,17 @@ def test_ward29_gap_display_rules(client):
     assert set(gaps) == set(rec)
     for gid, f in gaps.items():                                     # recorded length is never replaced
         assert f["properties"]["length_m"] == rec[gid]["length_m"]
-    g1 = gaps["gap60-001"]["properties"]                            # Sathy Main Road: follows the road, length note
-    assert g1["display_mode"] == "along_road" and g1["along_road_m"] == 424 and g1["length_differs"]
-    assert len(gaps["gap60-001"]["geometry"]["coordinates"]) > 2 and "424 m along the road" in g1["note"]
-    g6 = gaps["gap60-006"]["properties"]                            # hairpin street: drawn as recorded, flagged
-    assert g6["display_mode"] == "check" and g6["lit_cameras_inside"] == 4 and g6["longest_dark_along_road_m"] == 302
-    drawn = gaps["gap60-006"]["geometry"]["coordinates"]                # recorded ends (7 dp ≈ 1 cm)
-    assert drawn == [pytest.approx(rec["gap60-006"]["start"][::-1], abs=1e-6), pytest.approx(rec["gap60-006"]["end"][::-1], abs=1e-6)]
+    g1 = gaps["gap60-008"]["properties"]                            # D64 re-run: follows the road, length note
+    assert g1["display_mode"] == "along_road" and g1["along_road_m"] == 367 and g1["length_differs"]
+    assert len(gaps["gap60-008"]["geometry"]["coordinates"]) > 2 and "367 m along the road" in g1["note"]
+    g6 = gaps["gap60-007"]["properties"]                            # bending street: drawn as recorded, flagged
+    assert g6["display_mode"] == "check" and g6["lit_cameras_inside"] == 4 and g6["longest_dark_along_road_m"] == 204
+    drawn = gaps["gap60-007"]["geometry"]["coordinates"]                # recorded ends (7 dp ~ 1 cm)
+    assert drawn == [pytest.approx(rec["gap60-007"]["start"][::-1], abs=1e-6), pytest.approx(rec["gap60-007"]["end"][::-1], abs=1e-6)]
     assert sum(f["properties"]["display_mode"] == "along_road" for f in gaps.values()) == 10
     rows = client.get("/areas/ward29").json()["consistency"]
     flagged = {r["field"].split(".")[1].split(" ")[0] for r in rows if r["field"].startswith("streetlight_gaps.")}
-    assert flagged == {"gap60-001", "gap60-003", "gap60-005", "gap60-006"}
+    assert flagged == {"gap60-006", "gap60-007", "gap60-008"}                   # D64 re-run
 
 
 def test_coverage_banner_facts(client):
