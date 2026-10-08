@@ -41,7 +41,8 @@ def area_slugs():
     """Every area folder with the run files this step needs (no hard-coded list)."""
     base = os.path.join(ROOT, "data", "areas")
     need = ("detections.json", "buildings.json", "export.json", "streets.json")
-    return sorted(s for s in os.listdir(base) if all(os.path.isfile(os.path.join(base, s, n)) for n in need))
+    return sorted(s for s in os.listdir(base) if all(os.path.isfile(os.path.join(base, s, n)) for n in need)
+                  and not os.path.isfile(os.path.join(base, s, "hidden.json")))           # D65: a hidden backup is not an area
 
 
 def _local_map_source():

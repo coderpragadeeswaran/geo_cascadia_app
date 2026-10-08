@@ -26,7 +26,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 IMAGE_EXT = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tif", ".tiff")
 TEXT_EXT = (".py", ".sh", ".conf", ".service", ".timer", ".txt", ".sql", ".md", ".ini", ".cfg", ".toml", ".html",
             ".js", ".css", ".svg", "")
-SERVER_TOOLS = ("build_run_report.py", "box_choice.py", "fetch_osm_tags.py", "check_photos.py", "detect_photos.py")
+SERVER_TOOLS = ("build_run_report.py", "box_choice.py", "fetch_osm_tags.py", "check_photos.py", "detect_photos.py",
+                "measure_routes.py")                       # D65: the routed vs all-cloud measurement
 CACHE_SEEDS = ("streetview_meta.json", "streetpick", "planest")
 ASSETS = {"training_runs/v8s_640_s2/weights/best.pt": "the YOLOv8s detector (tier-1 config: v8s_640_s2)",
           "models/use_router.joblib": "the local building-use router",

@@ -177,7 +177,7 @@ function BuildingBody({ b }: { b: Building }) {
             <Fact k="Use"><RouteLine route={at?.use?.route} /></Fact>
             <Fact k="Floors"><RouteLine route={at?.floors?.route} />{at?.floors?.status && <span className="ink3"> Result: {floorsStatusPlain(at.floors.status)}.</span>}</Fact>
             {detail.data?.floor_confidence && <Fact k="Floor confidence" hint="a fixed rule">{detail.data.floor_confidence.rule}{detail.data.floor_confidence.check && <span className="ink3"> The AI floor count was {detail.data.floor_confidence.check}.</span>}</Fact>}
-            {/* ui-polish-2: only on buildings that carry the tag (Ward 29: 2 of 381); nothing elsewhere */}
+            {/* ui-polish-2: only on buildings that carry the tag (Ward 29: 2 of 373); nothing elsewhere */}
             {detail.data?.osm_levels?.osm_levels != null && <Fact k="OpenStreetMap floors" hint="building:levels">OpenStreetMap gives this building {detail.data.osm_levels.osm_levels} {detail.data.osm_levels.osm_levels === '1' ? 'level' : 'levels'} (looked up {detail.data.osm_levels.fetched?.slice(0, 10)}). Volunteers add this tag for few buildings; it is a cross-check only and never changes our count.</Fact>}
             <Fact k="Sign / name"><RouteLine route={name?.route} />{name?.quality && <span className="ink3"> The sign was {nameQualityPlain(name.quality)}.</span>}</Fact>
             {b.evidence?.sign_view?.ocr_text && <Fact k="Sign text read" hint={b.evidence.sign_view.ocr_conf != null ? `OCR confidence ${fmt1.format(b.evidence.sign_view.ocr_conf)}` : 'OCR'}>“{b.evidence.sign_view.ocr_text}”{b.evidence.sign_view.ocr_conf != null && <span className="ink2">, the text reader was {Math.round(b.evidence.sign_view.ocr_conf * 100)}% sure</span>}</Fact>}

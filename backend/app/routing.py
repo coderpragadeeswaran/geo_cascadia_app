@@ -187,7 +187,22 @@ def routing(bundle, F, n, model_card=None):
                          f"are missing from it, while the 'without router' figure (${ct.get('ward29_vlm_usd_without_router')}, "
                          f"{fr.get('vlm_calls_before')} calls) includes them. Like for like, with the router: "
                          f"{routed_n} calls, about ${round(routed_usd, 3) if routed_usd is not None else '?'}.")}
-    return {"tasks": tasks, "totals": totals, "all_cloud": all_cloud, "every_view": every, "accuracy": acc,
+    # D65: a measured comparison on a labelled sample (tools/measure_routes.py on the server + tools/routing_measured.py)
+    # replaces the estimates: the all-cloud and every-photo figures, and the local steps' "time not measured"
+    meas = F.get("routing_measured")
+    measured = None
+    if meas:
+        all_cloud, every = None, None
+        lat = {x["step"]: x for x in meas.get("latency") or []}
+        src = f"measured {meas['measured'][:10]} on {meas['machine']}, n = "
+        for t in tasks:
+            for x in t["routes"]:
+                hit = {("detect", "local"): "Find objects in a photo", ("signs", "local"): "Read a sign crop",
+                       ("use", "local"): "Building use, local", ("floors", "cloud"): "Floors, cloud (3 images per call)"}.get((t["key"], x["route"]))
+                if hit and lat.get(hit, {}).get("s") is not None:
+                    x.update(lat_s=lat[hit]["s"], lat_src=src + f"{lat[hit]['n']} ({lat[hit].get('note') or 'median seconds per item'})")
+        measured = {k: meas[k] for k in ("measured", "machine", "n", "sample", "paths", "routed_decided_locally", "latency", "spend")}
+    return {"tasks": tasks, "totals": totals, "all_cloud": all_cloud, "every_view": every, "accuracy": acc, "measured": measured,
             "measured_every_view": measured_every, "model_card_check": check,
             "prices": {"in_per_m": P_IN, "out_per_m": P_OUT, "src": "pipeline Config (Nova Lite USD per million tokens)"},
             "street_view": {"photos": n["photos_fetched"], "usd_per_photo": ct.get("street_view_price_usd_per_image"),

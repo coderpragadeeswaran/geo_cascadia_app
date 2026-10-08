@@ -243,11 +243,11 @@ def test_camera_only_count_is_shown_next_to_the_building_count(api):
     """D56: "+ N seen only by camera" comes from building_positions.json no_footprint, is the same in the area card, Hood
     and the report, and is never added to the building count"""
     cards = {a["slug"]: a for a in api.get("/areas").json()["areas"]}
-    expect = {"ward29": 47, "trichy_bharathidasan_salai": 79, "tiruppur_uthukuli_road": 12}    # ward29: D64 re-run (Sep run: 9)
+    expect = {"ward29": 9, "trichy_bharathidasan_salai": 79, "tiruppur_uthukuli_road": 11}     # D65: inside the area only
     for slug, n in expect.items():
         assert cards[slug]["counts"]["camera_only_buildings"] == n
         assert api.get(f"/areas/{slug}/camera-buildings").json()["count"] == n
         assert api.get(f"/areas/{slug}/hood").json()["n"]["camera_only_buildings"] == n
     c = _content(api, "ward29")
-    assert c["numbers"][0]["value"] == 373 and c["numbers"][0]["note"] == "+ 47 seen only by camera (no map outline)"   # D64 re-run
+    assert c["numbers"][0]["value"] == 373 and c["numbers"][0]["note"] == "+ 9 seen only by camera (no map outline)"   # D64 re-run
     assert _content(api, "ward29", "Sathy Main Road")["numbers"][0].get("note") == ""      # no street on camera-only points

@@ -229,7 +229,12 @@ def test_uncertainty_grows_with_distance_and_matches_model_card():
     with open(os.path.join(ROOT, "data", "model_card.json"), encoding="utf-8") as f:
         mc = json.load(f)
     block = mc["single_camera_by_distance"]
-    assert fitted(block["bands"]) == tuple(CFG.single_cam_unc_bands)
+    # D65: the table shows the circles the map draws (the pipeline's setting); a re-measurement that fits differently is
+    # stated next to it, never silently used
+    used = tuple((u["up_to_m"], u["plus_minus_m"]) for u in block["used_uncertainty_m"])
+    assert used == tuple(CFG.single_cam_unc_bands)
+    for (u, v), f, row in zip(used, fitted(block["bands"]), block["used_uncertainty_m"]):
+        assert (u, v) == f or f"re-measured here: ±{f[1]} m" in row["basis"]
     assert all(r["n"] >= 10 for r in block["bands"]) and block["n"] == sum(r["n"] for r in block["bands"])
 
 

@@ -250,7 +250,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             return {"offline": False, "available": False, "points": [], "count": 0, "stats": None}
         pts = [{"id": f"cb-{i + 1:03d}", "lat": q["lat"], "lon": q["lon"], "method": q.get("method"), "from": q.get("from"),
                 "n_cameras": q.get("n_cameras"), "uncertainty_m": q.get("uncertainty_m"), "approximate": q.get("approximate")}
-               for i, q in enumerate(bp.get("no_footprint") or []) if q.get("lat") is not None]
+               for i, q in camonly.points(slug, settings.areas_dir)]          # D65: inside the area's boundary only
         return {"offline": False, "available": True, "points": pts, "count": len(pts), "stats": bp.get("no_footprint_stats"),
                 "source": "building_positions.json (no_footprint): camera rays crossing with no building outline"}
 
@@ -535,7 +535,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
                 "single_camera_by_distance": card.get("single_camera_by_distance")}
 
     @app.get("/trust/sign-links", tags=["trust"])
-    def trust_sign_links(area: str = views.MODEL_CARD_AREA):     # D64: the spot-check was made on the Sep 2026 run
+    def trust_sign_links(area: str = "ward29"):                  # D65: the current run's spot-check
         """P7.4: the sign-linking rule and its Google-pin check (model_card.sign_links), the spot-check sample of sign moves
         (sign_spotcheck.json: photo view, box, camera, line of sight, old / new outline) and the AI first-pass verdicts
         (sign_spotcheck_ai.json, labelled as an AI visual check, not a human one)."""
@@ -564,9 +564,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         """Every place, in every area, where a stored counter or story sentence differs from the computed count."""
         def fn(s):
             bundles = [b for b in (s.bundle(x) for x in s.slugs()) if b]
-            mcb = s.bundle(views.MODEL_CARD_AREA)              # D64: the model card's run, hidden since the switch
-            files = {b["slug"]: app.state.runfiles.get(b["slug"]) for b in bundles + ([mcb] if mcb else [])}
-            return trust.consistency(bundles, files, mc(), mcb)
+            return trust.consistency(bundles, {b["slug"]: app.state.runfiles.get(b["slug"]) for b in bundles}, mc())
         res, off = D.read(fn)
         return {"offline": off, "rows": res}
 

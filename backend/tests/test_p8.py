@@ -52,10 +52,11 @@ def test_live_run_counter_equals_recount():
     assert abs(r["totals"]["usd"] - run["vlm_cost_usd"]) < 1e-4
 
 
-def test_trust_lists_the_model_card_cost_row(client):
+def test_trust_shows_only_listed_areas(client):
+    """D65: Trust's stored-vs-computed list covers the areas people can open; the hidden backup never appears"""
     rows = client.get("/trust/consistency").json()["rows"]
-    row = next(x for x in rows if x["field"] == "model_card.cost_time.ward29_vlm_usd_with_router")
-    assert row["stored"] == "$0.056" and row["jump"] == {"page": "trust", "section": "cost"} and row["area"] == OLD
+    assert rows and all(x["area"] != OLD for x in rows)
+    assert not any("Sep 2026" in (x.get("area_name") or "") for x in rows)
 
 
 # ------------------------------------------------------------------------------------------------ 3 imagery age

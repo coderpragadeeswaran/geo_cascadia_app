@@ -64,22 +64,24 @@ def measured_rates(areas_dir, model_card):
         jobs.append({"slug": slug, "street": lr.get("street"), "device": lr.get("device") or run.get("device"), "images": n,
                      "seconds": round(secs), "cloud_usd": run.get("vlm_cost_usd") or 0.0, "places_calls": run.get("places_calls") or 0})
     out = {"jobs": jobs}
-    # P7 R2 (F1): time = fixed start-up + images x per-image rate. Per-image rate: the Ward 29 full run (model_card GPU
-    # minutes over the photos counted from its run files). Start-up: each small completed GPU job's time minus its images x
-    # that rate; the median over those jobs. Not fitted: two measured inputs, one formula.
-    from .derived import MODEL_CARD_AREA                    # D64: the Sep 2026 run the model card's GPU minutes describe
-    ward = photos_of_run(os.path.join(areas_dir, MODEL_CARD_AREA)) or photos_of_run(os.path.join(areas_dir, "ward29"))
-    gpu_min = ct.get("ward29_full_run_gpu_minutes")
+    # P7 R2 (F1): time = fixed start-up + images x per-image rate. Per-image rate: the Ward 29 full run. D65: that is the
+    # current Ward 29 run itself when it is a fresh run from the app (its time from claim to upload over its photos);
+    # else the model card's GPU minutes over the photos counted from the run files. Start-up: each OTHER completed GPU
+    # job's time minus its images x that rate; the median over those jobs. Not fitted: two measured inputs, one formula.
+    ref = next((j for j in jobs if j["slug"] == "ward29" and j["device"] == "gpu"), None)
+    ward = {"photos": ref["images"]} if ref else photos_of_run(os.path.join(areas_dir, "ward29"))
+    gpu_min = round(ref["seconds"] / 60, 1) if ref else ct.get("ward29_full_run_gpu_minutes")
     if ward and gpu_min:
-        rate = gpu_min * 60 / ward["photos"]
-        gpu = [j for j in jobs if j["device"] == "gpu"]
+        rate = (ref["seconds"] if ref else gpu_min * 60) / ward["photos"]
+        gpu = [j for j in jobs if j["device"] == "gpu" and j is not ref]
         starts = sorted(j["seconds"] - j["images"] * rate for j in gpu)
         startup = None
         if starts:
             m = len(starts) // 2
             startup = max(0.0, starts[m] if len(starts) % 2 else (starts[m - 1] + starts[m]) / 2)
         out["gpu"] = {"sec_per_image": rate, "startup_s": startup or 0.0,
-                      "basis": f"{rate:.2f} s per image from the Ward 29 full run ({ward['photos']:,} images in {gpu_min} min)"
+                      "basis": f"{rate:.2f} s per image from the Ward 29 full run ({ward['photos']:,} images in {gpu_min} min"
+                               + (" on the server GPU, from claim to upload)" if ref else ")")
                                + (f" + {startup / 60:.1f} min start-up: the median of {len(gpu)} completed GPU job(s) that ran "
                                   "from the start, each job's time minus its images at that rate ("
                                   + ", ".join(f"{j['street']}: {j['seconds'] / 60:.1f} min, {j['images']} images" for j in gpu)

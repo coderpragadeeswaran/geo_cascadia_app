@@ -27,7 +27,7 @@
             "rejected_variants": ["3-example prompt (56% exact, bias worse)", "zoom re-shoot (44% -> 22%)", "prompt v4 (49%)"]},
  "names": {"crop_level_n31": {"routed_ocr_then_vlm": 0.74, "ocr_only": 0.71, "all_vlm": 0.65},
            "full_view_n16": {"routed": 0.56, "all_vlm_per_view": 0.56, "cost_ratio": "13x"},
-           "google_confirmed": {"ward29": "23 of 116", "trichy_unseen": "13 of 38", "chance_rate": 0.02},
+           "google_confirmed": {"ward29": "21 of 148", "trichy_unseen": "13 of 38", "chance_rate": 0.02},
            "vlm_only_names_confirmed": "0 of 8 -> VLM names kept only if OCR supports them (gate 0.7)",
            "vlm_invented_names_on_non_business_crops": "6 of 15 (40%)"},
  "ocr": {"engine": "PaddleOCR English + Tamil, tiered",
@@ -43,7 +43,7 @@
                              "asset": {"location_shift": {"P": 0.92, "R": 1.00}, "type_mismatch": {"P": 1.00, "R": 1.00}, "missing_asset": {"P": 1.00, "R": 0.90}},
                              "note": "registers are SYNTHETIC with planted errors (no open municipal data exists)"},
  "withheld": {"facade_condition": "53% vs 66% always-'good' baseline (n=38) -> not shown as a result",
-              "door_numbers": "43% precision on 9 of 381 buildings -> unverified field only"},
+              "door_numbers": "43% precision (door numbers read on 9 buildings) -> unverified field only"},
  "generalisation": {"regression_2_streets": "plan/detections within 3% of notebook; use & floors identical 49/51",
                     "trichy_bharathidasan_salai": {"length_km": 2.5, "buildings": 66, "assets": 87, "names": 38, "google_confirmed": 13, "vlm_usd": 0.015},
                     "tiruppur_uthukuli_road": {"osm_footprints_on_662m": 1, "unmapped_businesses": 14, "assets": 20,
@@ -54,15 +54,19 @@
                "cpu_fallback_per_street_min": {"full_ocr": 18, "fast_ocr_estimate": "3-5"}},
  "single_camera_by_distance": {
   "_note": "Single-camera pole/streetlight position error by camera distance: for poles triangulated from 2+ cameras, each camera's own estimate vs the triangulated point (a consistency check, not surveyed truth). Only poles two cameras agreed on are in the sample, so far-off single estimates are under-represented and real errors can be larger. tools/pole_uncertainty.py.",
-  "generated": "2026-10-01",
-  "n": 63,
+  "generated": "2026-10-08",
+  "n": 71,
   "samples_per_area": {
+   "rathinapuri_sanganoor_main_road_9520da": 7,
    "sanganur_road_086d14": 3,
    "tiruppur_uthukuli_road": 0,
    "trichy_bharathidasan_salai": 4,
+   "unnamed_road_between_bharathiar_road_and_923057": 2,
+   "unnamed_road_near_5th_street_6eeca4": 0,
    "unnamed_road_off_4th_street_5772fa": 0,
+   "unnamed_road_off_kattabomman_street_295e9b": 2,
    "vadakku_masi_veethi_f17937": 4,
-   "ward29": 52
+   "ward29": 49
   },
   "bands": [
    {
@@ -70,9 +74,9 @@
      0,
      8
     ],
-    "n": 20,
+    "n": 26,
     "median_m": 1.28,
-    "p80_m": 2.39,
+    "p80_m": 2.58,
     "surveyed_median_m": 1.64
    },
    {
@@ -80,9 +84,9 @@
      8,
      11
     ],
-    "n": 11,
-    "median_m": 1.93,
-    "p80_m": 3.51,
+    "n": 14,
+    "median_m": 1.56,
+    "p80_m": 2.97,
     "surveyed_median_m": 4.55
    },
    {
@@ -90,9 +94,9 @@
      11,
      15
     ],
-    "n": 32,
-    "median_m": 1.57,
-    "p80_m": 3.03,
+    "n": 31,
+    "median_m": 1.54,
+    "p80_m": 3.85,
     "surveyed_median_m": 4.55
    }
   ],
@@ -100,7 +104,7 @@
    {
     "up_to_m": 8.0,
     "plus_minus_m": 2.4,
-    "basis": "80th percentile (consistency)"
+    "basis": "the pipeline's setting (D45); re-measured here: ±2.6 m (not changed)"
    },
    {
     "up_to_m": 11.0,
@@ -1087,7 +1091,7 @@
     "status": "computed before D33 (old fallback); not re-run"
    },
    "ward29": {
-    "status": "not re-run for the Oct 2026 Ward 29 run (it needs paid Google look-ups); the Sep 2026 run's result stays with that run (ward29_v1, hidden backup)"
+    "status": "not run for this Ward 29 analysis (it needs paid Google look-ups)"
    }
   }
  },
@@ -1095,20 +1099,20 @@
   "rule": "A shop sign belongs to the building outline its own line of sight hits (from the camera through the sign box). It moves off the outline the photo was aimed at only when that line, and the lines 4 degrees either side, all hit the same other outline and none touches the aimed one (D44).",
   "margin_deg": 4,
   "ward29": {
-   "sign_crops": 2065,
-   "moved": 570,
-   "read_signs": 820,
-   "read_moved": 214,
+   "sign_crops": 2031,
+   "moved": 523,
+   "read_signs": 819,
+   "read_moved": 194,
    "google_check": {
-    "moved_read_signs_with_google_pin": 30,
-    "closer": 14,
+    "moved_read_signs_with_google_pin": 29,
+    "closer": 8,
     "further": 6,
     "same_within_1m": 1,
-    "to_or_from_no_outline": 9,
-    "median_change_m": -3.5
+    "to_or_from_no_outline": 14,
+    "median_change_m": -1.7
    }
   },
   "note": "Agreement check against Google Maps pins for the same business name (pins are Google's, not surveyed): is the sign's building nearer to the pin under the new rule than under the old aimed-photo rule?",
-  "source": "tools/validate_sign_links.py data/areas/ward29 (saved files only), 1 Oct 2026"
+  "source": "tools/validate_sign_links.py data/areas/ward29 (saved files only), 9 Oct 2026"
  }
 }

@@ -6,7 +6,7 @@
  *  buildings, positions (assets), matched, findings (streetlights), flow, dropped, streets-table, cost, story, compare. */
 import { AlertTriangle, ArrowRight, GitCompareArrows, MapPin } from 'lucide-react'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { useHood, useHoods, type Hood as HoodData, type Routing as RoutingData, type RouteRow, type StreetRow } from '@/api/p5'
+import { useHood, useHoods, type Hood as HoodData, type Routing as RoutingData, type RouteRow, type StreetRow, type RoutingMeasured, type MeasuredPath } from '@/api/p5'
 import { useAreas } from '@/api/queries'
 import { Card, CountUp, jumpTo, REDUCED, SectionNav, T, useDetail, useInView, useScrollSpy } from '@/components/Detail'
 import { ExampleSheet } from '@/components/ExampleSheet'
@@ -540,6 +540,9 @@ function RoutingCost({ r, billing }: { r: RoutingData; billing?: string }) {
       </div>
       <p className="t-small ink3 mt-2">Hover a number for its source. “Time each” is the median seconds per cloud call, or the model card’s speed for the detector (T4 GPU). Local models use GPU time, not a per-call fee. Derived = the run’s own cost counter minus the calls measured one by one; estimate = calls × the measured cost of the same prompt.</p>
 
+      {r.measured && <MeasuredCompare m={r.measured} />}
+
+      {!r.measured && <>
       <h3 className="t-title mt-6">Cloud-AI cost for this run, three ways</h3>
       <div className="mt-2 max-w-[640px]"><AlignedBars rows={totalRows} fmtV={(v) => usdText(v)} /></div>
       <ul className="t-small ink2 mt-2 max-w-[760px] space-y-1">
@@ -548,6 +551,7 @@ function RoutingCost({ r, billing }: { r: RoutingData; billing?: string }) {
         {ev && <li><b className="text-ink">Cloud model on every photo (estimate):</b> {fmt.format(ev.photos)} photos × {usd(ev.usd_per_call, 6)} per one-photo call (measured average) = {usdText(ev.usd)}{ev.minutes != null ? `, about ${ev.minutes} min of calls (${ev.workers} at a time)` : ''}. That still would not count floors or place anything on the map; the detector does that locally{det?.lat_s != null ? ` in ${Math.round(det.lat_s * 1000)} ms per photo` : ''}.</li>}
         {r.measured_every_view && <li><b className="text-ink">Measured on whole photos (model card, n = {r.measured_every_view.n}):</b> reading shop names with the cloud model on every photo cost {usdText(r.measured_every_view.usd_all_vlm)} vs {usdText(r.measured_every_view.usd_routed)} routed ({r.measured_every_view.ratio}), at the same accuracy ({Math.round(r.measured_every_view.all_vlm * 100)}% vs {Math.round(r.measured_every_view.routed * 100)}%).</li>}
       </ul>
+      </>}
 
       {!!r.accuracy.length && <>
         <h3 className="t-title mt-6">Accuracy: routed vs cloud only</h3>
@@ -571,6 +575,51 @@ function RoutingCost({ r, billing }: { r: RoutingData; billing?: string }) {
         </div>
       )}
     </Section>
+  )
+}
+
+/** D65: the cloud model on everything vs the routed path, measured on a labelled sample of this area's buildings (accuracy,
+ *  cost and time per building), and the time per item of every step, measured on the analysis server. */
+function MeasuredCompare({ m }: { m: RoutingMeasured }) {
+  const P = [m.paths.routed, m.paths.all_cloud]
+  const p100 = (v: number | null) => (v == null ? '—' : `${Math.round(v * 100)}%`)
+  const rows: [string, (p: MeasuredPath) => string][] = [
+    ['Building use right', (p) => `${p100(p.use_accuracy)} (${p.use_correct} of ${p.n})`],
+    ['Floors exactly right', (p) => `${p100(p.floors_exact)} (n = ${p.floors_n})`],
+    ['Floors within one', (p) => p100(p.floors_within_1)],
+    ['Cloud cost per building', (p) => usd(p.usd_per_building, 6)],
+    ['Time per building', (p) => `${p.s_per_building.toFixed(2)} s`],
+    ['Cloud calls for the sample', (p) => fmt.format(p.cloud_calls)],
+  ]
+  return (
+    <>
+      <h3 className="t-title mt-6">Cloud model on everything vs routed · measured, n = {m.n} buildings</h3>
+      <p className="t-small ink2 mt-1 max-w-[760px]">{m.n} buildings of this run ({m.sample.rule}), use and floors labelled by viewing each building’s photo ({m.sample.labeller}). Both paths are scored on the model’s own answers. Routed: this run’s answers ({m.routed_decided_locally} of {m.n} decided by the local model). Cloud on everything: the same photos sent to Nova Lite with the router off, {m.measured.slice(0, 10)}, on {m.machine}.</p>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full min-w-[560px] max-w-[760px]" aria-label="Measured comparison">
+          <thead><tr className="rule-b"><th className="t-micro py-1.5 pr-3 text-left font-[600]">measured on {m.n} buildings</th>
+            {['As run (routed)', 'Cloud model on everything'].map((x) => <th key={x} className="t-micro py-1.5 pr-3 text-right font-[600]">{x}</th>)}</tr></thead>
+          <tbody>{rows.map(([label, f]) => (
+            <tr key={label} className="rule-b"><td className="t-small py-1.5 pr-3">{label}</td>{P.map((p, i) => <td key={i} className="t-data py-1.5 pr-3 text-right">{f(p)}</td>)}</tr>))}</tbody>
+        </table>
+      </div>
+      <p className="t-small ink3 mt-1 max-w-[760px]">Small sample: one building moves a result by about {Math.round(100 / m.n)} points. The floors call is the same in both paths, so its cost and time are in both. Time per building = the steps one after the other (the analysis runs four cloud calls at a time).</p>
+      <h3 className="t-title mt-6">Time per item, by route</h3>
+      <div className="mt-2 overflow-x-auto">
+        <table className="w-full min-w-[640px] max-w-[860px]" aria-label="Time per item">
+          <thead><tr className="rule-b">{['step', 'route', 'time each', 'n', 'where'].map((x, i) => <th key={x} className={cn('t-micro py-1.5 pr-3 font-[600]', i === 2 || i === 3 ? 'text-right' : 'text-left')}>{x}</th>)}</tr></thead>
+          <tbody>{m.latency.map((x) => (
+            <tr key={x.step} className="rule-b align-baseline">
+              <td className="t-small py-1.5 pr-3"><b>{x.step}</b><div className="ink3 text-[13px]">{x.model}</div></td>
+              <td className="t-small py-1.5 pr-3"><span className="tag" style={x.route === 'cloud' ? { color: 'var(--ns-sodium)', boxShadow: 'inset 0 0 0 1px var(--ns-sodium)' } : undefined}>{x.route}</span></td>
+              <td className="t-data py-1.5 pr-3 text-right">{x.s == null ? '—' : x.s < 1 ? `${Math.round(x.s * 1000)} ms` : `${x.s.toFixed(2)} s`}<div className="ink3 text-[12px]">per {x.unit}</div></td>
+              <td className="t-data py-1.5 pr-3 text-right">{x.n ?? '—'}</td>
+              <td className="t-small ink2 py-1.5 pr-3">{x.where}{x.note ? <div className="ink3 text-[13px]">{x.note}</div> : null}</td>
+            </tr>))}</tbody>
+        </table>
+      </div>
+      <p className="t-small ink3 mt-1">Median seconds per item on the sample's photos. The measurement cost {fmt.format(m.spend.street_view_photos)} Street View photos (Google, {usd(m.spend.street_view_usd, 2)} at list price) and {fmt.format(m.spend.nova_calls)} Nova Lite calls (AWS, {usd(m.spend.nova_usd, 4)}).</p>
+    </>
   )
 }
 

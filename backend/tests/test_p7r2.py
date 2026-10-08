@@ -49,7 +49,8 @@ def test_camera_only_buildings(offline):
     r = offline.get("/areas/ward29/camera-buildings").json()
     with open(os.path.join(S.areas_dir, "ward29", "building_positions.json"), encoding="utf-8") as f:
         n = len(json.load(f)["no_footprint"])
-    assert r["available"] and r["count"] == n == len(r["points"]) and r["points"][0]["id"] == "cb-001"
+    # D65: only the points inside the area's boundary (9 of the run's 47); ids keep their place in the run's list
+    assert r["available"] and r["count"] == len(r["points"]) == 9 and n == 47
     assert offline.get("/areas/not_an_area/camera-buildings").status_code == 404
 
 
