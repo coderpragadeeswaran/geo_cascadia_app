@@ -1,0 +1,20 @@
+[Unit]
+Description=GEO-CASCADIA API (FastAPI, D63)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=gcapp
+Group=gcapp
+WorkingDirectory=/opt/geo-cascadia/current
+# Settings come from backend/.env, a link to /etc/geo-cascadia/app.env (600, gcapp), read by the app's own loader.
+# No AWS keys here: the API and the website never need them.
+Environment=GEO_DATA_DIR=/opt/geo-cascadia/data
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONUTF8=1
+ExecStart=/opt/geo-cascadia/venv-api/bin/python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 --root-path /api --proxy-headers --forwarded-allow-ips 127.0.0.1
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

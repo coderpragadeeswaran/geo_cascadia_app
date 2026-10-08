@@ -2478,3 +2478,47 @@ Ward 29's other 119 photos are on panoramas Google no longer serves (D60/D61): t
 gain).
 
 **Checks (8 Oct).** Backend: full suite 503 passed, 2 failed, 1 skipped — the 2 were `test_evidence` asserting the stored box is always orange (intended change, updated; a first full run also failed `test_p5::test_no_guessed_building_box` the same way, updated, and the known-flaky `test_p6` delete test, which passed alone and in the rerun); after the updates the changed files pass (test_evidence, test_m3_level1, test_p5, test_p6). typecheck, build, test:ui 25 (1 new), check:data pass; the audit: first run 1 fail ("Esc closes the palette", Night — unrelated code), second run all passed. Regression (production preview): ALL PASSED, 291 checks, 0 retries (`run-2026-10-08_0710.log`); no expected answer changed. Live: the evidence API for the three cases and the Ward 29 key numbers (unchanged) against the running API. Screenshots `web/scripts/m3-level1-shots.ts` → `docs/screenshots/m3-level1/` (both themes). Clean-up (Google terms): the experiment's review and example images and `docs/screenshots/box-restore/` deleted; `labels.csv`, `RESULTS.md`, `M12_PROTOCOL.md` kept.
+
+## 2026-10-08 — one AWS server (branch deploy): preparation and read-only checks
+
+### D63. One g4dn.xlarge for the website, the API and the GPU worker; database stays on Supabase
+**Owner's brief (8 Oct):** one g4dn.xlarge in ap-south-1; site open to anyone with the link, SSH only from the owner's IP;
+ask before anything that costs money; never more than one instance; shutdown = stop and a 90-minute auto-stop on the
+server; every resource tagged `Project=fai-tce-team-22-geo-cascadia`; keys only in `C:\projects\aws_ec2.env` (EC2) and
+`C:\projects\aws_builder.env` (Bedrock, worker only), never printed or committed. This round: Phase 0 (local prep) and
+Phase 1 (read-only checks) only; the launch waits for the owner's "go launch".
+
+**Decisions taken while preparing (deviations or choices the brief left open):**
+- **Two worker venvs** (`venv-worker`: torch / YOLO / CLIP / boto3; `venv-ocr`: Paddle) instead of one: the OCR step
+  already runs in its own process (D38), and separate venvs keep torch's and Paddle's CUDA libraries from clashing. One new
+  Colab-neutral setting in `colab_worker.py`: `OCR_PYTHON` (None = this Python, as before).
+- **The server worker reuses the Colab cell's code** (loaded without `main()`), replacing only questions, Drive, tunnel and
+  key input. One protocol, one set of tests.
+- **Three secret files, not one:** `app.env` (API), `worker.env` (token + Google server key, derived), `aws_builder.env`
+  (worker user only), so the API process can't read the AWS keys. All 600 in `/etc/geo-cascadia`.
+- **Data outside the code:** releases are replaced, `/opt/geo-cascadia/data` is not; deploys never delete data files.
+- **Tags:** the EC2 role refuses tags at creation on everything but the instance (dry-run probes), so the volume, network
+  interface, security group, Elastic IP and key pair are tagged right after creation with CreateTags.
+- **nginx** blocks the worker's endpoints from outside (`/api/worker/*` except the read-only status).
+- **PDF reports on Linux** use DejaVu Sans for the four symbols Anek Tamil lacks (Arial on Windows, unchanged).
+
+**Phase 1 results (8 Oct):** identity OK; g4dn.xlarge offered in all 3 zones; G vCPU quota 4 (one instance); AMI
+`ami-04a61a72eafe2d8ab` "Deep Learning Base OSS Nvidia Driver GPU AMI (Ubuntu 22.04) 20261002"; the exact launch request
+dry-runs OK (only the instance tagged); RDS not visible to the role (AccessDenied), price API refused; Nova Lite answered
+with the Builder keys ($0.0000011). Prices (public price files): $0.579/h; gp3 $0.0912/GB-month (100 GB $9.12/month);
+public IPv4 $0.005/h ($3.65/month).
+
+**Not available locally:** `use_router.joblib` and the two floor-count example photos (Drive `alldataset` only); the
+bundle script stops and says where to put them.
+
+**Checks (8 Oct, main before these changes):** backend 505 passed, 1 skipped; typecheck, build, test:ui 25, check:data, audit (both themes) pass; regression ALL PASSED, 291 checks, 0 retries (`run-2026-10-08_0802.log`). After: `test_d63_server_worker.py` 8 new; worker + report tests 106 passed, 1 skipped.
+
+**Launched and deployed (8 Oct, owner's "go launch"):** instance `i-09e10c6bc76bb84dc`, Elastic IP `65.1.253.18`, site
+http://65.1.253.18/. Owner decisions on the day: scikit-learn pinned to 1.6.1 (the router's pickle version); browser map
+key gets the website restriction `http://65.1.253.18/*`; server key unchanged (works from the server, no IP restriction);
+one live analysis approved ("Unnamed road near 5th Street", 50 m: 20 photos $0.14 at list price, Nova $0.0008, 2 min 19 s,
+5 buildings / 3 poles). Only the instance could be tagged: the role refuses CreateTags on the volume, network interface,
+security group, Elastic IP and key pair, also after creation. The instance is kept **stopped** between uses
+(`start.ps1` / `stop.ps1`; 90-minute auto-stop). The laptop + Colab + tunnel set-up stays as the fallback.
+
+Details, numbers and limits: explainer 07, D63 entry.

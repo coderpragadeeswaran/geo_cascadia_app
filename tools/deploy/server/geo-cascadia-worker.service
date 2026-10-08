@@ -1,0 +1,31 @@
+[Unit]
+Description=GEO-CASCADIA analysis worker (GPU, D63)
+After=network-online.target geo-cascadia-api.service
+Wants=network-online.target
+
+[Service]
+User=gcworker
+Group=gcworker
+WorkingDirectory=/var/lib/gc-worker
+Environment=HOME=/var/lib/gc-worker
+Environment=GC_API_URL=http://127.0.0.1:8000
+Environment=GC_ENV_FILE=/etc/geo-cascadia/worker.env
+Environment=GC_AWS_FILE=/etc/geo-cascadia/aws_builder.env
+Environment=GC_PIPELINE_DIR=/opt/geo-cascadia/current/pipeline
+Environment=GC_ASSETS_DIR=/opt/geo-cascadia/assets
+Environment=GC_WORK_DIR=/var/lib/gc-worker/jobs
+Environment=GC_OCR_PYTHON=/opt/geo-cascadia/venv-ocr/bin/python
+Environment=YOLO_CONFIG_DIR=/var/lib/gc-worker/ultralytics
+Environment=USE_TF=0
+Environment=TRANSFORMERS_NO_TF=1
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONUTF8=1
+ExecStart=/opt/geo-cascadia/venv-worker/bin/python /opt/geo-cascadia/current/worker/server_worker.py
+# a running job is "interrupted" after 2 min without a heartbeat and resumes from its saved files on the next claim
+Restart=always
+RestartSec=30
+KillMode=control-group
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

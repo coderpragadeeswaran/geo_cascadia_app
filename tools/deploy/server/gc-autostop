@@ -1,0 +1,27 @@
+#!/bin/bash
+# GEO-CASCADIA auto-stop (D63). The instance is launched with InstanceInitiatedShutdownBehavior=stop, so power-off = STOP
+# (disk and Elastic IP kept, no hourly instance charge).
+#   gc-autostop arm N     stop N minutes from now (replaces the current stop time); every boot runs "arm 90"
+#   gc-autostop extend N  add N minutes (to now, if the stop time already passed)
+#   gc-autostop check     power off once the stop time has passed (gc-autostop.timer, every minute)
+#   gc-autostop show      minutes left
+f=/var/lib/gc/stop_at
+mkdir -p /var/lib/gc
+now=$(date +%s)
+cur=$(cat "$f" 2>/dev/null || echo 0)
+case "$1" in
+  arm)    echo $(( now + ${2:-90} * 60 )) > "$f" ;;
+  extend) base=$(( cur > now ? cur : now )); echo $(( base + ${2:-60} * 60 )) > "$f" ;;
+  check)  boot=$(( now - $(cut -d. -f1 /proc/uptime) ))
+          if [ "$cur" -lt "$boot" ]; then                  # a stop time from before this boot (or none): never stop on it
+            echo $(( now + 90 * 60 )) > "$f"; logger "gc-autostop: stale stop time, re-armed 90 min"; exit 0
+          fi
+          if [ "$now" -ge "$cur" ]; then
+            logger "gc-autostop: stop time reached, powering off (= instance stop)"; systemctl poweroff
+          fi
+          exit 0 ;;
+  show)   ;;
+  *)      echo "usage: gc-autostop arm|extend|check|show [minutes]"; exit 2 ;;
+esac
+cur=$(cat "$f" 2>/dev/null || echo 0)
+echo "auto-stop in $(( (cur - $(date +%s)) / 60 )) min (at $(date -u -d @"$cur" '+%H:%M UTC'))"

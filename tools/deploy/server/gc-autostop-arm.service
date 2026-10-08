@@ -1,0 +1,9 @@
+[Unit]
+Description=GEO-CASCADIA: arm the 90-minute auto-stop at every boot (D63)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/gc-autostop arm 90
+
+[Install]
+WantedBy=multi-user.target

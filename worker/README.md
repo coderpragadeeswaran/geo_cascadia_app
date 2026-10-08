@@ -10,6 +10,8 @@ browser (localhost:5173) → API (localhost:8000) ← tunnel (https://….tryclo
 
 - `colab_worker.py`: **one cell**. Paste it into a notebook and run it. It keeps running until you stop it.
 - `fake_worker.py`: replays a saved area with fake progress, to test the whole flow without Colab.
+- `server_worker.py` (D63): the same cell's code as a systemd service on the AWS GPU server, next to the API (no
+  questions, no Drive, no tunnel; keys from files). Run and update it with `tools\deploy\*.ps1` (README, Deployment).
 
 The worker never prints or saves your keys. It asks for them with hidden input and keeps them in memory only.
 

@@ -1,0 +1,15 @@
+# GEO-CASCADIA worker on the AWS GPU server (D63): the pipeline minus sign reading (that runs in venv-ocr).
+# Mirrors the Colab S1a cell: transformers pinned to 4.57.6 (D37), no TensorFlow anywhere (D39).
+torch
+torchvision
+ultralytics
+transformers==4.57.6
+boto3
+shapely>=2.0
+scikit-learn==1.6.1     # the version use_router.joblib was pickled with (it warns on 1.9.1)
+joblib
+numpy
+pillow
+requests
+psutil
+indic-transliteration

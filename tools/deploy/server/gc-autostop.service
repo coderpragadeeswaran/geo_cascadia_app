@@ -1,0 +1,6 @@
+[Unit]
+Description=GEO-CASCADIA: stop the server once the auto-stop time has passed (D63)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/gc-autostop check

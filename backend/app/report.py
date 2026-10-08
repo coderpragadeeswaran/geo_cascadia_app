@@ -742,7 +742,9 @@ def _hex(rgb):
 
 
 SYMBOLS = {"≤": "<=", "≥": ">=", "→": "->", "↑": "^"}   # not in Anek Tamil; drawn from Arial when the system has it
-SYSTEM_SYMBOL_FONT = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "arial.ttf")
+# Arial on Windows; on the Ubuntu server (D63) DejaVu Sans (fonts-dejavu-core), which has the same four symbols
+SYSTEM_SYMBOL_FONT = next((p for p in (os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "arial.ttf"),
+                                       "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf") if os.path.isfile(p)), "")
 
 
 def _font(pdf):
