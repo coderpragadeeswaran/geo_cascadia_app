@@ -6,7 +6,7 @@ ultralytics
 transformers==4.57.6
 boto3
 shapely>=2.0
-scikit-learn
+scikit-learn==1.6.1     # the version use_router.joblib was pickled with (it warns on 1.9.1)
 joblib
 numpy
 pillow
