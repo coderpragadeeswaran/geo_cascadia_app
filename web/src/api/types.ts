@@ -241,6 +241,11 @@ export interface EvidenceViewData {
   served?: boolean | null
   /** D60: when it is gone: Google's current panorama near the original camera, aimed at the object (no boxes), or null */
   current?: CurrentPhoto | null
+  /** D62 (display only): how the orange "this building" box on a Front / Best photo was chosen (M3, visible span):
+   *  same = the analysis' own box, changed = another building box, cant_tell = no box fits well enough (none drawn) */
+  box_choice?: 'same' | 'changed' | 'cant_tell'
+  /** D62: the box the analysis itself used for this building (its readings came from it) */
+  analysis_box?: number[] | null
 }
 /** D60: the photo shown instead of a stored one Google no longer serves */
 export interface CurrentPhoto { pano_id: string; heading: number; pitch: number; fov: number; date: string | null; lat: number; lon: number; moved_m: number

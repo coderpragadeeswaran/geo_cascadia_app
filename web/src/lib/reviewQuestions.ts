@@ -30,6 +30,8 @@ export interface Question {
   values: { kind: ValueKind; current: string | number | null }[]
   /** the plain reasons this question covers (the pipeline's, as reviewReasons words them) */
   covers: string[]
+  /** D62: a 'box' question on a photo where no box is marked (can't tell which box is the building) */
+  noBox?: boolean
 }
 export interface Asked { main: Question; also: Question[]; hint: string | null }
 
@@ -40,7 +42,7 @@ const REGISTER_DIFFS = ['missing_record', 'extra_floor', 'use_change', 'location
 
 /** the question(s) for one review item. main = the one the Yes / No answers; also = value checks the reviewer can
  *  correct on the way (e.g. a floor estimate on a building that is not in the register); hint = "seen once" context. */
-export function reviewQuestions(item: QItem, b?: QBuilding | null, a?: QAsset | null): Asked {
+export function reviewQuestions(item: QItem, b?: QBuilding | null, a?: QAsset | null, opts: { noBox?: boolean } = {}): Asked {
   const R = item.reasons ?? []
   const diffs = (item.discrepancies?.length ? item.discrepancies : b?.discrepancies) ?? []
   const has = (re: RegExp) => R.some((r) => re.test(r))
@@ -94,7 +96,10 @@ export function reviewQuestions(item: QItem, b?: QBuilding | null, a?: QAsset | 
   // 3. seen once: the question itself when it is the only reason, else context for the main question
   const oneView = has(/^building seen from one view only/), onePhoto = has(/^single-detection asset/)
   const kind = item.asset_cls === 'streetlight' || a?.type === 'streetlight' ? 'streetlight' : 'pole'
-  if (!qs.length && oneView) qs.push({ kind: 'box', text: 'Does the orange box show this building?', values: [], covers: ['Seen from one camera position only'] })
+  // D62: when the photo marks no box ("can't tell which box is this building"), ask about the building itself
+  if (!qs.length && oneView) qs.push(opts.noBox
+    ? { kind: 'box', noBox: true, text: 'We can’t tell which box is this building in this photo. Look at the photo (or Live 360°): can you see this building?', values: [], covers: ['Seen from one camera position only'] }
+    : { kind: 'box', text: 'Does the orange box show this building?', values: [], covers: ['Seen from one camera position only'] })
   if (!qs.length && onePhoto) qs.push({ kind: 'asset', text: `Is there a ${kind} in the orange box?`, values: [], covers: ['Seen in one photo only'] })
   // 4. anything else, word for word
   const known = /^(high-severity discrepancy|attribute discrepancy|floor count low confidence|name read by VLM only|building seen from one view only|single-detection asset)/
@@ -143,7 +148,9 @@ export function outcomeLine(q: Asked, answer: 'yes' | 'no' | 'appeal', corrected
         : `Saved: reviewer says it isn’t ${lower(v?.current as string | null)}.${tail}`
     case 'name': return yes ? 'Saved: reviewer confirmed the sign.'
       : corrected?.name ? `Saved: reviewer says the sign reads “${corrected.name}”.${rest(corrected, 'name')}` : `Saved: reviewer says the sign reads differently.${tail}`
-    case 'box': return yes ? 'Saved: reviewer confirmed the orange box is this building.' : 'Saved: reviewer says the orange box is not this building.' + tail
+    case 'box': return q.main.noBox
+      ? (yes ? 'Saved: reviewer can see this building in the photo.' : 'Saved: reviewer can’t see this building in the photo.' + tail)
+      : yes ? 'Saved: reviewer confirmed the orange box is this building.' : 'Saved: reviewer says the orange box is not this building.' + tail
     case 'asset': return yes ? 'Saved: reviewer confirmed it’s there.' : 'Saved: reviewer says there’s nothing there.' + tail
     default: return (yes ? 'Saved: reviewer says yes.' : 'Saved: reviewer says no.') + tail
   }

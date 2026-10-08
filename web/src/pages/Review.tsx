@@ -14,7 +14,7 @@ import { ArrowLeft, Flag, ImageIcon, Keyboard, Loader2, MapPin, Undo2, UserRound
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from '@/api/client'
 import { useReviewEvents } from '@/api/p5'
-import { useReviewRows } from '@/api/queries'
+import { useEvidence, useReviewRows, type EvidenceResponse } from '@/api/queries'
 import type { ReviewRow } from '@/api/types'
 import { EvidenceViews } from '@/components/EvidenceViews'
 import { GeoMini, type MiniPoint } from '@/components/GeoMini'
@@ -135,8 +135,12 @@ export default function Review() {
     qc.invalidateQueries({ queryKey: ['review-events', id] })
   }
   /** the question for an item, from its own record (D59) */
+  // D62: the item's first photo marks no box ("can't tell") -> the box question asks about the building itself
+  const curEv = useEvidence(cur?.item_type === 'building' ? area : null, 'building', cur?.ref_id ?? '')
+  const noBoxOf = useCallback((r: ReviewRow) => r.item_type === 'building' &&
+    qc.getQueryData<EvidenceResponse>(['evidence', area, 'building', r.ref_id])?.views?.[0]?.box_choice === 'cant_tell', [qc, area, curEv.data]) // eslint-disable-line react-hooks/exhaustive-deps
   const askOf = useCallback((r: ReviewRow) => reviewQuestions(r, r.item_type === 'building' ? records?.buildings.find((x) => x.id === r.ref_id) : null,
-    r.item_type === 'asset' ? records?.assets.find((x) => x.id === r.ref_id) : null), [records])
+    r.item_type === 'asset' ? records?.assets.find((x) => x.id === r.ref_id) : null, { noBox: noBoxOf(r) }), [records, noBoxOf])
   const decide = useCallback(async (action: Decision, opts: { corrected?: Corrected | null; noNote?: string } = {}) => {
     const item = curRef.current
     if (!item?.id || offline || lock.current) return

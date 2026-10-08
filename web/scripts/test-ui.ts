@@ -298,6 +298,20 @@ t('D60: a photo Google no longer serves: current photo, plain label, "newer" onl
   assert.equal(swapNote(swapOf(true, null)), null)
 })
 
+t('D62: a photo with no orange box asks about the building itself, not the box', () => {
+  const item = { item_type: 'building' as const, reasons: ['building seen from one view only'] }
+  const boxQ = reviewQuestions(item, {})
+  assert.equal(boxQ.main.text, 'Does the orange box show this building?')
+  const none = reviewQuestions(item, {}, null, { noBox: true })
+  assert.equal(none.main.kind, 'box'); assert.ok(none.main.noBox); assert.ok(!/orange box/.test(none.main.text))
+  assert.ok(none.main.text.startsWith('We can’t tell which box is this building in this photo.'))
+  assert.equal(outcomeLine(none, 'yes'), 'Saved: reviewer can see this building in the photo.')
+  assert.equal(outcomeLine(boxQ, 'yes'), 'Saved: reviewer confirmed the orange box is this building.')
+  // other questions don't depend on the box
+  const reg = { item_type: 'building' as const, reasons: ['high-severity discrepancy'] }
+  assert.equal(reviewQuestions(reg, { match_status: 'no_record' }, null, { noBox: true }).main.kind, 'missing')
+})
+
 t('D61: only a verified re-issue (same image) keeps the stored view and its boxes', () => {
   const cur = { pano_id: 'N', heading: 10, pitch: 0, fov: 90, date: '2026-02', lat: 11, lon: 77, moved_m: 0.1 }
   const view = { pano_id: 'OLD', heading: 146, pitch: 22, fov: 60 }

@@ -64,7 +64,7 @@ export interface PositionCheck {
   corner: boolean; back_street: boolean; roads_checked: string
 }
 /** detection boxes on each evidence photo of an object (design pass B §2) */
-type EvidenceResponse = { views: EvidenceViewData[]; links?: BuildingLinks }
+export type EvidenceResponse = { views: EvidenceViewData[]; links?: BuildingLinks }
 /** P7.3: what the photos link to one building outline (sign boxes by their own line of sight, and the photos they are in) */
 export interface BuildingLinks { sign_boxes: number; photos: number; source: string }
 const evidenceQuery = (area: string | null, kind: 'building' | 'asset' | 'unmapped', id: string) => ({

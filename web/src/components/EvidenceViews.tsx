@@ -15,6 +15,14 @@ import { CLS_LETTER, CLS_NOUN, LETTER_KEY, tagBoxes } from '@/lib/photoTags'
 import { measureText, useFontsReady } from '@/lib/textWidth'
 import { shownView, showsBoxes, swapOf } from '@/lib/photoSwap'
 
+/** D62: no building box fits this building's visible outline well enough (M3 overlap below 0.4) */
+export const CANT_TELL = 'Can’t tell which box is this building in this photo.'
+const BOX_CHOICE_TEXT = {
+  same: 'The orange box is the building box that best covers the part of this building the camera can see (other outlines on the map hide the rest). It is also the box the analysis used.',
+  changed: 'The orange box is the building box that best covers the part of this building the camera can see (other outlines on the map hide the rest). The analysis used a different box in this photo for this building; its results are unchanged.',
+  cant_tell: 'No building box covers enough of the part of this building the camera can see (overlap below 40%), so none is marked. The analysis’ own readings are unchanged.',
+} as const
+
 /** overlay colours are fixed (they sit on photos, not on the Night / Daylight surface) */
 export const CLS_COLOR: Record<EvidenceBox['cls'], string> = { building: '#cfd6ea', pole: '#ffffff', lamp_head: '#ffc27a', signboard: '#7dcad6' }
 export const CLS_LABEL: Record<EvidenceBox['cls'], string> = { building: 'building', pole: 'pole', lamp_head: 'lamp', signboard: 'sign' }
@@ -166,8 +174,9 @@ export function EvidenceViews({ kind, id, at, target, maxPhoto = 300 }: {
       </div>
       {ok && <PhotoKey boxes={v.boxes} all={all} hidden={hidden} targetName={name} hl={hl} setHl={setHl} />}
       {ok && v.target === 'crosshair' && <p className="t-small ink2 mt-1.5">No box was found in the aimed direction: the cross marks where the camera was aimed, not a detection.</p>}
+      {ok && v.box_choice === 'cant_tell' && <p className="t-small ink2 mt-1.5" data-box-choice="cant_tell">{CANT_TELL}</p>}
       {v.user_note ? <p className="t-small ink2 mt-1.5">{v.user_note}</p>
-        : ok && v.target === 'none' && <p className="t-small ink3 mt-1.5">No box for this {kind === 'asset' ? 'object' : 'building'} in this view.</p>}
+        : ok && v.target === 'none' && v.box_choice !== 'cant_tell' && <p className="t-small ink3 mt-1.5">No box for this {kind === 'asset' ? 'object' : 'building'} in this view.</p>}
       <div className="mt-2 flex flex-wrap items-center gap-1">
         <PhotoDate date={sw.state === 'swapped' ? sw.current?.date : v.date} />
         {(views?.length ?? 0) > 1 && views!.map((x, k) => (
@@ -202,6 +211,7 @@ export function EvidenceViews({ kind, id, at, target, maxPhoto = 300 }: {
         <Fact k="This photo" hint={v.source === 'exact' ? `heading ${Math.round(v.heading)}°, pitch ${v.pitch}°, fov ${v.fov}°` : v.source === 'projected' ? `fov ${v.fov}°, projected` : undefined}>{v.source === 'exact' ? `The same photo the analysis used: facing ${Math.round(v.heading)}°, tilted ${v.pitch}°, ${v.fov}° wide.`
           : v.source === 'projected' ? `Pointed at the object (${v.fov}° wide). The boxes come from the analysis photos taken from the same spot, facing ${v.projected_from?.map((h) => `${Math.round(h)}°`).join(', ')}, redrawn into this view.`
             : 'No detector results are stored for this photo.'}</Fact>
+        {v.box_choice && <Fact k="Which box" hint="matched to the building's visible outline">{BOX_CHOICE_TEXT[v.box_choice]}</Fact>}
         {v.target === 'box' && v.aim_offset_deg != null && <Fact k="Which box">The box closest to where the camera was aimed: {v.aim_offset_deg}° from the middle of the photo</Fact>}
         {v.note && !(v.source === 'projected' && v.target === 'box') && <Fact k="Note">{v.note}</Fact>}
         <Fact k="Taken" hint="panorama capture month (Google)">{monthText(v.date) ?? 'Date not stored for this photo'}</Fact>

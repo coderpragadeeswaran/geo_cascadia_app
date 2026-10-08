@@ -145,6 +145,7 @@ npx tsx scripts/ui-polish2-shots.ts  # D59 (dev server): street list + full list
 npx tsx scripts/photo-fallback-shots.ts  # D60 (dev server): retired panoramas → current photo (drawer, pole, sign, Review, Drive), Hood note + cost lines; MODE=daylight, TAG=before|after
 npx tsx scripts/photo-browse.ts [label]  # D60 (dev server): one fixed Ward 29 click path; counts Street View photo requests and failures
 npx tsx scripts/box-restore-shots.ts     # D61 (dev server): retired photos (transport india, w1236978077), the "sign boxes" line, Hood note; MODE=daylight, TAG=before|after
+npx tsx scripts/m3-level1-shots.ts       # D62 (dev server): the orange box by M3 — #27 warehouse, #28 compound wall, #30 can't tell (drawer + Review); MODE=daylight
 backend\.venv\Scripts\python tools\audit_numbers.py    # (repo root) Ward 29 numbers straight from the database
 ```
 
@@ -240,6 +241,11 @@ panoramas) and 2 of Trichy's 223 were no longer served. Before showing a stored 
 still serves that panorama (free metadata, cached 30 days). If not, it shows Google's current photo from the same spot
 (within 25 m, aimed at the same building front, pole or sign) without the analysis' boxes, and says so; with no photo
 nearby it says "No Street View photo available here any more" and requests nothing. Re-run `tools\check_photos.py` monthly.
+
+**Which box is "this building" (D62).** The orange box on a building's Front / Best photo is the building box that best
+covers the part of the building the camera can see (other outlines hide the rest); below 40 % overlap the photo says
+"Can't tell which box is this building in this photo." Display only. Stored per area in `data/areas/<slug>/box_choice.json`;
+new worker areas get it automatically, existing ones with `backend\.venv\Scripts\python tools\box_choice.py [slug]`.
 
 **Are the replacements the same photo? (D61): no.** Re-running the production detector on 40 replacements at the stored view
 found the saved boxes shifted (median overlap 0.49, 0 of 34 judged photos passed; still-served photos: 1.00): they are
