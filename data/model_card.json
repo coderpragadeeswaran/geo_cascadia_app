@@ -103,8 +103,8 @@
   "used_uncertainty_m": [
    {
     "up_to_m": 8.0,
-    "plus_minus_m": 2.4,
-    "basis": "the pipeline's setting (D45); re-measured here: ±2.6 m (not changed)"
+    "plus_minus_m": 2.6,
+    "basis": "80th percentile (consistency)"
    },
    {
     "up_to_m": 11.0,
