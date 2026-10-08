@@ -161,7 +161,8 @@ def test_pipeline_hook_keeps_run_ocr_as_the_default():
     src = open(os.path.join(ROOT, "pipeline", "geo_cascadia", "run_area.py"), encoding="utf-8").read()
     fn = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "run_area")
     names = [a.arg for a in fn.args.args]
-    assert names[-1] == "ocr_runner" and isinstance(fn.args.defaults[-1], ast.Constant) and fn.args.defaults[-1].value is None
+    d = fn.args.defaults[names.index("ocr_runner") - (len(names) - len(fn.args.defaults))]      # D64 added a later parameter
+    assert "ocr_runner" in names and isinstance(d, ast.Constant) and d.value is None
     assert "(ocr_runner or run_ocr)(dets, cfg, out_dir, progress)" in src
 
 

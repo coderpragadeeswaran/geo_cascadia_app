@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.join(ROOT, "pipeline"))
 
 from shapely.geometry import LineString, MultiLineString, box  # noqa: E402
 
+from geo_cascadia import boxpick  # noqa: E402
 from geo_cascadia.area import Area  # noqa: E402
 from geo_cascadia.buildloc import building_rays, locate_unmapped_buildings, predict_positions  # noqa: E402
 from geo_cascadia.config import Config  # noqa: E402
@@ -65,10 +66,18 @@ def street_lines(slug, F):
     return out
 
 
+def level2(slug):
+    """D64: the run chose its building boxes with M3 (building_views.json rows carry box_rule "M3")"""
+    p = os.path.join(folder(slug), "building_views.json")
+    return os.path.isfile(p) and any(q.get("box_rule") == "M3" for q in load(slug, "building_views.json"))
+
+
 def positions(slug, cfg):
     area, dets, blds = area_model(slug, cfg)
     rays = building_rays(dets, area, ("building", "signboard"))
-    pos = predict_positions(dets, area, blds, street_lines(slug, area.frame), cfg, rays=[r for r in rays if r["cls"] == "building"])
+    # a level-2 run positions each building with its M3 box (as run_area does); older runs with today's rule
+    brays = boxpick.assign(dets, area)["rays"] if level2(slug) else [r for r in rays if r["cls"] == "building"]
+    pos = predict_positions(dets, area, blds, street_lines(slug, area.frame), cfg, rays=brays)
     free, free_stats = locate_unmapped_buildings(dets, area, cfg, rays=rays)
     return pos, free, free_stats
 

@@ -42,6 +42,9 @@ class Config:
     tilt_if_closer_m: float = 15.0
     oblique_deg: float = 35.0
     ray_max_range_m: float = 40.0
+    # D64: which building box in a photo is "this building" — "m3" (boxpick: occlusion-aware visible span; the box shown is
+    # the box read and positioned) or "m0" (pre-D64: the box whose centre line of sight hits the outline first)
+    box_rule: str = "m3"
     # D44 (validated in P7a): a sign moves off the building its photo was aimed at only when its own line of sight, and
     # the two lines this many degrees either side of it, all hit the same OTHER outline first and none touches the aimed
     # one; otherwise it stays (tools/validate_sign_links.py: vs Google pins, 4° beat the plain ray and 2°/3°)

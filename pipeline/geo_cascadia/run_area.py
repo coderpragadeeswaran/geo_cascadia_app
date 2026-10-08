@@ -8,6 +8,7 @@ from .area import Area
 from .plan import capture_plan, building_register
 from .detect import run_detection
 from .geometry import locate_assets, fuse_and_vote_streetlights, signs_by_building, building_views
+from . import boxpick
 from .buildloc import building_rays, locate_unmapped_buildings, predict_positions
 from .ocr import run_ocr
 from .vlm import VLM, run_names, run_building_attrs, finalize_buildings
@@ -27,8 +28,10 @@ def _print_progress(stage, done, total):
 
 
 def run_area(polygon, out_dir, cfg=None, area_name="area", street_filter=None, progress=None, resume=True, panos=None,
-             way_ids=None, ms_fill=True, on_stage=None, plan_check=None, ocr_runner=None):
+             way_ids=None, ms_fill=True, on_stage=None, plan_check=None, ocr_runner=None, register_records=None):
     """polygon: shapely (lon/lat) or GeoJSON geometry. street_filter: OSM street names to restrict to.
+    register_records (D64): (records with their hidden building ids, planted list) of an earlier run of the same area —
+    the same synthetic register is compared again (paired by location as always); None = make one (D42).
     panos: optional pre-discovered panorama list (skips discovery).
     on_stage(name, seconds): called when a stage finishes (P6 worker: live progress).
     plan_check(plan): called after the capture plan, BEFORE any Street View photo is fetched; it may raise to stop
@@ -94,14 +97,21 @@ def run_area(polygon, out_dir, cfg=None, area_name="area", street_filter=None, p
                                         dets, area.frame, cfg)
     assets = [a for a in assets if a.get("lat")]
     signs = signs_by_building(dets, area)
-    views = building_views(dets, area)
+    brays = building_rays(dets, area, ("building", "signboard"))
+    box_stats = None
+    if cfg.box_rule == "m3":
+        # D64: each building's box in each photo chosen by M3 (boxpick); the same box is shown, read by the cloud model and
+        # used for the position; "none" = no box and no camera position from that photo
+        m3 = boxpick.assign(dets, area)
+        save("box_pairs", m3["pairs"]); box_stats = boxpick.summary(m3["pairs"])
+        views, pos_rays = building_views(dets, area, chosen=m3["rays"]), m3["rays"]
+    else:
+        views, pos_rays = building_views(dets, area), [r for r in brays if r["cls"] == "building"]
     save("assets", assets); save("building_views", views)
     # predicted building position by the fixed rule (D27, D28): triangulated (>= 2 cameras, plausible) / wall_hit /
     # wall_centre (road-facing wall midpoint, D33) / footprint_centre.
     # lat/lon stay the footprint centroid. Same code for every area and every live street.
-    brays = building_rays(dets, area, ("building", "signboard"))
-    bpos = predict_positions(dets, area, buildings, {r["name"]: r["geom"] for r in area.streets}, cfg,
-                             rays=[r for r in brays if r["cls"] == "building"])
+    bpos = predict_positions(dets, area, buildings, {r["name"]: r["geom"] for r in area.streets}, cfg, rays=pos_rays)
     bfree, bfree_stats = locate_unmapped_buildings(dets, area, cfg, rays=brays)
     save("building_positions", {"by_building": bpos, "no_footprint": bfree, "no_footprint_stats": bfree_stats})
     stage("geometry")
@@ -148,7 +158,9 @@ def run_area(polygon, out_dir, cfg=None, area_name="area", street_filter=None, p
         register, truth = synthetic_property_register(buildings, kind, cfg)
         results, reg_unmatched, reg_pairs = match_properties(buildings, final, register, cfg), [], None
     else:
-        register, truth = observed_register(buildings, final, bpos, cfg, area_name)
+        # D64: a re-run of an analysed area can keep that area's register (records + planted list) instead of making one
+        register, truth = ([dict(r) for r in register_records[0]], list(register_records[1])) if register_records \
+            else observed_register(buildings, final, bpos, cfg, area_name)
         results, reg_unmatched, reg_pairs = match_by_location(buildings, final, hide_truth(register), bpos, cfg)
         save("planted_register_mistakes", truth)
         save("register_synthetic", register)              # with the hidden truth (building_id), for the pairing check
@@ -184,7 +196,8 @@ def run_area(polygon, out_dir, cfg=None, area_name="area", street_filter=None, p
                  "device": cfg.device, "floors_examples_found": shots_ok, "stage_seconds": T,
                  "total_minutes": round((time.time() - t0) / 60, 1),
                  "validation": cfg.validation, "planted_error_scores": planted, "asset_register_scores": asset_score,
-                 "register_matching": reg_scores, "signs_relinked": sum(1 for v in sign_links.values() if v["fp"] != v["planned"])}
+                 "register_matching": reg_scores, "signs_relinked": sum(1 for v in sign_links.values() if v["fp"] != v["planned"]),
+                 "box_choice": box_stats, "register_reused": bool(register_records)}
     dash = build_dashboard(results, A, gaps, queue, run_stats)
     dash["kpi"]["unmapped_businesses"] = len(ub)
     exp = build_export(area_name, cfg, buildings, results, views, vbld, ocr_res, A, missing, gaps, queue, dash, panos, run_stats,
