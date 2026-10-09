@@ -3,66 +3,267 @@
  "detector": {
   "production": "YOLOv8s (v8s_640_s2), 4 classes: pole, lamp_head, signboard, building",
   "test_set": "150 hand-labelled Ward 29 Street View images (never used for training), pipeline thresholds + NMS, IoU 0.5",
-  "per_class": {"pole": {"P": 0.738, "R": 0.579, "n": 209}, "lamp_head": {"P": 0.500, "R": 0.429, "n": 49},
-                "signboard": {"P": 0.397, "R": 0.558, "n": 104}, "building": {"P": 0.681, "R": 0.706, "n": 296}},
-  "weighted_F1": 0.625, "gpu_ms_per_view": 17, "cpu_ms_per_view": 320,
+  "per_class": {
+   "pole": {
+    "P": 0.738,
+    "R": 0.579,
+    "n": 209
+   },
+   "lamp_head": {
+    "P": 0.5,
+    "R": 0.429,
+    "n": 49
+   },
+   "signboard": {
+    "P": 0.397,
+    "R": 0.558,
+    "n": 104
+   },
+   "building": {
+    "P": 0.681,
+    "R": 0.706,
+    "n": 296
+   }
+  },
+  "weighted_F1": 0.625,
+  "gpu_ms_per_view": 17,
+  "cpu_ms_per_view": 320,
   "benchmark": [
-   {"model": "YOLOv8n (old)", "F1": 0.582, "pole_R": 0.488, "lamp_R": 0.327, "cpu_ms": 138},
-   {"model": "YOLOv8s (production)", "F1": 0.625, "pole_R": 0.579, "lamp_R": 0.429, "cpu_ms": 320},
-   {"model": "YOLO26n", "F1": 0.626, "pole_R": 0.555, "lamp_R": 0.388, "cpu_ms": 104},
-   {"model": "YOLO26s", "F1": 0.624, "pole_R": 0.627, "lamp_R": 0.490, "cpu_ms": 281,
-    "downstream": "full Ward 29 run: 28 streetlights vs 38 with v8s, +45 unverified poles -> rejected"}],
-  "decision": "keep YOLOv8s"},
+   {
+    "model": "YOLOv8n (old)",
+    "F1": 0.582,
+    "pole_R": 0.488,
+    "lamp_R": 0.327,
+    "cpu_ms": 138
+   },
+   {
+    "model": "YOLOv8s (production)",
+    "F1": 0.625,
+    "pole_R": 0.579,
+    "lamp_R": 0.429,
+    "cpu_ms": 320
+   },
+   {
+    "model": "YOLO26n",
+    "F1": 0.626,
+    "pole_R": 0.555,
+    "lamp_R": 0.388,
+    "cpu_ms": 104
+   },
+   {
+    "model": "YOLO26s",
+    "F1": 0.624,
+    "pole_R": 0.627,
+    "lamp_R": 0.49,
+    "cpu_ms": 281,
+    "downstream": "full Ward 29 run: 28 streetlights vs 38 with v8s, +45 unverified poles -> rejected"
+   }
+  ],
+  "decision": "keep YOLOv8s"
+ },
  "building_use": {
-  "vlm_accuracy": {"value": 0.90, "n": 29, "metric": "commercial vs residential, Ward 29 hand labels"},
-  "local_router": {"method": "CLIP ViT-B/32 embedding + logistic regression trained on the VLM's own answers (hand-labelled buildings excluded)",
-                   "ward29_heldout": {"vlm_only": 0.90, "local_only": 0.94, "routed": 0.90, "escalated": 0.23, "n": 31},
-                   "trichy_unseen": {"vlm_only": 0.92, "local_only": 0.92, "routed": 0.92, "escalated": 0.50, "n": 12},
-                   "full_ward29_run": {"local": 193, "vlm": 73, "vlm_calls_before": 782, "vlm_calls_after": 339,
-                                       "use_accuracy_before": 0.89, "use_accuracy_after": 0.89, "n": 28}},
-  "google_places_as_use_signal": {"value": 0.66, "n": 29, "decision": "rejected"}},
- "floors": {"method": "Nova Lite, 2-image few-shot (1-storey + 2-storey examples)",
-            "ward29": {"exact": 0.61, "within_1": 1.00, "baseline_exact": 0.42, "n": 36},
-            "trichy_unseen": {"exact": 0.50, "within_1": 1.00, "n": 6, "note": "mild under-count on 3+ storeys"},
-            "rejected_variants": ["3-example prompt (56% exact, bias worse)", "zoom re-shoot (44% -> 22%)", "prompt v4 (49%)"]},
- "names": {"crop_level_n31": {"routed_ocr_then_vlm": 0.74, "ocr_only": 0.71, "all_vlm": 0.65},
-           "full_view_n16": {"routed": 0.56, "all_vlm_per_view": 0.56, "cost_ratio": "13x"},
-           "google_confirmed": {"ward29": "23 of 116", "trichy_unseen": "13 of 38", "chance_rate": 0.02},
-           "vlm_only_names_confirmed": "0 of 8 -> VLM names kept only if OCR supports them (gate 0.7)",
-           "vlm_invented_names_on_non_business_crops": "6 of 15 (40%)"},
- "ocr": {"engine": "PaddleOCR English + Tamil, tiered",
-         "cpu_fast_mode": {"sec_per_crop": 0.34, "full_mode_sec_per_crop": 6.30, "routed_accuracy": 0.68, "full_routed_accuracy": 0.65, "n": 31,
-                           "crop_cap": "best 3 crops per building: 63% fewer crops, 5 of 107 names lost"}},
- "streetlights": {"vlm_lamp_check": "0 of 20 VLM 'lamp' verdicts confirmed -> rejected; detector only",
-                  "detector_no_lamp_verdict": "30 of 30 confirmed by eye"},
- "positions": {"synthetic_triangulation_error_m": "0.36-0.74",
-               "independent_camera_check_n30": {"triangulated_on_or_near": "3 of 4", "single_camera_on_or_near": "7 of 26 (27%)",
-                                                "conclusion": "single-camera assets shown as approximate and sent to review"},
-               "pin_noise_stress": {"sigma_0m": 0.978, "sigma_10m": 0.72}},
- "matching_planted_errors": {"property_geometry": {"P": 1.00, "R": 1.00},
-                             "asset": {"location_shift": {"P": 0.92, "R": 1.00}, "type_mismatch": {"P": 1.00, "R": 1.00}, "missing_asset": {"P": 1.00, "R": 0.90}},
-                             "note": "registers are SYNTHETIC with planted errors (no open municipal data exists)"},
- "withheld": {"facade_condition": "53% vs 66% always-'good' baseline (n=38) -> not shown as a result",
-              "door_numbers": "43% precision on 9 of 381 buildings -> unverified field only"},
- "generalisation": {"regression_2_streets": "plan/detections within 3% of notebook; use & floors identical 49/51",
-                    "trichy_bharathidasan_salai": {"length_km": 2.5, "buildings": 66, "assets": 87, "names": 38, "google_confirmed": 13, "vlm_usd": 0.015},
-                    "tiruppur_uthukuli_road": {"osm_footprints_on_662m": 1, "unmapped_businesses": 14, "assets": 20,
-                                               "lesson": "open building maps are missing in smaller towns -> unmapped-business fallback"}},
- "cost_time": {"ward29_full_run_gpu_minutes": 11.5, "ward29_vlm_usd_with_router": 0.056, "ward29_vlm_usd_without_router": 0.089,
-               "names_routed_vs_all_vlm_usd": {"routed": 0.0079, "all_vlm_every_view": 0.105},
-               "street_view_price_usd_per_image": 0.007,
-               "cpu_fallback_per_street_min": {"full_ocr": 18, "fast_ocr_estimate": "3-5"}},
+  "vlm_accuracy": {
+   "value": 0.9,
+   "n": 29,
+   "metric": "commercial vs residential, Ward 29 hand labels"
+  },
+  "local_router": {
+   "method": "CLIP ViT-B/32 embedding + logistic regression trained on the VLM's own answers (hand-labelled buildings excluded)",
+   "ward29_heldout": {
+    "vlm_only": 0.9,
+    "local_only": 0.94,
+    "routed": 0.9,
+    "escalated": 0.23,
+    "n": 31,
+    "source": "measured on earlier labelled photos (hand labels, n=31)"
+   },
+   "trichy_unseen": {
+    "vlm_only": 0.92,
+    "local_only": 0.92,
+    "routed": 0.92,
+    "escalated": 0.5,
+    "n": 12
+   },
+   "measured_ward29_n30": {
+    "n": 30,
+    "decided_locally": 16,
+    "routed": {
+     "use_accuracy": 0.767,
+     "use_correct": 23,
+     "floors_exact": 0.733,
+     "floors_within_1": 1.0,
+     "usd_per_building": 0.0002271,
+     "s_per_building": 1.21,
+     "cloud_calls": 44
+    },
+    "all_cloud": {
+     "use_accuracy": 0.733,
+     "use_correct": 22,
+     "floors_exact": 0.733,
+     "floors_within_1": 1.0,
+     "usd_per_building": 0.0002714,
+     "s_per_building": 1.98,
+     "cloud_calls": 60
+    },
+    "labels": "this run's buildings, use and floors labelled by viewing each building's photo (AI check by Claude Code, not a human one)",
+    "measured": "2026-10-08",
+    "machine": "AWS g4dn.xlarge (NVIDIA T4)",
+    "source": "tools/measure_routes.py on the server + tools/routing_measured.py (data/areas/ward29/routing_measured.json)"
+   }
+  },
+  "google_places_as_use_signal": {
+   "value": 0.66,
+   "n": 29,
+   "decision": "rejected"
+  }
+ },
+ "floors": {
+  "method": "Nova Lite, 2-image few-shot (1-storey + 2-storey examples)",
+  "ward29": {
+   "exact": 0.61,
+   "within_1": 1.0,
+   "baseline_exact": 0.42,
+   "n": 36,
+   "source": "measured on earlier labelled photos (hand labels, n=36)"
+  },
+  "trichy_unseen": {
+   "exact": 0.5,
+   "within_1": 1.0,
+   "n": 6,
+   "note": "mild under-count on 3+ storeys"
+  },
+  "rejected_variants": [
+   "3-example prompt (56% exact, bias worse)",
+   "zoom re-shoot (44% -> 22%)",
+   "prompt v4 (49%)"
+  ],
+  "measured_ward29_n30": {
+   "n": 30,
+   "exact": 0.733,
+   "within_1": 1.0,
+   "note": "the floors call is the same with or without the router; this run's answers vs labels made by viewing the photos (AI check)"
+  }
+ },
+ "names": {
+  "crop_level_n31": {
+   "routed_ocr_then_vlm": 0.74,
+   "ocr_only": 0.71,
+   "all_vlm": 0.65
+  },
+  "full_view_n16": {
+   "routed": 0.56,
+   "all_vlm_per_view": 0.56,
+   "cost_ratio": "13x"
+  },
+  "google_confirmed": {
+   "ward29": "21 of 148",
+   "trichy_unseen": "13 of 38",
+   "chance_rate": 0.02
+  },
+  "vlm_only_names_confirmed": "0 of 8 -> VLM names kept only if OCR supports them (gate 0.7)",
+  "vlm_invented_names_on_non_business_crops": "6 of 15 (40%)",
+  "crop_level_n31_source": "measured on earlier labelled photos (hand labels, n=31)"
+ },
+ "ocr": {
+  "engine": "PaddleOCR English + Tamil, tiered",
+  "cpu_fast_mode": {
+   "sec_per_crop": 0.34,
+   "full_mode_sec_per_crop": 6.3,
+   "routed_accuracy": 0.68,
+   "full_routed_accuracy": 0.65,
+   "n": 31,
+   "crop_cap": "best 3 crops per building: 63% fewer crops, 5 of 107 names lost"
+  }
+ },
+ "streetlights": {
+  "vlm_lamp_check": "0 of 20 VLM 'lamp' verdicts confirmed -> rejected; detector only",
+  "detector_no_lamp_verdict": "30 of 30 confirmed by eye"
+ },
+ "positions": {
+  "synthetic_triangulation_error_m": "0.36-0.74",
+  "independent_camera_check_n30": {
+   "triangulated_on_or_near": "3 of 4",
+   "single_camera_on_or_near": "7 of 26 (27%)",
+   "conclusion": "single-camera assets shown as approximate and sent to review"
+  },
+  "pin_noise_stress": {
+   "sigma_0m": 0.978,
+   "sigma_10m": 0.72
+  }
+ },
+ "matching_planted_errors": {
+  "property_geometry": {
+   "P": 1.0,
+   "R": 1.0
+  },
+  "asset": {
+   "location_shift": {
+    "P": 0.92,
+    "R": 1.0
+   },
+   "type_mismatch": {
+    "P": 1.0,
+    "R": 1.0
+   },
+   "missing_asset": {
+    "P": 1.0,
+    "R": 0.9
+   }
+  },
+  "note": "registers are SYNTHETIC with planted errors (no open municipal data exists)"
+ },
+ "withheld": {
+  "facade_condition": "53% vs 66% always-'good' baseline (n=38) -> not shown as a result",
+  "door_numbers": "43% precision (door numbers read on 9 buildings) -> unverified field only"
+ },
+ "generalisation": {
+  "regression_2_streets": "plan/detections within 3% of notebook; use & floors identical 49/51",
+  "trichy_bharathidasan_salai": {
+   "length_km": 2.5,
+   "buildings": 66,
+   "assets": 87,
+   "names": 38,
+   "google_confirmed": 13,
+   "vlm_usd": 0.015
+  },
+  "tiruppur_uthukuli_road": {
+   "osm_footprints_on_662m": 1,
+   "unmapped_businesses": 14,
+   "assets": 20,
+   "lesson": "open building maps are missing in smaller towns -> unmapped-business fallback"
+  }
+ },
+ "cost_time": {
+  "ward29_full_run_gpu_minutes": 9.8,
+  "names_routed_vs_all_vlm_usd": {
+   "routed": 0.0079,
+   "all_vlm_every_view": 0.105
+  },
+  "street_view_price_usd_per_image": 0.007,
+  "cpu_fallback_per_street_min": {
+   "full_ocr": 18,
+   "fast_ocr_estimate": "3-5"
+  },
+  "ward29_full_run_images": 1343,
+  "ward29_full_run_where": "AWS g4dn.xlarge (NVIDIA T4), the worker's claim to upload, 8 Oct 2026",
+  "ward29_vlm_usd_run": 0.0606,
+  "ward29_vlm_calls_run": 534
+ },
  "single_camera_by_distance": {
   "_note": "Single-camera pole/streetlight position error by camera distance: for poles triangulated from 2+ cameras, each camera's own estimate vs the triangulated point (a consistency check, not surveyed truth). Only poles two cameras agreed on are in the sample, so far-off single estimates are under-represented and real errors can be larger. tools/pole_uncertainty.py.",
-  "generated": "2026-10-01",
-  "n": 63,
+  "generated": "2026-10-08",
+  "n": 71,
   "samples_per_area": {
+   "rathinapuri_sanganoor_main_road_9520da": 7,
    "sanganur_road_086d14": 3,
    "tiruppur_uthukuli_road": 0,
    "trichy_bharathidasan_salai": 4,
+   "unnamed_road_between_bharathiar_road_and_923057": 2,
+   "unnamed_road_near_5th_street_6eeca4": 0,
    "unnamed_road_off_4th_street_5772fa": 0,
+   "unnamed_road_off_kattabomman_street_295e9b": 2,
    "vadakku_masi_veethi_f17937": 4,
-   "ward29": 52
+   "ward29": 49
   },
   "bands": [
    {
@@ -70,9 +271,9 @@
      0,
      8
     ],
-    "n": 20,
+    "n": 26,
     "median_m": 1.28,
-    "p80_m": 2.39,
+    "p80_m": 2.58,
     "surveyed_median_m": 1.64
    },
    {
@@ -80,9 +281,9 @@
      8,
      11
     ],
-    "n": 11,
-    "median_m": 1.93,
-    "p80_m": 3.51,
+    "n": 14,
+    "median_m": 1.56,
+    "p80_m": 2.97,
     "surveyed_median_m": 4.55
    },
    {
@@ -90,16 +291,16 @@
      11,
      15
     ],
-    "n": 32,
-    "median_m": 1.57,
-    "p80_m": 3.03,
+    "n": 31,
+    "median_m": 1.54,
+    "p80_m": 3.85,
     "surveyed_median_m": 4.55
    }
   ],
   "used_uncertainty_m": [
    {
     "up_to_m": 8.0,
-    "plus_minus_m": 2.4,
+    "plus_minus_m": 2.6,
     "basis": "80th percentile (consistency)"
    },
    {
@@ -1087,7 +1288,7 @@
     "status": "computed before D33 (old fallback); not re-run"
    },
    "ward29": {
-    "status": "not re-run for the Oct 2026 Ward 29 run (it needs paid Google look-ups); the Sep 2026 run's result stays with that run (ward29_v1, hidden backup)"
+    "status": "not run for this Ward 29 analysis (it needs paid Google look-ups)"
    }
   }
  },
@@ -1095,20 +1296,73 @@
   "rule": "A shop sign belongs to the building outline its own line of sight hits (from the camera through the sign box). It moves off the outline the photo was aimed at only when that line, and the lines 4 degrees either side, all hit the same other outline and none touches the aimed one (D44).",
   "margin_deg": 4,
   "ward29": {
-   "sign_crops": 2065,
-   "moved": 570,
-   "read_signs": 820,
-   "read_moved": 214,
+   "sign_crops": 2031,
+   "moved": 523,
+   "read_signs": 819,
+   "read_moved": 194,
    "google_check": {
-    "moved_read_signs_with_google_pin": 30,
-    "closer": 14,
+    "moved_read_signs_with_google_pin": 29,
+    "closer": 8,
     "further": 6,
     "same_within_1m": 1,
-    "to_or_from_no_outline": 9,
-    "median_change_m": -3.5
+    "to_or_from_no_outline": 14,
+    "median_change_m": -1.7
    }
   },
   "note": "Agreement check against Google Maps pins for the same business name (pins are Google's, not surveyed): is the sign's building nearer to the pin under the new rule than under the old aimed-photo rule?",
-  "source": "tools/validate_sign_links.py data/areas/ward29 (saved files only), 1 Oct 2026"
+  "source": "tools/validate_sign_links.py data/areas/ward29 (saved files only), 9 Oct 2026"
+ },
+ "latency_per_item": {
+  "machine": "AWS g4dn.xlarge (NVIDIA T4)",
+  "measured": "2026-10-08",
+  "rows": [
+   {
+    "step": "Find objects in a photo",
+    "model": "YOLOv8s",
+    "route": "local",
+    "unit": "photo",
+    "s": 0.0103,
+    "n": 30,
+    "where": "AWS g4dn.xlarge (NVIDIA T4), GPU"
+   },
+   {
+    "step": "Read a sign crop",
+    "model": "PaddleOCR (full, English + Tamil)",
+    "route": "local",
+    "unit": "sign crop",
+    "s": 0.1396,
+    "n": 72,
+    "where": "AWS g4dn.xlarge (NVIDIA T4), GPU"
+   },
+   {
+    "step": "Building use, local",
+    "model": "CLIP + logistic regression",
+    "route": "local",
+    "unit": "building",
+    "s": 0.0078,
+    "n": 30,
+    "where": "AWS g4dn.xlarge (NVIDIA T4), GPU",
+    "note": "+ 3.354 s to load the model once per run"
+   },
+   {
+    "step": "Building use, cloud",
+    "model": "Amazon Nova Lite",
+    "route": "cloud",
+    "unit": "building",
+    "s": 0.89,
+    "n": 30,
+    "where": "AWS Bedrock (ap-south-1), called from the server"
+   },
+   {
+    "step": "Floors, cloud (3 images per call)",
+    "model": "Amazon Nova Lite",
+    "route": "cloud",
+    "unit": "building",
+    "s": 1.087,
+    "n": 30,
+    "where": "AWS Bedrock (ap-south-1), called from the server"
+   }
+  ],
+  "source": "tools/measure_routes.py: median seconds per item on the 30 sampled buildings' photos"
  }
 }

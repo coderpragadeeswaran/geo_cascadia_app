@@ -63,7 +63,7 @@ class Config:
     # 80th percentile of the single-camera error of triangulated poles (63 estimates, 6 areas; a consistency check) and
     # the notebook's surveyed median for that distance rounded up to 0.5 m (8–15 m: 4.55 m → 5.0), made non-decreasing
     # with distance (tools/pole_uncertainty.py, which also writes model_card.json "single_camera_by_distance").
-    single_cam_unc_bands: tuple = ((8.0, 2.4), (11.0, 5.0), (15.0, 5.0))
+    single_cam_unc_bands: tuple = ((8.0, 2.6), (11.0, 5.0), (15.0, 5.0))   # D65: 0-8 m re-measured (n=71): 2.4 -> 2.6
 
     # ---- OCR ----
     ocr_min_conf: float = 0.55

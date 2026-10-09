@@ -251,7 +251,8 @@ def test_hood_timings_flagged_as_resumed(offline):
     mc = json.load(open(os.path.join(ROOT, "data", "model_card.json"), encoding="utf-8"))
     vlm = next(x for x in c["lines"] if x["key"] == "vlm")
     # P8 (D50): the model card's $0.056 left out the name and business-sign checks; the line is the like-for-like recount
-    assert vlm["status"] == "computed" and abs(vlm["value"] - 0.0702) < 0.0005 and vlm["value"] != mc["cost_time"]["ward29_vlm_usd_with_router"]
+    assert vlm["status"] == "computed" and abs(vlm["value"] - 0.0702) < 0.0005
+    assert "ward29_vlm_usd_with_router" not in mc["cost_time"]          # D65: the old run's figure left the model card
     t = offline.get("/areas/tiruppur_uthukuli_road/hood").json()["cost"]
     assert next(x for x in t["lines"] if x["key"] == "vlm")["status"] == "not recorded"
 

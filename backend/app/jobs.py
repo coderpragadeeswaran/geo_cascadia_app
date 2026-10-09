@@ -119,6 +119,10 @@ def stage_info(status, stage, done, total):
 
 def _job(r):
     inp = dict(r[2] or {})
+    if isinstance(inp.get("estimate"), dict) and "rates" in inp["estimate"]:
+        # D65: the estimate's technical rates (with the basis of the day, e.g. an earlier Ward 29 run's figures) are not
+        # shown anywhere; the plain basis the person saw stays
+        inp["estimate"] = {k: v for k, v in inp["estimate"].items() if k != "rates"}
     stage_no, stage_count, progress = stage_info(r[3], r[4], r[5], r[6])
     return {"id": str(r[0]), "kind": r[1], "input": inp, "street": streetpick.plain_name(inp.get("street") or inp.get("name")),
             "status": r[3], "display_status": display_status(r[3], r[7], r[15], r[19]), "is_test": bool(r[14]),

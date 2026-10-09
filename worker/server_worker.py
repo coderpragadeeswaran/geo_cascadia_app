@@ -76,7 +76,7 @@ def load_cell():
 
 def install(g):
     os.makedirs(WORK_DIR, exist_ok=True)
-    g.update(WORK_DIR=WORK_DIR, SAVE_TO_DRIVE=False, OCR_SELF_TEST=True, OCR_PYTHON=OCR_PYTHON)
+    g.update(WORK_DIR=WORK_DIR, SAVE_TO_DRIVE=False, KEEPS_JOB_FILES=True, OCR_SELF_TEST=True, OCR_PYTHON=OCR_PYTHON)
     seen = {"aws": None}
 
     def ask(prompt, secret=False, default=None, compact=True):

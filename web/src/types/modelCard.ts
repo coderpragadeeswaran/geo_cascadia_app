@@ -31,7 +31,9 @@ export function makeModelCardSchemas(mode: SchemaMode) {
     }),
     floors: obj({
       method: Text, // PRODUCTION variant (route tier3_vlm_fewshot)
-      ward29: obj({ exact: z.number(), within_1: z.number(), baseline_exact: z.number(), n: z.number() }),
+      ward29: obj({ exact: z.number(), within_1: z.number(), baseline_exact: z.number(), n: z.number(), source: Text.optional() }),
+      // D65: 30 of the current run's buildings, labelled by viewing the photos (AI check)
+      measured_ward29_n30: obj({ n: z.number(), exact: z.number(), within_1: z.number(), note: Text }).optional(),
       trichy_unseen: obj({ exact: z.number(), within_1: z.number(), n: z.number(), note: Text.optional() }),
       rejected_variants: z.array(Text), // shown separately from production (D5)
     }),
@@ -48,12 +50,16 @@ export function makeModelCardSchemas(mode: SchemaMode) {
     generalisation: z.record(z.string(), z.union([Text, z.record(z.string(), NumOrText)])),
     cost_time: obj({
       ward29_full_run_gpu_minutes: z.number(),
-      ward29_vlm_usd_with_router: z.number(),
-      ward29_vlm_usd_without_router: z.number(),
+      // D65: the current Ward 29 run (the server's T4; claim to upload) and its whole cloud-AI bill
+      ward29_full_run_images: z.number().optional(), ward29_full_run_where: Text.optional(),
+      ward29_vlm_usd_run: z.number().optional(), ward29_vlm_calls_run: z.number().optional(),
       names_routed_vs_all_vlm_usd: obj({ routed: z.number(), all_vlm_every_view: z.number() }),
       street_view_price_usd_per_image: z.number(),
       cpu_fallback_per_street_min: z.record(z.string(), NumOrText),
     }),
+    // D65: seconds per item for every route, measured on the analysis server (tools/measure_routes.py)
+    latency_per_item: obj({ machine: Text, measured: z.string(), source: Text,
+      rows: z.array(obj({ step: Text, model: Text, route: z.enum(['local', 'cloud']), unit: Text, s: z.number().nullable(), n: z.number().nullable(), where: Text, note: Text.optional() })) }).optional(),
     // D45: single-camera pole error by camera distance (tools/pole_uncertainty.py)
     single_camera_by_distance: obj({
       _note: Text, generated: z.string(), n: z.number(), samples_per_area: z.record(z.string(), z.number()),

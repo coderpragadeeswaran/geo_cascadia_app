@@ -26,7 +26,8 @@ from geo_cascadia.signlink import box_bearing, link_signs, relink_ocr  # noqa: E
 
 CFG = Config()
 ALL = sorted(d for d in os.listdir(os.path.join(ROOT, "data", "areas"))
-             if os.path.isfile(os.path.join(ROOT, "data", "areas", d, "export.json")))
+             if os.path.isfile(os.path.join(ROOT, "data", "areas", d, "export.json"))
+             and not os.path.isfile(os.path.join(ROOT, "data", "areas", d, "hidden.json")))   # D65: a hidden backup is kept as it was
 LAT0, LON0 = 11.03, 76.97
 F = Frame(LAT0, LON0)
 
@@ -229,7 +230,12 @@ def test_uncertainty_grows_with_distance_and_matches_model_card():
     with open(os.path.join(ROOT, "data", "model_card.json"), encoding="utf-8") as f:
         mc = json.load(f)
     block = mc["single_camera_by_distance"]
-    assert fitted(block["bands"]) == tuple(CFG.single_cam_unc_bands)
+    # D65: the table shows the circles the map draws (the pipeline's setting); a re-measurement that fits differently is
+    # stated next to it, never silently used
+    used = tuple((u["up_to_m"], u["plus_minus_m"]) for u in block["used_uncertainty_m"])
+    assert used == tuple(CFG.single_cam_unc_bands)
+    for (u, v), f, row in zip(used, fitted(block["bands"]), block["used_uncertainty_m"]):
+        assert (u, v) == f or f"re-measured here: ±{f[1]} m" in row["basis"]
     assert all(r["n"] >= 10 for r in block["bands"]) and block["n"] == sum(r["n"] for r in block["bands"])
 
 
@@ -247,7 +253,7 @@ def test_map_circle_radius_is_the_asset_uncertainty(offline):
     feats = offline.get("/areas/ward29/geojson?layers=assets").json()["features"]
     by = {a["id"]: a for a in raw_export("ward29")["assets"]}
     assert all(f["properties"]["uncertainty_m"] == by[f["properties"]["id"]]["uncertainty_m"] for f in feats)
-    assert {f["properties"]["uncertainty_m"] for f in feats if f["properties"]["approximate"]} >= {2.4, 5.0}
+    assert {f["properties"]["uncertainty_m"] for f in feats if f["properties"]["approximate"]} >= {2.6, 5.0}   # D65: 0-8 m ±2.6 m
 
 
 # ------------------------------------------------------------------------------------------------ reloads keep decisions

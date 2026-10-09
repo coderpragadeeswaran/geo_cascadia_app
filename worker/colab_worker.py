@@ -18,6 +18,7 @@ WORK_DIR = None                 # where job files are kept (None: /content/gc_jo
 CPU_OCR_MODE = "fast"           # on a CPU, sign reading uses the fast mode (a few crops per building); "full" = all crops
 SAVE_TO_DRIVE = True            # with Drive mounted, each street's progress is saved there after every stage, so a restarted
 DRIVE_JOBS_DIR = "/content/drive/MyDrive/gc_worker_jobs"   # worker on the same account continues (no photo bought twice)
+KEEPS_JOB_FILES = False         # the server worker (D63) keeps each job's files on disk, so an interrupted street continues there
 OCR_SELF_TEST = "ask"           # at start: load the sign reader once, read one test image, free it. "ask" | True | False
 OVERPASS_RETRY_S = (30, 60, 120)  # OpenStreetMap busy at the area stage: wait this long and try again, then fail (Retry)
 OCR_PYTHON = None               # the Python that runs the sign-reading process (None: this one; the AWS server, D63, uses its own Paddle venv)
@@ -1046,7 +1047,9 @@ def main():
     print(f"Worker ready on {dev.upper()} ({platform.node() or 'this machine'}).",
           f"CPU: sign reading uses the {CPU_OCR_MODE} mode." if dev == "cpu" else "",
           "Progress is saved to Drive per street." if SAVE_TO_DRIVE and os.path.isdir(DRIVE_JOBS_DIR.rsplit("/", 1)[0])
-          else "Drive is not mounted: an interrupted street starts again from the beginning.", "Waiting for a street...")
+          else f"Progress is kept on this machine ({WORK_DIR}): an interrupted street continues from its saved stages."
+          if KEEPS_JOB_FILES else "Drive is not mounted: an interrupted street starts again from the beginning.",
+          "Waiting for a street...")
     resume = None                                                   # after fresh AWS keys: claim that same job again
 
     def beat():

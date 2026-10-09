@@ -51,7 +51,7 @@ def _slug_key(s):
 class RunFiles:
     """The run files of each area, loaded once per file change (small slices only)."""
     NAMES = ("panos", "plan", "plan_anomalies", "_views_done", "detections", "ocr", "building_views", "vlm_unmapped",
-             "live_run", "sign_links", "vlm_buildings", "vlm_names")
+             "live_run", "sign_links", "vlm_buildings", "vlm_names", "routing_measured")
 
     def __init__(self, areas_dir):
         self.dir = areas_dir

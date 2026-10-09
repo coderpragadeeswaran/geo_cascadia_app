@@ -60,6 +60,19 @@ export interface Routing {
   model_card_check: { stored_with: number; stored_without: number; stored_calls_with: number; stored_calls_without: number; computed_with: number | null
     computed_calls_with: number; computed_without: number | null; computed_calls_without: number | null; names_and_signs_calls: number; why: string } | null
   street_view: { photos: number; usd_per_photo: number | null; usd: number | null }
+  /** D65: cloud model on everything vs routed, measured on a labelled sample (replaces the estimates when present) */
+  measured: RoutingMeasured | null
+}
+export interface MeasuredPath { label: string; source: string; n: number; use_correct: number; use_accuracy: number | null; use_no_answer: number
+  floors_n: number; floors_exact: number | null; floors_within_1: number | null; floors_no_answer: number
+  usd_per_building: number; usd_sample: number; cloud_calls: number; s_per_building: number; s_per_building_mean: number }
+export interface LatencyRow { step: string; model: string; route: 'local' | 'cloud'; unit: string; s: number | null; n: number | null; where: string; note?: string }
+export interface RoutingMeasured {
+  measured: string; machine: string; n: number; routed_decided_locally: number
+  sample: { rule: string; seed: number; labeller: string; labelled: string }
+  paths: { routed: MeasuredPath; all_cloud: MeasuredPath }
+  latency: LatencyRow[]
+  spend: { street_view_photos: number; street_view_usd: number; nova_usd: number; nova_calls: number }
 }
 export interface HoodBox { cls: 'building' | 'pole' | 'lamp_head' | 'signboard'; conf: number; x1: number; y1: number; x2: number; y2: number; geom_ok: boolean; target: boolean }
 export interface HoodExample {

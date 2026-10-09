@@ -1,0 +1,190 @@
+{
+ "seed": 20261009,
+ "rule": "stratified by use route x use category x floors (1/2/3+), round robin, streets spread; buildings with an analysis photo and a floor count",
+ "ids": [
+  "w1251626341",
+  "w1236978077",
+  "w1252504509",
+  "w1247745303",
+  "w1247745321",
+  "w1252504638",
+  "w1236978680",
+  "w1247745339",
+  "w1247745338",
+  "w1252504103",
+  "w1236978576",
+  "w1252506259",
+  "w1247745336",
+  "w1236978653",
+  "w1251626332",
+  "w1251626330",
+  "w1251630440",
+  "w1236978349",
+  "w1236978266",
+  "w1247745207",
+  "w1251626539",
+  "w1247745057",
+  "w1236977959",
+  "w1236978683",
+  "w1252504169",
+  "w1236977934",
+  "w1247745114",
+  "w1252504807",
+  "w1247745351",
+  "w1247745301"
+ ],
+ "labels": {
+  "w1251626341": {
+   "use": "commercial",
+   "floors": 1,
+   "note": "vegetable shop shack"
+  },
+  "w1236978077": {
+   "use": "residential",
+   "floors": 2,
+   "note": "house at the photo edge behind a car"
+  },
+  "w1252504509": {
+   "use": "commercial",
+   "floors": 3,
+   "note": "shutters on the ground floor, 2 floors above"
+  },
+  "w1247745303": {
+   "use": "other",
+   "floors": 1,
+   "note": "pallet yard / industrial shed"
+  },
+  "w1247745321": {
+   "use": "other",
+   "floors": 2,
+   "note": "building under construction"
+  },
+  "w1252504638": {
+   "use": "residential",
+   "floors": 1,
+   "note": "single-storey house"
+  },
+  "w1236978680": {
+   "use": "residential",
+   "floors": 2,
+   "note": "house"
+  },
+  "w1247745339": {
+   "use": "residential",
+   "floors": 2,
+   "note": "corner house"
+  },
+  "w1247745338": {
+   "use": "commercial",
+   "floors": 1,
+   "note": "workshop / office with a business sign"
+  },
+  "w1252504103": {
+   "use": "commercial",
+   "floors": 2,
+   "note": "shop row (the box covers a street umbrella in front of it)"
+  },
+  "w1236978576": {
+   "use": "commercial",
+   "floors": 4,
+   "note": "office / industrial block"
+  },
+  "w1252506259": {
+   "use": "other",
+   "floors": 1,
+   "note": "industrial shed"
+  },
+  "w1247745336": {
+   "use": "other",
+   "floors": 2,
+   "note": "institutional / utility building behind a wall"
+  },
+  "w1236978653": {
+   "use": "residential",
+   "floors": 1,
+   "note": "low old building behind a wall (unsure)"
+  },
+  "w1251626332": {
+   "use": "other",
+   "floors": 1,
+   "note": "temple"
+  },
+  "w1251626330": {
+   "use": "commercial",
+   "floors": 3,
+   "note": "shops below, 2 floors above"
+  },
+  "w1251630440": {
+   "use": "commercial",
+   "floors": 2,
+   "note": "mobile shop on the ground floor"
+  },
+  "w1236978349": {
+   "use": "commercial",
+   "floors": 3,
+   "note": "narrow shop building, 2 floors above"
+  },
+  "w1236978266": {
+   "use": "commercial",
+   "floors": 4,
+   "note": "xerox shop below, 3 floors above"
+  },
+  "w1247745207": {
+   "use": "other",
+   "floors": 1,
+   "note": "industrial shed (Sri Lakshmi Industries)"
+  },
+  "w1251626539": {
+   "use": "other",
+   "floors": 2,
+   "note": "long 2-storey institutional / office building"
+  },
+  "w1247745057": {
+   "use": "residential",
+   "floors": 1,
+   "note": "old tiled shed / house (unsure)"
+  },
+  "w1236977959": {
+   "use": "residential",
+   "floors": 2,
+   "note": "house"
+  },
+  "w1236978683": {
+   "use": "residential",
+   "floors": 2,
+   "note": "apartment building"
+  },
+  "w1252504169": {
+   "use": "other",
+   "floors": 1,
+   "note": "sheet-metal shed"
+  },
+  "w1236977934": {
+   "use": "residential",
+   "floors": 1,
+   "note": "single-storey house"
+  },
+  "w1247745114": {
+   "use": "commercial",
+   "floors": 3,
+   "note": "shops below, 2 floors above"
+  },
+  "w1252504807": {
+   "use": "commercial",
+   "floors": 1,
+   "note": "workshop selling block-making machines"
+  },
+  "w1247745351": {
+   "use": "other",
+   "floors": 2,
+   "note": "play school"
+  },
+  "w1247745301": {
+   "use": "other",
+   "floors": 1,
+   "note": "small shed"
+  }
+ },
+ "labeller": "Claude Code, by viewing each building's analysis photo with the analysed box (an AI check, not a human one), before seeing any model output; use as commercial (incl. mixed) / residential / other; floors counted with the ground floor as 1",
+ "labelled": "2026-10-09"
+}

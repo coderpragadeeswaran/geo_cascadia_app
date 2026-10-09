@@ -688,4 +688,121 @@
 
 ---
 
+## 9 Oct 2026 · D65 — Before the 11 Oct review: measured routed vs all-cloud, time per step, no trace of the old Ward 29, camera-only inside the area, ±2.6 m pole circles
+
+### What
+1. **Cloud model on everything vs routed, measured** (requirement: cost AND accuracy). 30 buildings of the current Ward 29
+   run (stratified by use route × use × floors, every street; fixed seed), use and floors labelled by viewing each
+   building's analysis photo before any model output was seen (an AI check by Claude Code, not a human one;
+   `data/measure/ward29_routing_sample.json`). On the server the same photos went through the pipeline's own "router off"
+   path (every building's use and floors to Nova Lite); the routed answers are the run's own.
+2. **Time per step** (requirement: show latency), measured on the server's T4 on the same photos: YOLO, OCR, the local
+   use model (CLIP), and both Nova calls.
+3. Both replace the estimates in **Under the Hood › Routing and cost** (a measured table with n = 30 and a time-per-step
+   table; the "no local router" and "every photo" estimates are no longer shown when a measurement exists) and feed the
+   **cost panel on Trust** and the model card.
+4. **No trace of the old Ward 29** in any page, tooltip, tour step, Hood / Trust text, report / Excel / GIS or the API
+   answers the pages use (list below). `ward29_v1` stays only as the hidden backup.
+5. **Camera-only buildings** are counted and shown only inside the area's boundary (the analysed buildings' rule), in every
+   area.
+6. **Pole / streetlight circles 0–8 m: ±2.4 m → ±2.6 m** (owner decision): the re-measured 80th percentile (n = 71), so
+   the map and Trust agree; re-applied to every area.
+7. **Hand-label figures** (use n = 31, floors n = 36, sign names n = 31) are labelled "measured on earlier labelled
+   photos"; where today's 30-building measurement covers the same thing (use, floors) its numbers are shown next to them.
+8. **Worker start line** on the server: "Progress is kept on this machine (…): an interrupted street continues from its
+   saved stages." (it wrongly said the street starts again from the beginning).
+
+### Key numbers (measured 8 Oct 2026, AWS g4dn.xlarge, n = 30)
+| | As run (routed) | Cloud model on everything |
+|---|---|---|
+| Building use right | 77 % (23 of 30) | 73 % (22 of 30) |
+| Floors exactly right / within one | 73 % / 100 % | 73 % / 100 % (the same call) |
+| Cloud cost per building | $0.000227 | $0.000271 |
+| Time per building (median, steps in sequence) | 1.21 s | 1.98 s |
+| Cloud calls for the 30 | 44 (16 decided locally) | 60 |
+
+| Step | Route | Time each (median) | n |
+|---|---|---|---|
+| Find objects in a photo (YOLOv8s) | local, T4 GPU | 10 ms per photo | 30 |
+| Read a sign crop (PaddleOCR full, en + ta) | local, T4 GPU | 140 ms per crop | 72 |
+| Building use (CLIP + logistic regression) | local, T4 GPU | 8 ms per building (+ 3.4 s to load once per run) | 30 |
+| Building use (Nova Lite) | cloud | 0.89 s per building | 30 |
+| Floors (Nova Lite, 3 images) | cloud | 1.09 s per building | 30 |
+
+- Earlier labelled photos (unchanged): use routed 90 % vs cloud-only 90 % (n = 31); floors 61 % exact (n = 36).
+- The run as a whole (model card cost_time): 9.8 min for 1,343 photos on the server's T4 (claim to upload); cloud AI
+  $0.0606 for 534 calls.
+- **Camera-only buildings, inside the area:** Ward 29 47 → **9**, Tiruppur 12 → **11**; Trichy 79, Vadakku Masi Veethi 4,
+  Sanganur Road 2, Rathinapuri 1, the four short streets 0 (unchanged).
+- **Pole circles:** 0–8 m ±2.6 m; 128 Ward 29 assets (of 243 single-camera ones) and 84 in the other areas changed circle;
+  8–15 m unchanged (±5 m).
+
+### Old Ward 29 traces removed or replaced
+- Trust › Stored vs computed: the backup's model-card rows ("Ward 29, Sep 2026 run", $0.056 / 339 / 782 calls) — removed.
+- Trust › Tried and dropped: "every building to the VLM 782 calls / local router 339 calls (n = 28)" → this run's measured
+  rows (n = 30); model card `full_ward29_run`, `ward29_vlm_usd_with/without_router` ($0.056 / $0.089) removed.
+- Cost panel: "VLM spend (Ward 29, Sep 2026 run)", "Ward 29 full run (Sep 2026, Colab T4) 11.5 GPU min" → this run's
+  measured comparison, time per step and "9.8 min · 1,343 photos (server GPU)".
+- Analyse estimate basis ("1,420 images in 11.5 min", "1,420 images over 10 streets") → this run (1,343 in 9.8 min); old
+  jobs' stored technical rates are no longer sent by the API (the plain estimate text people saw stays).
+- Trust: "door numbers 43 % precision on 9 of 381 buildings" → "(door numbers read on 9 buildings)"; "names also found on
+  Google (Ward 29) 23 of 116" → 21 of 148 (this run); Gate 1's Google-pin note no longer names the backup.
+- Trust › Which building a sign belongs to: the sign-link check (2,065 crops / 570 moved) → this run (2,031 / 523; Google
+  pins 8 closer, 6 further, 1 same, 14 to or from no outline) and a new 20-sign spot-check with a new AI first pass (11
+  right, 1 wrong, 8 can't tell; 8 not shop signs; 20 Street View photos).
+- Trust › Pole positions: the table re-measured without the backup (n = 71; Ward 29's 49 samples are this run's).
+- Explore / Hood / report: "+ 47 seen only by camera" → "+ 9".
+- Tools that list areas skip a hidden area (`building_positions.area_slugs`, `pole_uncertainty.py`).
+- Not changed: model-card accuracy figures on earlier labelled photos (now labelled so); the Google billing line (a billing
+  period, not the run).
+
+### How it works
+- `tools/measure_routes.py` (server, worker user and venv; `tools\deploy\measure_routes.ps1`): one Street View fetch per
+  sampled building, then `vlm.run_building_attrs(router=None)` with every Nova call timed, `UseRouter.predict` timed (one
+  call with 1 crop = the load, one with all), YOLO with the pipeline's predict settings, OCR in the Paddle venv on the
+  sign boxes YOLO finds; photos in a temp folder deleted at the end. `tools/routing_measured.py` (laptop) scores both
+  paths against the labels and writes `data/areas/ward29/routing_measured.json`; `routing.py` uses it when present.
+- Time per building = the steps in sequence (router + cloud use call when unsure + floors call; or use call + floors call);
+  the analysis runs four cloud calls at a time, so a whole run is faster than the sum.
+- Camera-only: `camonly.points` keeps the points inside the polygon the loader uses for the area (study area or streets
+  buffered 40 m); the map layer, the counts, Hood and the report all use it.
+- Pole circles: `config.single_cam_unc_bands` (0–8 m 2.6); `tools/reapply_pole_bands.py` re-applied it to the saved areas
+  from their stored camera distances (hidden backup untouched); `tools/pole_uncertainty.py --write` shows the setting as the
+  measurement.
+
+### Limits
+- 30 buildings: one building moves a result by about 3 points; routed 77 % vs 73 % is one building apart.
+- The labels are one AI labeller's (Claude Code), not a person's; two of them were marked unsure.
+- Both paths' floors come from the same prompt; the cloud model is not fully deterministic, but here every floor answer
+  agreed.
+- Time per building is a median over the sample's photos at the time of measuring (AWS Bedrock latency varies).
+- The measurement took three server runs (the first two failed on folder permissions in the local steps; their photos were
+  bought again): 90 Street View photos ($0.63 at list price), 60 Nova calls ($0.0081).
+
+### Checks and live (9 Oct)
+- Backend 531 passed, 1 skipped (after the intended updates listed under Files); typecheck, build, test:ui 25, check:data
+  and the audit (both themes) pass; regression ALL PASSED, 0 retries, no expected answer changed
+  (`run-2026-10-08_2358.log`).
+- Live (http://65.1.253.18/, release `a7278ec`): Explore shows "373 buildings checked + 9 seen only by camera"; Under the
+  Hood › Routing and cost shows the measured table and the time per step; Trust's cost panel shows this run's numbers; a
+  "Differ from register" drawer shows a fresh photo with one orange box; no page errors, both themes
+  (`docs/screenshots/prereview/live/`). The worker's journal shows the new start line.
+- Server: stopped before the round (status.ps1: "stopped"); used 17:53–18:09 UTC (measurement) and about 18:47–19:00 UTC
+  (deploy and live check), ≈ 30 min, ≈ $0.29. The EC2 keys expired during the final stop: the stop request was accepted
+  ("waiting for 'stopped'") and the site and SSH stopped answering; status.ps1 needs fresh keys to show "stopped".
+
+### Files changed
+- Pipeline: `config.py` (0–8 m circle 2.6).
+- Backend: `camonly.py`, `routing.py`, `hood.py`, `trust.py`, `main.py`, `planest.py`, `jobs.py`; tests `test_d65.py`
+  (new) and intended updates in `test_p4_api.py`, `test_p7a.py`, `test_p7r2.py`, `test_p8.py`, `test_report.py`.
+- Worker: `colab_worker.py` (`KEEPS_JOB_FILES`), `server_worker.py`.
+- Tools: new `measure_routes.py`, `routing_measured.py`, `reapply_pole_bands.py`, `deploy/measure_routes.ps1`;
+  `pole_uncertainty.py`, `building_positions.py`, `deploy/make_bundle.py`.
+- Web: `pages/Hood.tsx`, `components/CostPanel.tsx`, `lib/routes.tsx`, `api/p5.ts`, `types/modelCard.ts`,
+  `components/EvidenceDrawer.tsx` (comment); new `scripts/prereview-shots.ts`.
+- Data: `data/model_card.json`, every area's `export.json` / `export.geojson` (circles), `data/areas/ward29/`
+  (`routing_measured.json`, `sign_spotcheck.json`, `sign_spotcheck_ai.json`), `data/measure/`.
+
+---
+
 [← 06 Updates](06_updates.md) · [Start here](00_START_HERE.md) · (this is the last file) →

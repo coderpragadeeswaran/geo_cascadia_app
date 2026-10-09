@@ -42,7 +42,8 @@ def main(write):
     base = os.path.join(ROOT, "data", "areas")
     for slug in sorted(os.listdir(base)):
         f = os.path.join(base, slug)
-        if not all(os.path.isfile(os.path.join(f, n)) for n in ("assets.json", "detections.json")):
+        if not all(os.path.isfile(os.path.join(f, n)) for n in ("assets.json", "detections.json")) \
+                or os.path.isfile(os.path.join(f, "hidden.json")):                  # D65: a hidden backup is not an area
             continue
         with open(os.path.join(f, "detections.json"), encoding="utf-8") as fh:
             dets = json.load(fh)
@@ -60,7 +61,12 @@ def main(write):
                        "truth). Only poles two cameras agreed on are in the sample, so far-off single estimates are "
                        "under-represented and real errors can be larger. tools/pole_uncertainty.py."),
              "generated": datetime.date.today().isoformat(), "n": len(samples), "samples_per_area": areas, "bands": rows,
-             "used_uncertainty_m": [{"up_to_m": u, "plus_minus_m": v, "basis": basis(r, v)} for r, (u, v) in zip(rows, fit)],
+             # D65: what the map draws is the pipeline's setting (config.single_cam_unc_bands, frozen since D45); when a
+             # re-measurement fits differently, the table says so instead of showing circles the app does not use
+             "used_uncertainty_m": [{"up_to_m": u, "plus_minus_m": v,
+                                     "basis": basis(r, v) if (u, v) == f else
+                                     f"the pipeline's setting (D45); re-measured here: ±{f[1]} m (not changed)"}
+                                    for r, (u, v), f in zip(rows, tuple(cfg.single_cam_unc_bands), fit)],
              "rule": ("the map circle = the larger of the band's 80th percentile (consistency check) and the notebook's "
                       "surveyed median for that distance rounded up to 0.5 m, made non-decreasing with distance. The "
                       "surveyed check is larger at 8-15 m (median 4.55 m), so those circles are ±5 m and hold about half "

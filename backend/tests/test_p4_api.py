@@ -72,10 +72,12 @@ def test_measured_rates_come_from_full_live_runs():
     r = planest.measured_rates(st.areas_dir, mc)
     used = {j["slug"] for j in r["jobs"]}
     assert "vadakku_masi_veethi_f17937" in used and "sanganur_road_086d14" not in used      # resumed: not a rate
-    # P7 R2 (F1): per-image rate from the Ward 29 full run; start-up = median of (job time - images x rate)
-    rate = mc["cost_time"]["ward29_full_run_gpu_minutes"] * 60 / 1420
-    assert abs(r["gpu"]["sec_per_image"] - rate) < 1e-9
-    starts = sorted(j["seconds"] - j["images"] * rate for j in r["jobs"])
+    # P7 R2 (F1): per-image rate from the Ward 29 full run — D65: the current run itself (a fresh run from the app, its
+    # time from claim to upload over its photos); start-up = median of (each OTHER job's time - images x rate)
+    ref = next(j for j in r["jobs"] if j["slug"] == "ward29")
+    rate = ref["seconds"] / ref["images"]
+    assert abs(r["gpu"]["sec_per_image"] - rate) < 1e-9 and ref["images"] == 1343
+    starts = sorted(j["seconds"] - j["images"] * rate for j in r["jobs"] if j is not ref)
     med = starts[len(starts) // 2] if len(starts) % 2 else (starts[len(starts) // 2 - 1] + starts[len(starts) // 2]) / 2
     assert abs(r["gpu"]["startup_s"] - med) < 1e-9
     assert r["sv_price"] == mc["cost_time"]["street_view_price_usd_per_image"]
