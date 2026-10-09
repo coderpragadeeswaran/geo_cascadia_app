@@ -101,7 +101,7 @@ function Chip({ k, f, streets, typed }: { k: Key; f: QueryFilters; streets: stri
       case 'discrepancy': return DISC.map((d) => <Opt key={d} on={f.discrepancy === d} onClick={() => apply({ ...f, discrepancy: d })}>{diffLabel(d)}</Opt>)
       case 'interval_m': return [40, 60, 100, 150].map((v) => <Opt key={v} on={f.interval_m === v} onClick={() => apply({ ...f, interval_m: v })} note={v !== 60 ? 'computed by the app' : 'stored by the pipeline'}>{v} m</Opt>)
       case 'floors': return <FloorsEditor f={f} onApply={apply} />
-      case 'near_dark_m': return [25, 50, 100].map((v) => <Opt key={v} on={f.near_dark_m === v} onClick={() => apply({ ...f, near_dark_m: v })} note="PostGIS distance">within {v} m</Opt>)
+      case 'near_dark_m': return [25, 50, 100].map((v) => <Opt key={v} on={f.near_dark_m === v} onClick={() => apply({ ...f, near_dark_m: v })} note="distance on the map">within {v} m</Opt>)
       case 'priority': return (['high', 'medium', 'low'] as const).map((v) => <Opt key={v} on={f.priority === v} onClick={() => apply({ ...f, priority: v })} note="lighting priority">{priorityLabel(v)}</Opt>)
       case 'osm': return (Object.keys(OSM_MODE) as OsmMode[]).map((v) => <Opt key={v} on={(f.osm ?? 'camera_only') === v} onClick={() => apply({ ...f, osm: v })}>{OSM_MODE[v]}</Opt>)
       default: return <p className="t-small ink3 px-2 py-1">Remove this filter with ×.</p>

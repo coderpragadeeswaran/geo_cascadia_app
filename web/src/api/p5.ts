@@ -96,7 +96,7 @@ export const useHoodExamples = (slug: string | null, key: string | null) =>
   useQuery({ queryKey: ['hood-ex', slug, key], queryFn: () => api<{ examples: HoodExample[] }>(`/areas/${slug}/hood/examples?key=${encodeURIComponent(key!)}`).then((r) => r.examples),
     enabled: !!(slug && key), staleTime: Infinity })
 
-export interface TrustNum { label: string; value: number | string; kind: 'pct' | 'num' | 'm' | 'pctn' | 'text'; src: string | null; n?: number; n_src?: string }
+export interface TrustNum { label: string; value: number | string; kind: 'pct' | 'num' | 'm' | 'pctn' | 'text' | 'usd' | 's'; src: string | null; n?: number; n_src?: string }
 export interface TrustCard { id: string; title: string; measured: string; method: string; result: TrustNum; baseline: TrustNum | null; more: TrustNum[]; verdict: string; caveat: string; section: string }
 export interface Experiment { lane: string; name: string; status: 'production' | 'rejected' | 'replaced' | 'tried' | 'withheld'; numbers: TrustNum[]; why: string | null; src: string | null }
 export interface ConsistencyRow {

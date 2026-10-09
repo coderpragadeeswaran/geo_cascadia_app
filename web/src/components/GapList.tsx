@@ -4,7 +4,7 @@
 import { useMap } from '@vis.gl/react-google-maps'
 import { useState } from 'react'
 import type { GapProps, GapRow } from '@/api/types'
-import { byPriority, gapTypeLabel, PRIORITY_ORDER, priorityLabel } from '@/lib/labels'
+import { byPriority, gapPolesSentence, gapTypeLabel, PRIORITY_ORDER, priorityLabel } from '@/lib/labels'
 import { propsFor, useAreaData } from '@/lib/useAreaData'
 import { cn, fmt, plural } from '@/lib/utils'
 import { colors, mapBase } from '@/design/tokens'
@@ -30,7 +30,7 @@ export function GapHow({ g }: { g: Gap }) {
       <Fact k="Poles here" hint={g.gap_type}><span className="t-data">{g.poles_inside}</span>: {gapTypeLabel(g.gap_type)}</Fact>
       {g.display_mode === 'check' && <Fact k="Check">{g.note}</Fact>}
       {g.priority && g.priority_points && (
-        <Fact k="Priority" hint="fixed points rule (D54), not tuned">
+        <Fact k="Priority" hint="fixed points rule, not tuned">
           {priorityLabel(g.priority)}: length {g.priority_points.length} + road {g.priority_points.road}{g.priority_road ? ` (OpenStreetMap: ${g.priority_road})` : ''} + shops and businesses within 30 m {g.priority_points.activity} = <span className="t-data">{g.priority_score}</span> of 9 points (High 7–9, Medium 5–6, Low 0–4)
         </Fact>
       )}
@@ -89,7 +89,7 @@ export function GapList({ rows }: { rows: Gap[] }) {
                   {g.priority ? <PriorityTag p={g.priority} /> : <StretchSwatch />}
                 </div>
                 {g.priority_reason && <div className="t-small ink2 mt-0.5">{g.priority_reason}</div>}
-                <div className="t-small ink3 mt-0.5">{gapTypeLabel(g.gap_type)}</div>
+                <div className="t-small ink3 mt-0.5">{gapPolesSentence(g.poles_inside)}</div>
                 {g.display_mode === 'check' && <p className="t-small mt-1 border-l-2 pl-2 ink2" style={{ borderColor: 'var(--ns-sodium)' }}>Needs checking on the ground: the road bends here and some lights were seen part way along.</p>}
                 {on && <p className="t-small mt-1 ink3">Shown on the map · click again or press Esc to clear</p>}
               </button>

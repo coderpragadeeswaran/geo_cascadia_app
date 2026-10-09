@@ -11,7 +11,7 @@ import { useUi } from '@/store/ui'
 import { Crosshair, EvidencePhoto, PhotoScale } from './EvidencePhoto'
 import { Fact, HowWeKnow } from './HowWeKnow'
 import { placeLabels } from '@/lib/labelLayout'
-import { CLS_LETTER, CLS_NOUN, LETTER_KEY, tagBoxes } from '@/lib/photoTags'
+import { CLS_LETTER, CLS_NOUN, isDrawnTarget, LETTER_KEY, SIGN_NOT_MATCHED, tagBoxes } from '@/lib/photoTags'
 import { measureText, useFontsReady } from '@/lib/textWidth'
 import { shownView, showsBoxes, swapOf } from '@/lib/photoSwap'
 
@@ -101,7 +101,7 @@ export function Boxes({ boxes, all, hidden, hl, setHl }: { boxes: EvidenceBox[];
 export function PhotoKey({ boxes, all, hidden, targetName, hl, setHl }: { boxes: EvidenceBox[]; all: boolean; hidden: Set<string>; targetName: string
   hl: number | null; setHl: (i: number | null) => void }) {
   const shown = useMemo(() => tagBoxes(boxes, all, hidden), [boxes, all, hidden])
-  const target = shown.find((b) => b.target)
+  const target = shown.find((b) => isDrawnTarget(b))            // D66: never promise an orange box that isn't on the photo
   const items = shown.filter((b) => b.tag)
   // keyboard focus highlights too, but not a focus that only follows a click elsewhere (focus-visible)
   const on = (i: number) => ({ onMouseEnter: () => setHl(i), onMouseLeave: () => setHl(null), onBlur: () => setHl(null),
@@ -158,7 +158,10 @@ export function EvidenceViews({ kind, id, at, target, maxPhoto = 300 }: {
   if (isPending) return <div style={{ maxWidth: maxPhoto }} className="t-small ink3 flex aspect-square w-full animate-pulse items-center justify-center rounded-[var(--ns-r-control)] bg-line" role="status">Loading the evidence photos…</div>
   if (isError) return <p className="t-small ink2 rounded-[var(--ns-r-control)] p-4" style={{ boxShadow: 'inset 0 0 0 1px var(--ns-line)' }}>Couldn’t load the evidence photos: the API didn’t answer. <button className="link" onClick={() => refetch()}>Try again</button></p>
   if (!v) return <p className="t-small ink3 rounded-[var(--ns-r-control)] p-4" style={{ boxShadow: 'inset 0 0 0 1px var(--ns-line)' }}>No Street View evidence stored for this item.</p>
-  const name = target === 'building' && v.boxes.some((x) => x.target && x.cls === 'signboard') ? 'This building’s sign' : TARGET_NAME[target]
+  const drawn = v.boxes.find((x) => isDrawnTarget(x))
+  const name = target === 'building' && drawn?.cls === 'signboard' ? 'This building’s sign' : TARGET_NAME[target]
+  // D66: a Sign photo whose sign box couldn't be matched says so in one plain line (no "Orange = …" in the key)
+  const signLost = v.key === 'sign' && !drawn
   const toggle = (c: string) => setHidden((h) => { const n = new Set(h); if (n.has(c)) n.delete(c); else n.add(c); return n })
   // D60: the analysis photo is gone from Google: its current photo there (no boxes), or none at all
   const sw = swapOf(v.served, v.current, v.date)
@@ -175,8 +178,9 @@ export function EvidenceViews({ kind, id, at, target, maxPhoto = 300 }: {
       {ok && <PhotoKey boxes={v.boxes} all={all} hidden={hidden} targetName={name} hl={hl} setHl={setHl} />}
       {ok && v.target === 'crosshair' && <p className="t-small ink2 mt-1.5">No box was found in the aimed direction: the cross marks where the camera was aimed, not a detection.</p>}
       {ok && v.box_choice === 'cant_tell' && <p className="t-small ink2 mt-1.5" data-box-choice="cant_tell">{CANT_TELL}</p>}
+      {ok && signLost && <p className="t-small ink2 mt-1.5" data-sign-lost>{kind === 'building' ? SIGN_NOT_MATCHED : 'The sign box couldn’t be matched in this photo.'}</p>}
       {v.user_note ? <p className="t-small ink2 mt-1.5">{v.user_note}</p>
-        : ok && v.target === 'none' && v.box_choice !== 'cant_tell' && <p className="t-small ink3 mt-1.5">No box for this {kind === 'asset' ? 'object' : 'building'} in this view.</p>}
+        : ok && !signLost && v.target === 'none' && v.box_choice !== 'cant_tell' && <p className="t-small ink3 mt-1.5">No box for this {kind === 'asset' ? 'object' : 'building'} in this view.</p>}
       <div className="mt-2 flex flex-wrap items-center gap-1">
         <PhotoDate date={sw.state === 'swapped' ? sw.current?.date : v.date} />
         {(views?.length ?? 0) > 1 && views!.map((x, k) => (

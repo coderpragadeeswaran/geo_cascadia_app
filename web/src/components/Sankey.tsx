@@ -4,7 +4,7 @@
  *  focus for counts; click a dropped branch (or any segment with examples) to see real items and the reason. */
 import { useMemo, useState } from 'react'
 import type { Hood, SankeySeg } from '@/api/p5'
-import { fmt } from '@/lib/utils'
+import { fmt, noun, plural } from '@/lib/utils'
 
 const W = 980, H = 400, TOP = 34, BOT = 12, NODE = 14, GAP = 7, GROUP_GAP = 16, MIN_H = 3
 const COL_X = [8, 262, 516, 770]
@@ -60,7 +60,7 @@ export default function Sankey({ hood, onPick }: { hood: Hood; onPick: (key: str
     if (stops) {
       const c1 = boxes[1]
       rib.push({ d: ribbon(COL_X[0] + NODE, stops.y0, stops.y1, COL_X[1], c1[0].y0, c1[c1.length - 1].y1),
-        text: `${fmt.format(n.cameras)} camera stops took ${fmt.format(n.views)} photos` })
+        text: `${plural(n.cameras, 'camera stop')} took ${plural(n.views, 'photo')}` })
     }
     const cls = ['building', 'signboard', 'pole', 'lamp_head']
     const cnt = (view: string, c: string) => n[`boxes_${c}_${view}`] ?? 0
@@ -78,7 +78,7 @@ export default function Sankey({ hood, onPick }: { hood: Hood; onPick: (key: str
         const ty = tb.y0 + (tgtUsed[c] ?? 0)
         tgtUsed[c] = (tgtUsed[c] ?? 0) + th
         rib.push({ d: ribbon(COL_X[1] + NODE, sy, sy + sh, COL_X[2], ty, ty + th),
-          text: `${fmt.format(v)} ${tb.seg.label} boxes from photos that ${view === 'mapped' ? 'face a mapped building' : 'face no building outline'}` })
+          text: `${fmt.format(v)} ${tb.seg.label} ${noun(v, 'box', 'boxes')} from photos that ${view === 'mapped' ? 'face a mapped building' : 'face no building outline'}` })
         sy += sh
       }
     }

@@ -530,7 +530,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             raise HTTPException(404, "data/model_card.json not found")
         return {"offline": not D.db_online, "cards": trust.cards(card), "experiments": trust.experiments(card),
                 "confusion_matrix": None,
-                "confusion_note": "model_card.json has precision and recall per class, not a confusion matrix, so none is drawn.",
+                "confusion_note": "The model card has precision and recall per class, not a confusion matrix, so none is drawn.",
                 # D45: single-camera pole error by camera distance (model_card, written by tools/pole_uncertainty.py)
                 "single_camera_by_distance": card.get("single_camera_by_distance")}
 

@@ -71,26 +71,26 @@ def consistency(exp, run_report=None, model_card=None):
 
     ur = C["use_route"]
     chk("meta.run.buildings_use_local", run.get("buildings_use_local"), ur.get("tier1_local_clip", 0), "export.json meta.run",
-        "stored counter counts VLM-stage records; computed = buildings whose exported use.route is tier1_local_clip")
+        "the saved counter also counts buildings the analysis set aside later; counted here: the analysed buildings the local model decided")
     chk("meta.run.buildings_use_vlm", run.get("buildings_use_vlm"), ur.get("tier3_vlm", 0), "export.json meta.run",
-        "computed = buildings whose exported use.route is tier3_vlm")
+        "counted here: the analysed buildings the cloud model decided")
 
     if run_report:
         ra = run_report.get("assets") or {}
         chk("run_report.assets.triangulated_2plus_cameras (and story[])", ra.get("triangulated_2plus_cameras"),
             C["assets_triangulated"], "run_report.json",
-            f"report counts assets seen by 2+ cameras ({C['assets_seen_by_2plus_cameras']}); "
-            f"computed = assets whose position method is 'triangulated'")
+            f"the saved report counts poles and lights seen by 2 or more cameras ({C['assets_seen_by_2plus_cameras']}); "
+            f"counted here: those placed where the cameras' lines of sight cross")
         chk("run_report.assets.single_camera_approximate (and story[])", ra.get("single_camera_approximate"),
-            C["assets"] - C["assets_triangulated"], "run_report.json", "computed = assets not positioned by triangulation")
+            C["assets"] - C["assets_triangulated"], "run_report.json", "counted here: poles and lights placed from one camera")
         rb = (run_report.get("buildings") or {}).get("use_route")
         if rb is not None:
-            chk("run_report.buildings.use_route", rb, ur, "run_report.json", "report counts VLM-stage records, not exported buildings")
+            chk("run_report.buildings.use_route", rb, ur, "run_report.json", "the saved report counts every building the AI step looked at, not only the analysed buildings")
 
     if model_card and meta.get("area") == MODEL_CARD_AREA_NAME:     # D64: the run the model card counts describe
         fr = (((model_card.get("building_use") or {}).get("local_router") or {}).get("full_ward29_run") or {})
         chk("model_card.building_use.local_router.full_ward29_run.local", fr.get("local"), ur.get("tier1_local_clip", 0),
-            "model_card.json", "count, so the export wins (D2); the model_card accuracy figures are unaffected")
+            "model_card.json", "a count, so the saved results win; the model card's accuracy figures are unaffected")
         chk("model_card.building_use.local_router.full_ward29_run.vlm", fr.get("vlm"), ur.get("tier3_vlm", 0), "model_card.json")
 
     if model_card:
@@ -101,6 +101,6 @@ def consistency(exp, run_report=None, model_card=None):
         for key, mc_n in (("floors", mc_floor_n), ("use", mc_use_n)):
             if val.get(key) and mc_n is not None and _n_in(val[key]) not in (None, mc_n):
                 out.append({"field": f"buildings[].attributes.{key}.validated", "stored": val[key],
-                            "computed": f"model_card n={mc_n}", "source": "export.json",
-                            "note": "metric: model_card.json is the only source (D2)"})
+                            "computed": f"model card: n = {mc_n}", "source": "export.json",
+                            "note": "accuracy figures come only from the model card"})
     return out

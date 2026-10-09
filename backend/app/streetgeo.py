@@ -156,12 +156,12 @@ def gap_consistency(gaps, display):
                          "computed": f"{d['lit_cameras_inside']} lit camera stops on the road between its ends; "
                                      f"longest unlit stretch ≈ {d['longest_dark_along_road_m']} m",
                          "source": "export.json + streets.json + plan.json",
-                         "note": "pipeline orders cameras along one straight line (match.py); on a bent street that "
-                                 "mixes both sides. Pipeline follow-up, not changed in the app."})
+                         "note": "the analysis orders the camera stops along one straight line; on a bent street that "
+                                 "mixes both sides of the bend. Left as the analysis recorded it."})
         elif d["length_differs"]:
             rows.append({"field": f"streetlight_gaps.{g['id']}.length_m ({g.get('street')})",
                          "stored": g["length_m"], "computed": f"≈ {d['along_road_m']} m along the road",
                          "source": "export.json + streets.json",
-                         "note": "pipeline measures gap length on a straight fitted line (match.py), which understates "
-                                 "curved streets; same +12 m end padding applied. The recorded value is shown."})
+                         "note": "the analysis measures the length on a straight fitted line, which understates curved "
+                                 "streets (the same 12 m end allowance is added here). The recorded length is the one shown."})
     return rows

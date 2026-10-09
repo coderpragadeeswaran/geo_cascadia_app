@@ -48,7 +48,7 @@ export function Explore() {
       {analyse && !picked && <Flashlight right={right} />}
       {analyse && <CoverageMask picked={picked} />}
       {!dive && (
-        <div className="scrim-top pointer-events-none absolute left-0 top-0 z-20 pb-10" style={{ right }}>
+        <div className="scrim-top pointer-events-none absolute left-0 top-0 z-20 pb-10" style={{ right }} data-top-scrim>
           <TopBar />
           {!analyse && !drive && <div className="pt-0.5"><KpiRibbon /></div>}
           {drive && <p className="sheet t-small ink2 mx-5 mt-1 inline-block px-3 py-1.5" style={{ background: 'color-mix(in srgb, var(--ns-bg1) 90%, transparent)' }}>Driving through the real camera stops. <span className="kbd">←</span> <span className="kbd">→</span> step · <span className="kbd">Esc</span> stops.</p>}

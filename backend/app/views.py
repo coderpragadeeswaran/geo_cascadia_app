@@ -579,7 +579,7 @@ def osm_answer(bundle, text, mode, osm_at, street=None, phrase=None, scoped=None
               + [{"osm_id": m["osm"]["osm_id"], "lat": m["osm"]["lat"], "lon": m["osm"]["lon"], "name": m["osm"].get("name"),
                   "kind": m["osm"].get("kind"), "matched": True} for m in sh["matched"]])
     out.update(rows=rows, total=len(rows),
-               note=(f"Our camera found {n['camera']} businesses here; OpenStreetMap lists {n['osm']} along these streets: "
+               note=(f"Our camera found {queryparse.plural(n['camera'], 'business', 'businesses')} here; OpenStreetMap lists {n['osm']} along these streets: "
                      f"{n['matched']} near each other (location only; {_names(n)}), {n['camera_only']} seen by "
                      f"our camera only, {n['osm_only']} in OpenStreetMap only. {sh['note']}"),
                osm={"mode": mode, "counts": n, "rule": sh["rule"], "fetched": sh.get("fetched"), "points": points})

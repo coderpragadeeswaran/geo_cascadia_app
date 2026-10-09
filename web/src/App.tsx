@@ -1,7 +1,6 @@
 import { APIProvider } from '@vis.gl/react-google-maps'
 import { motion } from 'framer-motion'
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { API_URL } from '@/api/client'
 import { useConfig, useFollowJobs } from '@/api/queries'
 import { CommandPalette } from '@/components/CommandPalette'
 import { Explore } from '@/components/Explore'
@@ -29,8 +28,7 @@ export default function App() {
     return (
       <Splash>
         <div className="t-small ink2 mt-6 max-w-md text-center">
-          <>Can’t reach the API at <code className="t-data text-ink">{API_URL}</code>. Start it with
-            <pre className="sheet t-data mt-3 px-3 py-2 text-left text-ink">backend\.venv\Scripts\python -m uvicorn app.main:app --app-dir backend --port 8000</pre></>
+          The app’s server isn’t answering, so nothing can be shown yet. Try again in a minute; if it keeps happening, the server needs to be started.
         </div>
       </Splash>
     )
@@ -67,7 +65,7 @@ function NoMap() {
     <div className="flex h-full items-center justify-center p-10">
       <div className="sheet max-w-lg p-6" role="status">
         <h1 className="t-title">The map can’t be shown</h1>
-        <p className="t-small ink2 mt-2">The API has no Google Maps browser key or Map ID, so the map and the Street View photos are off. Set <code className="t-data">GOOGLE_MAPS_BROWSER_KEY</code> and <code className="t-data">GOOGLE_MAP_ID</code> in backend/.env and restart the API.</p>
+        <p className="t-small ink2 mt-2">The map key isn’t set up on this server, so the map and the Street View photos are off.</p>
         <p className="t-small ink2 mt-2">Everything else still works from the saved results:</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <button className="btn btn-line" onClick={() => go('review')}>Review</button>
@@ -100,7 +98,7 @@ function ApiLost() {
   if (!lost) return null
   return (
     <div role="alert" className="sheet t-small fixed left-1/2 top-3 z-[55] -translate-x-1/2 px-3 py-1.5" style={{ color: 'var(--ns-sodium)', background: 'var(--ns-bg2)' }}>
-      The API isn’t answering ({API_URL}). What is on screen stays; new data loads once it is back.
+      The app’s server isn’t answering. What is on screen stays; new data loads once it is back.
     </div>
   )
 }

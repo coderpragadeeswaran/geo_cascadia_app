@@ -20,16 +20,16 @@ import { Badge, Card as Panel, jumpTo, REDUCED, SectionNav, Src, T, useDetail, u
 import { SYNONYM_HINTS } from '@/components/QueryHelp'
 import { AlignedBars } from '@/components/viz'
 import { KPI_DEFS, kpiFilter, kpis } from '@/lib/derive'
-import { shortArea, cameraOnlyText } from '@/lib/labels'
+import { shortArea, cameraOnlyText, plainText } from '@/lib/labels'
 import { useAreaData } from '@/lib/useAreaData'
-import { cn, fmt, plural } from '@/lib/utils'
+import { cn, fmt, plural, usd } from '@/lib/utils'
 import { useUi } from '@/store/ui'
 
 type Any = any // eslint-disable-line @typescript-eslint/no-explicit-any
 const pct = (v: unknown) => (typeof v === 'number' ? `${Math.round(v * 100)}%` : String(v ?? '—'))
 /** a stored / computed value as readable text: objects (counts per model route) become "local 193 / VLM 73" */
 const ROUTE_WORD: Record<string, string> = { tier1_local_clip: 'local', tier3_vlm: 'VLM', tier3_vlm_fewshot: 'VLM few-shot', tier2_ocr: 'OCR',
-  'tier3_vlm+ocr_gate': 'VLM + OCR gate', tier3_vlm_unverified: 'VLM only' }
+  'tier3_vlm+ocr_gate': 'VLM + OCR gate', tier3_vlm_unverified: 'VLM only', sign_text: 'shop sign' }
 const ROUTE_ORDER = ['tier1_local_clip', 'tier2_ocr', 'tier3_vlm', 'tier3_vlm_fewshot', 'tier3_vlm+ocr_gate', 'tier3_vlm_unverified']
 export function readable(v: unknown): string {
   if (v == null) return '—'
@@ -42,7 +42,11 @@ export function readable(v: unknown): string {
   }
   return String(v)
 }
-const val = (x: TrustNum) => x.kind === 'pct' ? pct(x.value) : x.kind === 'pctn' ? `${x.value}%` : x.kind === 'm' ? `${x.value} m` : typeof x.value === 'number' ? fmt.format(x.value) : String(x.value)
+// D66: dollars and seconds keep their digits (fmt rounds to 3 decimals, which printed $0.000227 as "0")
+const num = (v: number) => (v !== 0 && Math.abs(v) < 0.001 ? String(Number(v.toPrecision(3))) : fmt.format(v))
+const val = (x: TrustNum) => x.kind === 'pct' ? pct(x.value) : x.kind === 'pctn' ? `${x.value}%` : x.kind === 'm' ? `${x.value} m`
+  : x.kind === 'usd' && typeof x.value === 'number' ? usd(x.value, 6) : x.kind === 's' && typeof x.value === 'number' ? `${num(x.value)} s`
+  : typeof x.value === 'number' ? num(x.value) : String(x.value)
 const frac = (x: TrustNum | null) => !x || typeof x.value !== 'number' ? null : x.kind === 'pct' ? x.value : x.kind === 'pctn' ? x.value / 100 : null
 
 const NAV: [string, string][] = [
@@ -105,7 +109,7 @@ function PoleDistance({ t }: { t: PoleTable }) {
       </tbody></table>
       <p className="t-small ink2 mt-2">A pole seen from one camera position is placed from where its base meets the ground in the photo. For poles that two cameras pinpointed, each camera's own estimate was compared with the pinpointed spot (the "8 in 10" column). That check leans small, because only poles two cameras agreed on are in it. So each circle uses the larger of the "8 in 10" value and the earlier surveyed check at that distance, never smaller for a farther pole.</p>
       <p className="t-small ink2 mt-1">Between 8 and 15 m the surveyed check is larger (typical error 4.55 m), so those circles are ±5 m. That surveyed number is a median: about half of such poles fall inside the circle, not 8 in 10.</p>
-      <p className="t-small ink3 mt-1">{t._note} Earlier surveyed check: {t.notebook_surveyed_check}.</p>
+      <p className="t-small ink3 mt-1">{plainText(t._note)} Earlier surveyed check: {plainText(t.notebook_surveyed_check)}.</p>
     </div>
   )
 }
@@ -224,7 +228,7 @@ export default function Trust() {
           </Sec>
 
           <Sec id="gap-checks" title={`Gap length checks · ${area ? shortArea(area.name) : ''}`}
-            lead="The pipeline records each dark stretch’s length with a straight-line fit. The app measures it again along the street line; where they differ by more than 10 %, or lit camera stops lie inside the stretch, it is listed here. The recorded length stays the value shown everywhere (D13).">
+            lead="The pipeline records each dark stretch’s length with a straight-line fit. The app measures it again along the street line; where they differ by more than 10 %, or lit camera stops lie inside the stretch, it is listed here. The recorded length stays the value shown everywhere.">
             {gapRows.length ? (
               <table className="w-full"><tbody>
                 <Tr head cells={['stretch', 'recorded', 'along the road', 'check']} />
@@ -250,18 +254,22 @@ export default function Trust() {
               <li><b>Streetlights:</b> the detector finds lamp heads in photos; it cannot tell whether a lamp works. A VLM check was rejected ({m.streetlights.vlm_lamp_check}).</li>
               <li><b>Registers:</b> synthetic, with planted errors; real municipal registers were not available.</li>
               <li><b>Withheld:</b> facade condition and door numbers are not shown as findings (see “Tried and dropped”).</li>
-              <li><b>Timings:</b> the stored runs were resumed, so their stage times are not representative; they are shown greyed on Under the Hood. Ward 29’s full-run GPU time comes from the model card.</li>
+              {(() => {
+                // D66: only the original areas' stored runs were resumed (D1); Ward 29 (re-run, D64) and the app's streets carry their own measured time
+                const resumed = areas?.filter((x) => !x.live).map((x) => shortArea(x.name)) ?? []
+                return resumed.length ? <li><b>Timings:</b> the stored {resumed.length === 1 ? 'run' : 'runs'} of {resumed.length === 1 ? resumed[0] : `${resumed.slice(0, -1).join(', ')} and ${resumed[resumed.length - 1]}`} {resumed.length === 1 ? 'was' : 'were'} resumed, so {resumed.length === 1 ? 'its' : 'their'} stage times are not representative; they are shown greyed on Under the Hood. Ward 29 and the streets analysed from the app show the time measured on their own run.</li> : null
+              })()}
             </ul>
           </Sec>
 
           <Sec id="questions" title="How questions are answered: rules, not an AI model"
-            lead="The ask bar uses the pipeline’s own rule-based QueryEngine plus a short list of synonyms. There is no LLM in this step.">
+            lead="The ask bar uses the analysis package’s own rule-based question reader plus a short list of synonyms. There is no LLM in this step.">
             <ul className="t-small space-y-1.5">
               <li><b>Deterministic:</b> the same question always gives the same answer.</li>
               <li><b>Offline:</b> no model or internet call is made to read a question.</li>
               <li><b>Explainable:</b> every filter it read is shown as a chip; an empty answer shows the step that removed the last result; words no rule uses are listed as ignored, and nothing is applied until you confirm.</li>
             </ul>
-            <div className="t-micro mt-4">Synonyms (docs/QUERY.md has the full list and the patterns)</div>
+            <div className="t-micro mt-4">Synonyms (examples; the project documentation has the full list and the patterns)</div>
             <table className="mt-1"><tbody>{SYNONYM_HINTS.map(([a, b]) => <Tr key={b} cells={[a, `→ ${b}`]} />)}</tbody></table>
           </Sec>
         </div>
@@ -292,7 +300,7 @@ function Card({ c }: { c: TrustCard }) {
           <p className="t-small ink3 mt-0.5">compared with: {c.baseline.label}</p>
         </div>
       ) : <p className="t-small ink2 mt-1">Compared with: {c.baseline.label} — {val(c.baseline)}</p>)}
-      <p className="t-body mt-3">{c.verdict}</p>
+      <p className="t-body mt-3">{plainText(c.verdict)}</p>
       {c.caveat && <p className="t-small ink3 mt-1">{c.caveat}</p>}
       {!!c.more.length && (
         <dl className="t-small mt-3 space-y-0.5">
@@ -420,11 +428,16 @@ function plainSource(src: string) {
 
 function plainField(f: string) {
   if (f.startsWith('run_report.story')) return `A sentence of the run summary (${/\(([^)]+)\)/.exec(f)?.[1] ?? 'story'})`
-  if (/buildings_use_local|use_route|full_ward29_run/.test(f)) return 'Buildings decided by the local model vs the cloud model'
+  if (/buildings_use_(local|vlm)|use_route|full_ward29_run/.test(f)) return 'Buildings decided by the local model vs the cloud model'
   if (/triangulated_2plus|single_camera/.test(f)) return 'Poles and lights pinpointed vs approximate'
   if (/floors\.validated/.test(f)) return 'Floor accuracy quoted inside the records'
-  if (f.startsWith('streetlight_gaps')) return `Length of a dark stretch (${/\(([^)]+)\)/.exec(f)?.[1] ?? ''})`
-  return f
+  if (f.startsWith('streetlight_gaps')) return `${/\.length_m/.test(f) ? 'Length of a dark stretch' : 'A dark stretch on a bent street'} (${/\(([^)]+)\)/.exec(f)?.[1] ?? ''})`
+  // D66: never a raw key ("meta.counts.buildings") on screen
+  const last = f.replace(/\s*\(.*$/, '').split('.').pop() ?? f
+  const words = last.replace(/_/g, ' ')
+  if (f.startsWith('meta.counts')) return `Saved count: ${words}`
+  if (f.startsWith('dashboard.kpi')) return `Saved key number: ${words}`
+  return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
 /** D27: building position accuracy vs the FarmwiseAI Gate 1 target. Every number from model_card.json "gate1_position"
@@ -473,7 +486,7 @@ function Gate1({ g, names }: { g: Any; names: Record<string, string> }) {
       {g.organiser_guidance && <p className="t-body mb-3" style={{ fontWeight: 560 }}>{g.organiser_guidance}</p>}
       <div className="flex flex-wrap items-start gap-3 rounded-[var(--ns-r-sheet)] px-4 py-3" style={{ boxShadow: 'inset 0 0 0 1px var(--ns-discrepancy)' }}>
         <Badge tone="ok">Status: {g.status === 'not verified' ? 'Not verified' : g.status}</Badge>
-        <span className="t-small ink2 min-w-0 flex-1">{g.status_note} No surveyed reference exists.</span>
+        <span className="t-small ink2 min-w-0 flex-1">{plainText(g.status_note)} No surveyed reference exists.</span>
       </div>
       <ul className="t-small ink2 mt-3 space-y-0.5">
         <li><b className="text-ink">Triangulated:</b> {g.rule?.triangulated}</li>
@@ -534,7 +547,7 @@ function Gate1({ g, names }: { g: Any; names: Record<string, string> }) {
         <Tr head cells={['area', 'n', 'median', 'p90']} />
         {slugs.map((s) => { const d = pin[s]?.pin_vs_osm_wall; return d?.n ? <Tr key={s} cells={[nm(s), fmt.format(d.n), M(d.median_m), M(d.p90_m)]} /> : null })}
       </tbody></table>
-      <p className="t-small mt-4">{g.status_note}</p>
+      <p className="t-small mt-4">{plainText(g.status_note)}</p>
     </Sec>
   )
 }

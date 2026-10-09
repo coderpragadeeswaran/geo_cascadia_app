@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ApiError } from '@/api/client'
 import { useBuildingLinks, useImagery, useModelCard, useObjectDetail, type PositionCheck } from '@/api/queries'
 import type { AnyProps, Asset, Building, CameraBuildingProps, FloorConfidence, GapProps, MissingProps, OsmLevels, ReviewItem, UnmappedBusiness } from '@/api/types'
-import { assetRegLabel, ASSET_REG, diffLabel, onMapSeenIn, floorsStatusPlain, floorsText, googleFlagPlain, matchLabel, nameQualityPlain, reviewLabel, useLabel, useNoun } from '@/lib/labels'
+import { assetRegLabel, ASSET_REG, diffLabel, gapPolesSentence, onMapSeenIn, floorsStatusPlain, floorsText, googleFlagPlain, matchLabel, nameQualityPlain, reviewLabel, useLabel, useNoun } from '@/lib/labels'
 import { RouteLine } from '@/lib/routes'
 import { miniStreets } from '@/lib/mini'
 import { useAreaData } from '@/lib/useAreaData'
@@ -204,7 +204,7 @@ function BuildingBody({ b }: { b: Building }) {
             {reg?.property_id && <Fact k="Paired by" hint={reg.match_confidence ? `match confidence ${reg.match_confidence}` : undefined}>Location: the record's pin is {fmt1.format(reg.record_dist_m ?? 0)} m from this building{reg.match_confidence ? `, so the pairing is ${reg.match_confidence === 'high' ? 'clear' : reg.match_confidence === 'medium' ? 'likely' : 'uncertain'}` : ''}{reg.match_margin_m != null ? ` (the next building would fit ${fmt1.format(reg.match_margin_m)} m worse)` : ''}. Records are paired with buildings by position, never by a shared ID.</Fact>}
             <Fact k="Record says">{reg?.record_use?.replace(/_/g, ' ') ?? 'use not recorded (not compared)'} · {reg?.record_floors != null ? plural(reg.record_floors, 'floor') : 'floors not recorded (not compared)'} · {reg?.record_area_m2 != null ? `${fmt.format(Math.round(reg.record_area_m2))} m²` : '—'}</Fact>
             <Fact k="Record's map pin">{reg?.record_dist_m != null ? `${fmt1.format(reg.record_dist_m)} m from the building outline` : '—'}</Fact>
-            <Fact k="Result" hint={b.match_status}>{matchLabel(b.match_status, true, !!b.attributes?.use?.value)}{b.discrepancies?.length ? `: ${b.discrepancies.map(diffLabel).join(', ')}` : ''}</Fact>
+            <Fact k="Result">{matchLabel(b.match_status, true, !!b.attributes?.use?.value)}{b.discrepancies?.length ? `: ${b.discrepancies.map(diffLabel).join(', ')}` : ''}</Fact>
             <Fact k="Register" hint={reg?.source ?? 'SYNTHETIC'}>{reg?.source === 'IMPORTED' ? 'An imported property register' : 'Made-up demo data: it copies what the photos show, except a few planted mistakes (no open property records were available)'}</Fact>
           </HowWeKnow>
         </Section>
@@ -250,7 +250,7 @@ function AssetBody({ a }: { a: Asset }) {
             : reg?.status === 'unrecorded_asset' ? 'Not listed in the register.' : 'Not listed; seen in one photo only, so it needs a second look before it counts as missing from the register.'}</p>
           <HowWeKnow summary={<>We compared this {a.type === 'streetlight' ? 'streetlight' : 'pole'} with the asset register (made-up demo data with planted mistakes). Result: {assetRegLabel(reg?.status, true).charAt(0).toLowerCase() + assetRegLabel(reg?.status, true).slice(1)}.</>}
             links={[{ page: 'trust', section: 'matching', label: 'How matching was tested' }]}>
-            <Fact k="Result" hint={reg?.status ?? undefined}>{assetRegLabel(reg?.status, true)}{reg?.flags?.length ? `: ${reg.flags.map(diffLabel).join(', ')}` : ''}</Fact>
+            <Fact k="Result">{assetRegLabel(reg?.status, true)}{reg?.flags?.length ? `: ${reg.flags.map(diffLabel).join(', ')}` : ''}</Fact>
             <Fact k="Register entry">{reg?.asset_no ? <>{reg.asset_no}, listed as {reg.record_type ?? '—'}</> : 'No entry in the register'}</Fact>
           </HowWeKnow>
         </Section>
@@ -273,7 +273,9 @@ function UnmappedBody({ u }: { u: UnmappedBusiness }) {
             : 'A shop sign was read here, but the map has no building outline at this spot, so it can’t be matched to the register.'}</p>
           <Row k="Seen in">{u.sightings != null ? plural(u.sightings, 'photo') : '— photos'}</Row>
           <Row k="Position">{u.on_outline ? 'Where the sign’s line of sight meets that outline' : 'Approximate'}</Row>
-          <HowWeKnow summary={<>The text reader read this sign in {u.sightings != null ? plural(u.sightings, 'photo') : 'the photos'}. OpenStreetMap has no building outline here, so its spot is only approximate.</>}
+          <HowWeKnow summary={<>The text reader read this sign in {u.sightings != null ? plural(u.sightings, 'photo') : 'the photos'}. {u.on_outline
+            ? 'It sits on a building outline that is not one of the analysed buildings, so it is not compared with the register.'
+            : 'OpenStreetMap has no building outline here, so its spot is only approximate.'}</>}
             links={[{ page: 'hood', section: 'signs', label: 'How signs are read' }]}>
             <Fact k="Sign text read" hint="OCR">“{u.ocr_text}”</Fact>
             <Fact k="Position" hint={u.position ?? 'approximate'}>{u.on_outline ? <>On the outline <span className="t-data">{u.on_outline}</span>, where the sign’s own line of sight meets it</> : <>{(() => { const m = /~([\d.]+) m/.exec(u.position ?? ''); return m ? `About ${m[1]} m from the camera, along its line of sight` : 'Approximate' })()}: worked out from the camera, as there is no building outline to place it on</>}</Fact>
@@ -316,7 +318,7 @@ function GapBody({ p }: { p: GapProps }) {
           </div>
         )}
         <LampRecall />
-        <p className="t-body mt-2">{p.poles_inside ? `${plural(p.poles_inside, 'pole')} ${p.poles_inside === 1 ? 'stands' : 'stand'} here, but no lamp was seen on ${p.poles_inside === 1 ? 'it' : 'them'}.` : 'No pole or lamp was seen here.'}</p>
+        <p className="t-body mt-2">{gapPolesSentence(p.poles_inside)}</p>
         {p.display_mode === 'check' && <p className="t-small mt-2 border-l-2 pl-2 ink2" style={{ borderColor: 'var(--ns-sodium)' }}>Needs checking on the ground: the road bends here and some lights were seen part way along.</p>}
         <GapHow g={{ ...p }} />
       </Body>
@@ -509,7 +511,7 @@ function CameraOnlyBody({ p }: { p: CameraBuildingProps }) {
             : <span className="ink3">Not estimated</span>}</Row>
           <HowWeKnow summary={<>Lines of sight from the cameras’ {what} boxes that hit no OpenStreetMap outline were crossed in pairs; crossings within 3 m were grouped, and a group seen from 3 or more camera positions was solved and kept when every line passes within 3 m.</>}
             links={[{ page: 'trust', section: 'gate1', label: 'Position accuracy (Gate 1)' }]}>
-            <Fact k="Method" hint="triangulated_no_footprint">Camera views cross, with no map outline</Fact>
+            <Fact k="Method" hint="triangulated">Camera views cross, with no map outline</Fact>
             <Fact k="Cameras">{p.n_cameras ?? '—'}</Fact>
             <Fact k="Uncertainty" hint="largest ray residual">{p.uncertainty_m != null ? `${fmt1.format(p.uncertainty_m)} m: the farthest camera line of sight from the point (at least 0.5 m)` : 'not estimated'}</Fact>
             <Fact k="Why no error">Gate 1 measures a position against the middle of the building’s front wall on its OpenStreetMap outline. This building has no outline, so there is nothing to measure against.</Fact>

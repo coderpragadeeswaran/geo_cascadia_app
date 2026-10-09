@@ -379,10 +379,10 @@ def story(n, verdict, stored):
         (f"{_pl(n['review_items'], 'item')} sent to human review.", "review"),
     ]
     why = {
-        "positions": "The stored sentence counts assets seen by 2+ cameras ({s2}); only {t} were actually triangulated (position "
-                     "method), the rest fell back to a single-camera estimate.",
-        "buildings": "The stored sentence counted rows of building_views.json, which include {u} footprints that are not "
-                     "registered buildings; counted per registered building instead.",
+        "positions": "The stored sentence counts poles and lights seen by 2 or more cameras ({s2}); only {t} were actually placed "
+                     "where the cameras' lines of sight cross, the rest use a single-camera estimate.",
+        "buildings": "The stored sentence counted every building outline with a photo, including {u} outlines that are not "
+                     "analysed buildings; counted per analysed building instead.",
     }
     out = []
     for i, (text, chapter) in enumerate(sent):
@@ -425,15 +425,15 @@ def cost(bundle, n, model_card, live_run=None, rt=None):
         sv = run.get("street_view_requests") or 0
         lines = [
             {"key": "street_view", "label": "Street View photos", "value": round(sv * price, 2) if price else None,
-             "detail": f"{sv:,} photos × ${price} per image", "source": "run counter × model_card price", "status": "measured"},
+             "detail": f"{sv:,} photos × ${price} per image", "source": "the run's own photo counter × the model card's price per photo", "status": "measured"},
             # P8: a resumed run's counter covers only the last part; the run's cloud-call files cover every call
             {"key": "vlm", "label": "Cloud AI calls", "value": rt["totals"]["usd"], "detail": f"{rt['totals']['calls']:,} calls",
              "source": "computed from this run's cloud-call files (the run counter covers only the last part)", "status": "computed"}
             if resumed and rt and rt["totals"]["usd"] is not None else
             {"key": "vlm", "label": "Cloud AI calls", "value": run.get("vlm_cost_usd"),
-             "detail": f"{run.get('vlm_calls') or 0:,} calls", "source": "run counter", "status": "measured"},
+             "detail": f"{run.get('vlm_calls') or 0:,} calls", "source": "the run's own counter", "status": "measured"},
             {"key": "places", "label": "Google look-ups", "value": None,
-             "detail": f"{run.get('places_calls') or 0:,} look-ups (price not in the model card)", "source": "run counter",
+             "detail": f"{run.get('places_calls') or 0:,} look-ups (price not in the model card)", "source": "the run's own counter",
              "status": "not recorded"},
         ]
         return {"lines": lines, "model_card": None, "live": True,
@@ -448,9 +448,9 @@ def cost(bundle, n, model_card, live_run=None, rt=None):
         {"key": "street_view", "label": "Street View photos", "value": round(n["photos_fetched"] * price, 2) if price else None,
          "photos": n["photos_fetched"],
          "detail": f"{n['photos_fetched']:,} photos × ${price} per image",
-         "source": (f"computed from this run's files: {n['views_fetched']:,} views fetched (_views_done.json) + "
-                    f"{n['building_photos']:,} building photos for use and floors (reliable rows of building_views.json) = "
-                    f"{n['photos_fetched']:,} photos, × ${price} per image (model card)"),
+         "source": (f"counted from this run's saved files: {n['views_fetched']:,} photos fetched along the streets + "
+                    f"{n['building_photos']:,} building photos for use and floors = "
+                    f"{n['photos_fetched']:,} photos, × ${price} per photo (model card)"),
          "status": "computed" if price else "not recorded"},
         # P8: the run files' own calls (tokens × price), like for like; model_card's Ward 29 "$0.056 with router" counts
         # only the use + floors calls of a resumed run (routing.py), so it is no longer the headline
@@ -463,7 +463,7 @@ def cost(bundle, n, model_card, live_run=None, rt=None):
           "value": ct.get("ward29_vlm_usd_with_router") if ward else gen.get("vlm_usd"),
           "detail": ("with the local router; without it $" + str(ct.get("ward29_vlm_usd_without_router"))) if ward else
                     ("Trichy run" if gen.get("vlm_usd") is not None else "cost not recorded"),
-          "source": "model_card.cost_time" if ward else ("model_card.generalisation" if gen.get("vlm_usd") is not None else None),
+          "source": "the model card" if ward or gen.get("vlm_usd") is not None else None,
           "status": "model_card" if (ward or gen.get("vlm_usd") is not None) else "not recorded"}),
         {"key": "places", "label": "Google Places look-ups", "value": None, "detail": "cost not recorded",
          "source": None, "status": "not recorded"},

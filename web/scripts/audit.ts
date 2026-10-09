@@ -1,4 +1,4 @@
-/** P7 R3 (C1–C3): live audit. Dev server (:5173) or preview (APP_URL) + API on :8000.  npx tsx scripts/audit.ts [outDir]
+/** P7 R3 (C1–C3): live audit. Dev server (:5173) or preview (APP_URL) + API on :8000 (API_PORT: another).  npx tsx scripts/audit.ts [outDir]
  *  Per theme: every page (Explore, the evidence drawer, Analyse, Review, Under the Hood, Trust, Jobs) screenshotted;
  *  keyboard checks (Tab order with a visible focus ring, Ctrl K opens / Esc closes the palette, Esc closes the panel, the
  *  drawer and Analyse); the numbers the UI shows for Ward 29 printed as JSON (C3 compares them with the database). */
@@ -31,6 +31,8 @@ async function run(mode: 'night' | 'daylight') {
     localStorage.setItem('gc.mode', JSON.stringify(m)); localStorage.setItem('gc.tourSeen', '1')
     localStorage.setItem('gc.reviewer', JSON.stringify('audit')); localStorage.setItem('gc.area', JSON.stringify('ward29'))
   }, mode)
+  // D66: API_PORT=8010 reroutes the page's :8000 calls to another API (as offline.ts does), e.g. a branch API next to a running one
+  if (process.env.API_PORT) await ctx.route('http://localhost:8000/**', (r) => r.continue({ url: r.request().url().replace(':8000', `:${process.env.API_PORT}`) }))
   const page = await ctx.newPage()
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))

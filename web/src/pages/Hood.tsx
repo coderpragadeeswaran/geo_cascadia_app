@@ -12,7 +12,7 @@ import { Card, CountUp, jumpTo, REDUCED, SectionNav, T, useDetail, useInView, us
 import { ExampleSheet } from '@/components/ExampleSheet'
 import { GeoMini } from '@/components/GeoMini'
 import { OsmLevelsSummary, OsmShopsSummary } from '@/components/OsmPanels'
-import { StreetNames } from '@/components/StreetNames'
+import { StreetNames, useStreetNames } from '@/components/StreetNames'
 import { AlignedBars, Donut, Funnel, SegBar, StageTimeline } from '@/components/viz'
 import { KPI_DEFS, kpiFilter } from '@/lib/derive'
 import { shortArea, CAMERA_ONLY_TIP, cameraOnlyText } from '@/lib/labels'
@@ -50,11 +50,14 @@ export default function Hood() {
   }, [h, section, area])
   const sorted = [...(areas ?? [])].sort((a, b) => b.counts.buildings - a.counts.buildings)
   const scroller = useRef<HTMLDivElement>(null)
-  const active = useScrollSpy(NAV.map(([id]) => id), scroller, [h, compare])
+  // D66: sections an area doesn't have are left out of the nav too (no name list → no "Street names"; no routing table)
+  const names = useStreetNames(h?.area)
+  const nav = NAV.filter(([id]) => (id !== 'street-names' || names.data?.available !== false) && (id !== 'routing' || !h || !!h.routing))
+  const active = useScrollSpy(nav.map(([id]) => id), scroller, [h, compare, nav.length])
   const showNav = !compare && !!h
   return (
     <div className={cn('grid h-full', showNav ? 'grid-cols-[210px_minmax(0,1fr)]' : 'grid-cols-1')}>
-      {showNav && <div className="min-h-0 overflow-y-auto" style={{ borderRight: '1px solid var(--ns-line)' }}><SectionNav items={NAV} active={active} onJump={jumpTo} /></div>}
+      {showNav && <div className="min-h-0 overflow-y-auto" style={{ borderRight: '1px solid var(--ns-line)' }}><SectionNav items={nav} active={active} onJump={jumpTo} /></div>}
     <div ref={scroller} className="h-full min-w-0 overflow-y-auto px-10 py-8" id="hood-scroll">
       <div className="mx-auto max-w-[960px]">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -108,7 +111,7 @@ function Story({ h, pick }: { h: HoodData; pick: Pick }) {
         label={`The ${plural(n.streets, 'analysed street')} with the camera stops along them`}
         caption="Hover a street for its name and length; the small ticks are the camera stops." /> : null,
       examples: [exBtn('streets', 'Streets analysed')] },
-    { id: 'cameras', title: 'Camera positions', figure: n.cameras, unit: 'camera positions',
+    { id: 'cameras', title: 'Camera positions', figure: n.cameras, unit: noun(n.cameras, 'camera position'),
       plain: `Instead of photographing every panorama in all 12 directions, the planner chose ${plural(n.cameras, 'camera position')} that face the buildings.${n.cameras_inside_footprint ? ` ${plural(n.cameras_inside_footprint, 'position')} ${n.cameras_inside_footprint === 1 ? 'was' : 'were'} dropped: the camera stood inside a building outline.` : ''} Of the other panoramas, ${fmt.format(n.panoramas_off_street)} lie more than 15 m from the analysed streets and ${fmt.format(n.panoramas_thinned)} were thinned out because a camera position a few metres away was already chosen.`,
       tech: `panos.json ${fmt.format(n.panoramas)} (${n.panoramas_user} user photospheres; ${n.cameras_user} used as stops) → plan.json ${n.cameras} stops; plan_anomalies.json camera_inside_footprint ${n.cameras_inside_footprint}; not selected ${fmt.format(n.panoramas_not_selected)} = off street (> 15 m, plan.py assignment) ${fmt.format(n.panoramas_off_street)} + thinned (thin_m 12 m / min_sep_m 6 m, or piece < min_seg_m 25 m) ${fmt.format(n.panoramas_thinned)}.`,
       visual: (run) => <SegBar run={run} onPick={pick} unit="panoramas" segs={[
@@ -117,23 +120,23 @@ function Story({ h, pick }: { h: HoodData; pick: Pick }) {
         { key: 'thin', label: 'on the street, thinned', value: n.panoramas_thinned, kind: 'idle', examples: n.panoramas_thinned ? 'panos.thinned' : null },
         { key: 'drop', label: 'dropped: inside a building outline', value: n.cameras_inside_footprint, kind: 'drop', examples: n.cameras_inside_footprint ? 'cameras.inside' : null }]} />,
       examples: [exBtn('cameras.kept', 'Camera positions'), ...(n.cameras_inside_footprint ? [exBtn('cameras.inside', 'Dropped camera positions')] : [])] },
-    { id: 'imagery', title: 'Photos fetched', figure: n.views_fetched || n.views, unit: 'photos',
-      plain: `${fmt.format(n.views)} Street View photos were taken from those positions. ${fmt.format(n.views_mapped)} face a building on the map; ${fmt.format(n.views_unmapped)} (${pct(n.views_unmapped, n.views)}) face frontage with no building outline, where only lights and signs can be read.`,
+    { id: 'imagery', title: 'Photos fetched', figure: n.views_fetched || n.views, unit: noun(n.views_fetched || n.views, 'photo'),
+      plain: `${plural(n.views, 'Street View photo')} ${n.views === 1 ? 'was' : 'were'} taken from those positions. ${fmt.format(n.views_mapped)} face a building on the map; ${fmt.format(n.views_unmapped)} (${pct(n.views_unmapped, n.views)}) face frontage with no building outline, where only lights and signs can be read.`,
       tech: `plan.json views ${fmt.format(n.views)} (${fmt.format(n.views_tilted)} tilted up for rooflines); _views_done.json ${fmt.format(n.views_fetched)} fetched; footprint == null ${fmt.format(n.views_unmapped)}. Billed at the Static API price (model_card).`,
       visual: (run) => <SegBar run={run} onPick={pick} unit="photos" segs={[
         { key: 'm', label: 'face a mapped building', value: n.views_mapped, kind: 'kept', examples: 'views.mapped' },
         { key: 'u', label: 'map has no building outline', value: n.views_unmapped, kind: 'idle', examples: 'views.unmapped' }]} />,
       examples: [exBtn('views.mapped', 'Photos facing a mapped building'), exBtn('views.unmapped', 'Photos where the map has no building outline')] },
-    { id: 'detection', title: 'Objects detected', figure: n.boxes, unit: 'boxes',
-      plain: `A detector running without the cloud drew boxes around ${fmt.format(n.boxes_building)} buildings, ${fmt.format(n.boxes_signboard)} signs, ${fmt.format(n.boxes_pole)} poles and ${fmt.format(n.boxes_lamp_head)} lamp heads in the photos. These are photo boxes, not objects: one pole is usually boxed in several photos, and the boxes of the same pole or lamp are merged into ${plural(n.assets, 'pole or streetlight', 'poles and streetlights')} on the map. ${fmt.format(n.boxes_tilted + n.boxes_user)} boxes came from tilted or public photos and are not used to place anything on the map.`,
+    { id: 'detection', title: 'Objects detected', figure: n.boxes, unit: noun(n.boxes, 'box', 'boxes'),
+      plain: `A detector running without the cloud drew boxes around ${plural(n.boxes_building, 'building')}, ${plural(n.boxes_signboard, 'sign')}, ${plural(n.boxes_pole, 'pole')} and ${plural(n.boxes_lamp_head, 'lamp head')} in the photos. These are photo boxes, not objects: one pole is usually boxed in several photos, and the boxes of the same pole or lamp are merged into ${plural(n.assets, 'pole or streetlight', 'poles and streetlights')} on the map. ${plural(n.boxes_tilted + n.boxes_user, 'box', 'boxes')} came from tilted or public photos and ${n.boxes_tilted + n.boxes_user === 1 ? 'is' : 'are'} not used to place anything on the map.`,
       tech: `${pipe.detector ?? 'YOLO'} → detections.json ${fmt.format(n.boxes)} boxes; geom_ok ${fmt.format(n.boxes_geom_ok)}; excluded: tilted view ${fmt.format(n.boxes_tilted)}, user photosphere ${fmt.format(n.boxes_user)}.`,
       visual: (run) => <SegBar run={run} onPick={pick} unit="boxes" segs={[
         { key: 'ok', label: 'usable for positions', value: n.boxes_geom_ok, kind: 'kept', examples: 'det.building' },
         { key: 't', label: 'tilted photo', value: n.boxes_tilted, kind: 'drop', examples: n.boxes_tilted ? 'det.tilted' : null },
         { key: 'u', label: 'public photosphere', value: n.boxes_user, kind: 'drop', examples: n.boxes_user ? 'det.user' : null }]} />,
       examples: [exBtn('det.building', 'Building boxes'), exBtn('det.signboard', 'Sign boxes'), exBtn('det.pole', 'Pole boxes'), exBtn('det.lamp_head', 'Lamp-head boxes')] },
-    { id: 'signs', title: 'Signs read', figure: n.sign_crops, unit: 'sign crops',
-      plain: `Every sign was cut out and read by OCR on the machine first. ${fmt.format(n.signs_ocr)} were read directly; ${fmt.format(n.signs_vlm)} were unclear and went to the cloud model; ${fmt.format(n.signs_no_text)} had no readable name. ${plural(n.named, 'building')} got a name from a sign; ${fmt.format(n.named_good)} of those were read clearly (the “shop names read clearly” number on the map; the rest are partly readable or unconfirmed Tamil) and ${fmt.format(n.named_google)} are also on Google Maps. ${n.unmapped_kept ? `${plural(n.unmapped_kept, 'business', 'businesses')} were found on no analysed building.` : ''} A sign stays with the building its photo was aimed at, unless its own line of sight clearly hits another building${n.signs_relinked ? ` (${fmt.format(n.signs_relinked)} signs moved that way)` : ''}.`,
+    { id: 'signs', title: 'Signs read', figure: n.sign_crops, unit: noun(n.sign_crops, 'sign crop'),
+      plain: `Every sign was cut out and read by OCR on the machine first. ${fmt.format(n.signs_ocr)} were read directly; ${fmt.format(n.signs_vlm)} were unclear and went to the cloud model; ${fmt.format(n.signs_no_text)} had no readable name. ${plural(n.named, 'building')} got a name from a sign; ${fmt.format(n.named_good)} of those were read clearly (the “shop names read clearly” number on the map; the rest are partly readable or unconfirmed Tamil) and ${fmt.format(n.named_google)} are also on Google Maps. ${n.unmapped_kept ? `${plural(n.unmapped_kept, 'business', 'businesses')} were found on no analysed building.` : ''} A sign stays with the building its photo was aimed at, unless its own line of sight clearly hits another building${n.signs_relinked ? ` (${plural(n.signs_relinked, 'sign')} moved that way)` : ''}.`,
       tech: `ocr.json tiers: 2 OCR ${n.signs_ocr}, 3 VLM ${n.signs_vlm}, 1 no text ${n.signs_no_text}, 0 watermark ${n.signs_watermark}${n.signs_skipped ? `, −1 skipped ${n.signs_skipped}` : ''}. Name gate ${pipe.name_gate ?? '—'}: a VLM name is kept only if OCR supports it. vlm_unmapped.json: ${n.unmapped_checked} checked, ${n.unmapped_not_business} not a business → ${n.unmapped_kept} kept. D44: sign_links.json (each sign box's own ray ±4°: moves only when all three hit the same other outline first and none touches the aimed one); ${n.signs_relinked ?? 0} differ from the photo's planned outline.`,
       visual: (run) => <Funnel run={run} onPick={pick} rows={h.sign_funnel} />,
       examples: [exBtn('signs.ocr', 'Read by OCR'), exBtn('signs.vlm', 'Sent to the cloud model'), exBtn('signs.no_text', 'No readable text'), ...(n.unmapped_kept ? [exBtn('unmapped.kept', 'Businesses not on the map')] : [])] },
@@ -154,7 +157,7 @@ function Story({ h, pick }: { h: HoodData; pick: Pick }) {
         </div>),
       examples: [] },
     { id: 'buildings', title: 'Floors and use', figure: n.buildings_usable, unit: `of ${plural(n.buildings, 'building')} had a clear photo`,
-      plain: `Use and floors can only be read from a clear photo of the front. ${fmt.format(n.buildings_usable)} buildings had one; ${fmt.format(n.buildings_rejected)} had only a poor photo (roof cut off, a sliver at the edge…) and ${fmt.format(n.buildings_no_box)} were never seen as a building. Floors were measured for ${fmt.format(n.floors_measured)} and estimated for ${fmt.format(n.floors_low_confidence)}.`,
+      plain: `Use and floors can only be read from a clear photo of the front. ${plural(n.buildings_usable, 'building')} had one; ${fmt.format(n.buildings_rejected)} had only a poor photo (roof cut off, a sliver at the edge…) and ${fmt.format(n.buildings_no_box)} were never seen as a building. Floors were measured for ${fmt.format(n.floors_measured)} and estimated for ${fmt.format(n.floors_low_confidence)}.`,
       tech: `building_views.json per registered building: reliable ${n.buildings_usable}; quality gate: sliver ${n.gate_thin_sliver_at_the_photo_edge}, roof cut ${n.gate_roof_cut_off_at_the_top}, base cut ${n.gate_base_cut_off_at_the_bottom}, full frame ${n.gate_box_fills_the_whole_photo}, tall ${n.gate_implausibly_tall_box}; no box ${n.buildings_no_box}. floors.status measured ${n.floors_measured} / low_confidence ${n.floors_low_confidence} / not_measured ${n.floors_not_measured}. (${n.footprints_unregistered_with_box} unregistered footprints also had boxes; not in the export.)`,
       visual: (run) => (
         <div className="space-y-4">
@@ -211,10 +214,7 @@ function Story({ h, pick }: { h: HoodData; pick: Pick }) {
       </Section>
       <Dropped h={h} pick={pick} />
       <StreetsTable h={h} />
-      <Section id="street-names" title="Street names" lead={<T plain="Where our sources give a street different names, choose the one to show. The default is the street picker’s rule: the map’s name, else Google’s name for the road itself, else the cross streets."
-        tech="GET /areas/{slug}/street-names (street_name_candidates.json); PUT stores data/street_name_picks.json and reloads the area. Source files unchanged." />}>
-        <StreetNames slug={h.area} />
-      </Section>
+      <StreetNamesSection slug={h.area} />
       {h.routing && <RoutingCost r={h.routing} billing={h.billing?.line} />}
       <CostTime h={h} />
       <Section id="osm" title="Businesses vs OpenStreetMap" lead={<T plain="A real, outside reference next to the synthetic register: the businesses our camera found against the shop points on OpenStreetMap, the open map volunteers edit. It is not an official register: a shop missing from it says nothing about the street."
@@ -223,6 +223,17 @@ function Story({ h, pick }: { h: HoodData; pick: Pick }) {
         <div className="mt-4"><OsmLevelsSummary area={h.area} brief /></div>
       </Section>
     </div>
+  )
+}
+
+/** D66: the whole section is hidden when the area has no name list (e.g. Ward 29) */
+function StreetNamesSection({ slug }: { slug: string }) {
+  const { data } = useStreetNames(slug)
+  if (data?.available === false) return null
+  return (
+    <Section id="street-names" title="Street names" lead="Where our sources give a street different names, choose the one to show. The default is the street picker’s rule: the map’s name, else Google’s name for the road itself, else the cross streets.">
+      <StreetNames slug={slug} />
+    </Section>
   )
 }
 
@@ -472,7 +483,7 @@ function PhotoCheckLine({ h }: { h: HoodData }) {
   if (!c) return null
   return (
     <p className="t-small ink2 mt-2" aria-label="Photos Google still serves"
-      title={`${c.panoramas_gone} of ${c.panoramas} panoramas. A photo reference is one evidence photo of one object; a panorama can serve several.`}>
+      title={`${c.panoramas_gone} of ${plural(c.panoramas, 'panorama')}. A photo reference is one evidence photo of one object; a panorama can serve several.`}>
       {c.gone ? <span className="sodium">{c.text}</span> : c.text}
     </p>
   )
@@ -516,7 +527,7 @@ function RoutingCost({ r, billing }: { r: RoutingData; billing?: string }) {
           while Google billed ₹0 (India pricing, free monthly allowance) */}
       {(sv.usd != null || ai != null) && (
         <div className="mb-4 space-y-1" aria-label="Cost of this run">
-          {sv.usd != null && <p className="t-body" title={`${fmt.format(sv.photos)} × $${sv.usd_per_photo} (Google list price, model card)`}>Street View photos (Google): <b>{usdText(sv.usd)}</b> — {fmt.format(sv.photos)} photos at Google’s global list price.</p>}
+          {sv.usd != null && <p className="t-body" title={`${fmt.format(sv.photos)} × $${sv.usd_per_photo} (Google list price, model card)`}>Street View photos (Google): <b>{usdText(sv.usd)}</b> — {plural(sv.photos, 'photo')} at Google’s global list price.</p>}
           {sv.usd != null && billing && <p className="t-small ink2">{billing}</p>}
           {ai != null && <p className="t-body" title={`${r.totals.status}, from this run's saved calls`}>Cloud AI (Amazon Nova Lite, AWS): <b>{usdText(ai)}</b>.{top?.task === 'floors' && <> Floor counting is the largest AI cost; it isn’t routed yet.</>}</p>}
         </div>
@@ -547,8 +558,8 @@ function RoutingCost({ r, billing }: { r: RoutingData; billing?: string }) {
       <div className="mt-2 max-w-[640px]"><AlignedBars rows={totalRows} fmtV={(v) => usdText(v)} /></div>
       <ul className="t-small ink2 mt-2 max-w-[760px] space-y-1">
         <li><b className="text-ink">As run:</b> {fmt.format(r.totals.calls)} cloud calls, {usdText(r.totals.usd)} ({r.totals.status}).</li>
-        {ac && <li><b className="text-ink">No local router:</b> {fmt.format(ac.calls)} calls, {usdText(ac.usd)}. The {fmt.format(ac.extra_calls)} buildings the local model decided would each need one more cloud call ({usdText(ac.extra_usd)} in all). The saving is modest because the use call is one of the cheapest; the floors call (three photos per building) costs most and runs for every building either way.</li>}
-        {ev && <li><b className="text-ink">Cloud model on every photo (estimate):</b> {fmt.format(ev.photos)} photos × {usd(ev.usd_per_call, 6)} per one-photo call (measured average) = {usdText(ev.usd)}{ev.minutes != null ? `, about ${ev.minutes} min of calls (${ev.workers} at a time)` : ''}. That still would not count floors or place anything on the map; the detector does that locally{det?.lat_s != null ? ` in ${Math.round(det.lat_s * 1000)} ms per photo` : ''}.</li>}
+        {ac && <li><b className="text-ink">No local router:</b> {plural(ac.calls, 'call')}, {usdText(ac.usd)}. The {plural(ac.extra_calls, 'building')} the local model decided would each need one more cloud call ({usdText(ac.extra_usd)} in all). The saving is modest because the use call is one of the cheapest; the floors call (three photos per building) costs most and runs for every building either way.</li>}
+        {ev && <li><b className="text-ink">Cloud model on every photo (estimate):</b> {plural(ev.photos, 'photo')} × {usd(ev.usd_per_call, 6)} per one-photo call (measured average) = {usdText(ev.usd)}{ev.minutes != null ? `, about ${ev.minutes} min of calls (${ev.workers} at a time)` : ''}. That still would not count floors or place anything on the map; the detector does that locally{det?.lat_s != null ? ` in ${Math.round(det.lat_s * 1000)} ms per photo` : ''}.</li>}
         {r.measured_every_view && <li><b className="text-ink">Measured on whole photos (model card, n = {r.measured_every_view.n}):</b> reading shop names with the cloud model on every photo cost {usdText(r.measured_every_view.usd_all_vlm)} vs {usdText(r.measured_every_view.usd_routed)} routed ({r.measured_every_view.ratio}), at the same accuracy ({Math.round(r.measured_every_view.all_vlm * 100)}% vs {Math.round(r.measured_every_view.routed * 100)}%).</li>}
       </ul>
       </>}
@@ -560,7 +571,7 @@ function RoutingCost({ r, billing }: { r: RoutingData; billing?: string }) {
           {r.accuracy.map((a) => (
             <div key={a.task}>
               <div className="t-micro mb-1.5">{a.task} · n = {a.n}</div>
-              <AlignedBars rows={a.rows.map((x) => ({ key: x.label, label: x.label, value: x.value, tone: x.production ? undefined : 'var(--ns-ink3)', note: `${a.src}${x.production ? ' (production)' : ''}` }))} fmtV={(v) => `${Math.round(v * 100)}%`} />
+              <AlignedBars rows={a.rows.map((x) => ({ key: x.label, label: x.label, value: x.value, tone: x.production ? undefined : 'var(--ns-ink3)', note: `the team’s model card${x.production ? ' · as run' : ''}` }))} fmtV={(v) => `${Math.round(v * 100)}%`} />
               <p className="t-small ink3 mt-1">{a.note}.</p>
             </div>
           ))}

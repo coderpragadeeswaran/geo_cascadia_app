@@ -9,7 +9,7 @@ import type { Asset, Building, UnmappedBusiness } from '@/api/types'
 import { assetRegLabel, ASSET_REG, floorsText, matchLabel, reviewLabel, useLabel } from '@/lib/labels'
 import { nameOf, useOf } from '@/lib/derive'
 import { propsFor, useAreaData } from '@/lib/useAreaData'
-import { cn, fmt } from '@/lib/utils'
+import { cn, plural } from '@/lib/utils'
 import { flyTo, OBJECT_TILT } from '@/map/camera'
 import { useUi } from '@/store/ui'
 
@@ -123,7 +123,7 @@ export function FindingsTable({ kind, rows, empty = 'Nothing matches.', onExpand
         </div>
       </div>
       <div className="t-data ink3 rule-t flex items-center justify-between gap-2 px-5 py-1.5">
-        <span>{fmt.format(sorted.length)} {kind === 'building' ? 'buildings' : kind === 'asset' ? 'poles & streetlights' : 'businesses'}</span>
+        <span>{kind === 'building' ? plural(sorted.length, 'building') : kind === 'asset' ? plural(sorted.length, 'pole or streetlight', 'poles & streetlights') : plural(sorted.length, 'business')}</span>
         {onExpand && <button className="link t-small inline-flex items-center gap-1 font-sans" onClick={onExpand}><Maximize2 className="size-3.5" /> Open the full list</button>}
       </div>
     </div>

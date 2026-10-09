@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api } from '@/api/client'
 import { cn, fmt } from '@/lib/utils'
+import { plainText } from '@/lib/labels'
 import { EvidencePhoto } from './EvidencePhoto'
 import { Boxes } from './EvidenceViews'
 
@@ -54,7 +55,7 @@ export function SignRule() {
       <dl className="t-small grid max-w-[760px] grid-cols-[220px_1fr] gap-y-1">
         <dt className="ink3">Ward 29 sign boxes</dt><dd><span className="t-data">{fmt.format(w.sign_crops)}</span>, of which <span className="t-data">{fmt.format(w.moved)}</span> moved to another building (or to / from none)</dd>
         <dt className="ink3">Checked against Google</dt><dd>{fmt.format(g.moved_read_signs_with_google_pin)} moved signs whose name matches a Google Maps business: the new building is <b>closer</b> to Google’s pin for <span className="t-data">{g.closer}</span>, <b>further</b> for <span className="t-data">{g.further}</span>, the same for <span className="t-data">{g.same_within_1m}</span>; <span className="t-data">{g.to_or_from_no_outline}</span> moved to or from no building (not measured). Median change: {Math.abs(g.median_change_m)} m {g.median_change_m < 0 ? 'closer' : 'further'}.</dd>
-        <dt className="ink3">How far to trust it</dt><dd className="ink2">{m.note}</dd>
+        <dt className="ink3">How far to trust it</dt><dd className="ink2">{plainText(m.note)}</dd>
       </dl>
       {ai && (
         <div className="max-w-[760px] rounded-[var(--ns-r-control)] p-3" style={{ boxShadow: 'inset 0 0 0 1px var(--ns-sodium)' }}>
@@ -64,7 +65,7 @@ export function SignRule() {
         </div>
       )}
       {open && data.spotcheck && <SpotCheck samples={data.spotcheck.samples} ai={ai?.rows ?? []} onClose={() => setOpen(false)} />}
-      <p className="t-small ink3">Source: {m.source}.</p>
+      <p className="t-small ink3">Source: the team’s check of this run’s saved files (no new photos or model calls){/(\d{1,2} \w{3} \d{4})/.exec(m.source)?.[1] ? `, ${/(\d{1,2} \w{3} \d{4})/.exec(m.source)![1]}` : ''}.</p>
     </div>
   )
 }
