@@ -13,6 +13,7 @@ image. Pure-Python libraries only (fpdf2, openpyxl, fontTools via fpdf2; uharfbu
 import datetime as _dt
 import io
 import math
+import re
 import os
 
 from . import camonly, lighting, mapdata, osmref, photos
@@ -46,6 +47,18 @@ def fmt(n):
 
 PLURALS = {"stretch": "stretches", "possible dark stretch": "possible dark stretches", "business": "businesses",
            "shop or business": "shops & businesses"}
+
+
+def plain_text(s):
+    """D66: model-card prose without developer references ("(tools/eval_gate1.py)", "(D44)", a trailing "tools/x.py.",
+    "model_card.json"); the web app's lib/labels.ts plainText does the same."""
+    s = re.sub(r"\s*\([^()]*(?:\b(?:tools|data|backend)[\/]|\.py\b|\.json\b)[^()]*\)", "", s or "")
+    s = re.sub(r"\s*\(D\d{1,2}(?:\s*,\s*D\d{1,2})*\)", "", s)
+    s = re.sub(r"(?:^|\s+)(?:(?:tools|data|backend)[\/]\S+\s*)+(?=[.;,]|$)", "", s)
+    s = re.sub(r"^history chat \d+:\s*", "", s, flags=re.I)
+    s = re.sub(r"\bmodel_card(?:\.json)?\b", "the model card", s)
+    s = re.sub(r"\s+([.,;])", r"\1", s)
+    return re.sub(r"\s{2,}", " ", re.sub(r"\.{2,}", ".", s)).strip()
 
 
 def noun(n, one, many=None):
@@ -639,7 +652,7 @@ def content(store, bundle, F, model_card, areas_dir, street=None, today=None):
         # are Google's global list price, while Google actually billed ₹0 (data/billing.json)
         lines = []
         if sv.get("usd") is not None:
-            lines.append(f"Street View photos (Google): {usd_text(sv['usd'])} — {fmt(sv['photos'])} photos at Google’s global list price.")
+            lines.append(f"Street View photos (Google): {usd_text(sv['usd'])} — {plural(sv['photos'], 'photo')} at Google’s global list price.")
             bill = photos.billing(os.path.dirname(areas_dir))
             if bill and bill.get("line"):
                 lines.append(bill["line"])
@@ -662,7 +675,7 @@ def content(store, bundle, F, model_card, areas_dir, street=None, today=None):
             fair = v
     gate1 = {"title": f"Position accuracy — target ≤ {g1.get('target_m')} m (FarmwiseAI Gate 1)",
              "status": "Status: " + ("Not verified" if g1.get("status") == "not verified" else str(g1.get("status"))),
-             "note": f"{g1.get('status_note')} No surveyed reference exists.",
+             "note": f"{plain_text(g1.get('status_note'))} No surveyed reference exists.",
              "row": (f"All camera-derived positions (the two camera methods together), vs the centre of the OSM front wall: "
                      f"n = {fmt(fair['n'])}, median {fair['median_m']} m, p90 {fair['p90_m']} m, {fair['within_3_5_m_pct']}% within "
                      f"{g1.get('target_m')} m.") if fair else "This area is not in Trust's Gate 1 table (it was analysed from the app)."}

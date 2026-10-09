@@ -2,6 +2,16 @@
  *  confidences, n) stay behind "How do we know?" and on the verifier pages (docs/DECISIONS.md D16). */
 import { plural } from './utils'
 
+/** D66: model-card prose without developer references: "(tools/eval_gate1.py)", a trailing "tools/x.py.", "(D44)",
+ *  "history chat 1:" and "model_card.json" (→ "the model card"). Numbers and wording otherwise unchanged. */
+export const plainText = (s: string | null | undefined) => (s ?? '')
+  .replace(/\s*\([^()]*(?:\b(?:tools|data|backend)[\\/]|\.py\b|\.json\b)[^()]*\)/g, '')
+  .replace(/\s*\(D\d{1,2}(?:\s*,\s*D\d{1,2})*\)/g, '')
+  .replace(/(?:^|\s+)(?:(?:tools|data|backend)[\\/]\S+\s*)+(?=[.;,]|$)/g, '')
+  .replace(/^history chat \d+:\s*/i, '')
+  .replace(/\bmodel_card(?:\.json)?\b/g, 'the model card')
+  .replace(/\s+([.,;])/g, '$1').replace(/\.{2,}/g, '.').replace(/\s{2,}/g, ' ').trim()
+
 export const pretty = (s: string | null | undefined) => (s ? s.replace(/_/g, ' ') : '—')
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
@@ -53,6 +63,9 @@ export const GAP_TYPE: Record<string, string> = {
   'no pole or lamp detected': 'no pole or streetlight seen',
 }
 export const gapTypeLabel = (t: string | null | undefined) => (t ? GAP_TYPE[t] ?? t : '—')
+/** D66: one sentence for the poles on a possible dark stretch (drawer, list card, hover card) */
+export const gapPolesSentence = (poles: number | null | undefined) =>
+  poles ? `${plural(poles, 'pole')} ${poles === 1 ? 'stands' : 'stand'} here, but no lamp was seen on ${poles === 1 ? 'it' : 'them'}.` : 'No pole or lamp was seen here.'
 
 /** D56: buildings seen only by the camera (no map outline) — shown next to the analysed-building count, never added */
 export const cameraOnlyText = (n: number | null | undefined) => (n ? `+ ${n} seen only by camera` : '')

@@ -115,6 +115,8 @@ async function main() {
     log(`[${mode}]`)
     const browser = await chromium.launch({ args: ['--use-angle=d3d11', '--ignore-gpu-blocklist', '--enable-gpu'] })
     const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 } })
+    // D66: API_PORT (optional) reroutes the page's :8000 calls to another API (e.g. a branch API next to a running one)
+    if (process.env.API_PORT) await ctx.route('http://localhost:8000/**', (r) => r.continue({ url: r.request().url().replace(':8000', `:${process.env.API_PORT}`) }))
     await ctx.addInitScript((m) => { try { if (!sessionStorage.getItem('init')) { localStorage.setItem('gc.tourSeen', '1'); localStorage.setItem('gc.mode', JSON.stringify(m)); sessionStorage.setItem('init', '1') } } catch { /* */ } }, mode)
     const page = await ctx.newPage()
     const errors: string[] = []

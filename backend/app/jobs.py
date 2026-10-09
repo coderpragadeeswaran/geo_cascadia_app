@@ -407,7 +407,7 @@ def job_cancel(job_id: str, request: Request, D: Data = Depends(get_data)):
         with s.pool.connection() as c:
             j = _get_job(c, job_id)
             if j["status"] not in ("queued", "running", "expired_token", "needs_approval"):
-                raise HTTPException(409, f"job is already {j['status']}")
+                raise HTTPException(409, f"job is already {j['status'].replace('_', ' ')}")
             if j["display_status"] in ("running", "cancelling"):
                 c.execute("update jobs set cancel_requested = true where id = %s", (job_id,))
             else:
@@ -468,7 +468,7 @@ def job_approve(job_id: str, request: Request, D: Data = Depends(get_data)):
         with s.pool.connection() as c:
             j = _get_job(c, job_id)
             if j["status"] != "needs_approval":
-                raise HTTPException(409, f"job is {j['status']}, not waiting for approval")
+                raise HTTPException(409, f"job is {j['status'].replace('_', ' ')}, not waiting for approval")
             c.execute("update jobs set status = 'queued', approved = true, message = null where id = %s", (job_id,))
             return _get_job(c, job_id)
     return {"offline": False, "job": D.write(fn), "worker_online": worker_online(request.app)}
@@ -482,7 +482,7 @@ def job_retry(job_id: str, request: Request, D: Data = Depends(get_data)):
         with s.pool.connection() as c:
             j = _get_job(c, job_id)
             if not j["retryable"]:          # failed with an error: not cancelled, not "no Street View", no area
-                raise HTTPException(409, f"job is {j['display_status']}: only a failed job can be retried")
+                raise HTTPException(409, f"job is {j['display_status'].replace('_', ' ')}: only a failed job can be retried")
             if not j["is_test"]:
                 busy = c.execute(f"""select case when coalesce((j.input->>'hidden')::boolean, false) then null else j.input->>'street' end from jobs j where not j.is_test and j.status in {ACTIVE_SQL}
                                      and j.id <> %s order by j.created_at limit 1""", (job_id,)).fetchone()

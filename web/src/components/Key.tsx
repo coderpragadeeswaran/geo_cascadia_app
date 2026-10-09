@@ -1,7 +1,7 @@
 /** The key (legend), collapsed by default and contextual (docs/DESIGN.md declutter rule 5): it lists only what is on the
  *  map at this zoom band with the current layers and mode. */
 import { ChevronDown } from 'lucide-react'
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { useAreaGeo, useCameraBuildings } from '@/api/queries'
 import { colors } from '@/design/tokens'
 import { FLOOR_HEIGHT_M } from '@/map/layers'
@@ -9,12 +9,47 @@ import { cn } from '@/lib/utils'
 import { StretchSwatch } from './GapList'
 import { useUi } from '@/store/ui'
 
+// the label is one inline span, so a count inside it flows with the words instead of becoming its own flex column
 const Item = ({ sw, children }: { sw: React.ReactNode; children: React.ReactNode }) => (
-  <li className="t-small flex items-center gap-2.5 py-[3px]"><span className="flex w-8 shrink-0 justify-center">{sw}</span>{children}</li>
+  <li className="t-small flex items-center gap-2.5 py-[3px]"><span className="flex w-8 shrink-0 justify-center">{sw}</span><span className="min-w-0">{children}</span></li>
 )
+
+/** D66: the open key may use only the space between the bottom of the top scrim's content (top bar, key numbers, the
+ *  More menu, the coverage note) and the top of the Key button; re-measured when any of them changes size. */
+function useKeyMaxHeight(open: boolean, btn: React.RefObject<HTMLButtonElement | null>) {
+  const [maxH, setMaxH] = useState<number | null>(null)
+  useLayoutEffect(() => {
+    if (!open) return
+    const scrim = () => document.querySelector<HTMLElement>('[data-top-scrim]')
+    const measure = () => {
+      const b = btn.current
+      if (!b) return
+      const top = scrim()
+      let bottom = 0
+      if (top) {
+        const r = top.getBoundingClientRect()
+        bottom = r.bottom - (parseFloat(getComputedStyle(top).paddingBottom) || 0)
+        top.querySelectorAll<HTMLElement>('[role="menu"]').forEach((m) => { bottom = Math.max(bottom, m.getBoundingClientRect().bottom) })
+      }
+      const GAP = 8 + 8                                         // the sheet's mb-2 above the button + air below the ribbon
+      setMaxH(Math.max(96, Math.floor(b.getBoundingClientRect().top - bottom - GAP)))
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    const mo = new MutationObserver(measure)
+    const top = scrim()
+    if (top) { ro.observe(top); mo.observe(top, { childList: true, subtree: true }) }
+    if (btn.current) ro.observe(btn.current)
+    window.addEventListener('resize', measure)
+    return () => { ro.disconnect(); mo.disconnect(); window.removeEventListener('resize', measure) }
+  }, [open, btn])
+  return maxH
+}
 
 export function Key() {
   const [open, setOpen] = useState(false)
+  const btn = useRef<HTMLButtonElement>(null)
+  const maxH = useKeyMaxHeight(open, btn)
   const band = useUi((s) => s.band)
   const layers = useUi((s) => s.layers)
   const flat = useUi((s) => s.flat)
@@ -33,7 +68,8 @@ export function Key() {
   return (
     <div className="pointer-events-auto absolute bottom-8 left-4 z-10">
       {open && (
-        <ul className="sheet mb-2 w-[272px] px-4 py-3" aria-label="Map key">
+        <ul className="sheet mb-2 w-[272px] overflow-y-auto px-4 py-3" aria-label="Map key" tabIndex={0} data-map-key
+          style={{ maxHeight: maxH ?? undefined, scrollbarWidth: 'thin', scrollbarColor: 'var(--ns-ink3) transparent' }}>
           {band === 'city' ? (
             <>
               <Item sw={<span className="h-2.5 w-4 rounded-[2px]" style={{ boxShadow: `inset 0 0 0 1.5px ${c.sodium}`, background: c.sodiumSoft }} />}>Analysed area</Item>
@@ -63,7 +99,7 @@ export function Key() {
               {layers.assets && near && layers.uncertainty && <Item sw={<span className="size-3 rounded-full" style={{ border: `1px dashed ${c.ink2}` }} />}>Approximate position</Item>}
               {layers.cameraBuildings && (camB?.count ?? 0) > 0 && (
                 <Item sw={<span className="size-2.5 rotate-45 rounded-[1px]" style={{ boxShadow: `inset 0 0 0 1.5px ${night ? c.sodiumGlow : c.sodium}` }} />}>
-                  Building seen by camera only, no map outline · <span className="t-data">{camB!.count}</span>{near ? '' : ' (street zoom)'}</Item>
+                  Building seen by camera only, no map outline · <span className="t-data">{camB!.count}</span>{near ? null : ' (street zoom)'}</Item>
               )}
               {layers.missing && near && <Item sw={<span className="size-3 rounded-[3px]" style={{ border: `1.5px dashed ${c.noRecord}` }} />}>In the register, not seen</Item>}
               {layers.review && near && <Item sw={<span className="h-2.5 w-4 rounded-[2px]" style={{ border: `1.5px dashed ${c.review}` }} />}>Waiting for review</Item>}
@@ -76,7 +112,7 @@ export function Key() {
           <li className="t-micro mt-1.5">Registers are synthetic (demo)</li>
         </ul>
       )}
-      <button className="btn" onClick={() => setOpen(!open)} aria-expanded={open} style={{ background: 'color-mix(in srgb, var(--ns-bg1) 80%, transparent)' }}>
+      <button ref={btn} className="btn" onClick={() => setOpen(!open)} aria-expanded={open} style={{ background: 'color-mix(in srgb, var(--ns-bg1) 80%, transparent)' }}>
         Key <ChevronDown className={cn('transition-transform', open && 'rotate-180')} />
       </button>
     </div>

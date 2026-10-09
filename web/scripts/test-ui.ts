@@ -1,6 +1,7 @@
 /** Pure UI helpers (review fixes 10, 11, 13, 14), no browser: `npm run test:ui`. Exits 1 on the first failure. */
 import { strict as assert } from 'node:assert'
 import { placeLabels, placeMapLabels, type Rect } from '../src/lib/labelLayout'
+import { gapPolesSentence, plainText } from '../src/lib/labels'
 import { byPriority, JOB_STAGES, jobStatus, matchLabel, priorityLabel, minutesText, planSlowText, planTooSlow, stageLine, stageProgress, stageShort, timeLeft } from '../src/lib/labels'
 import { kpis, type Records } from '../src/lib/derive'
 import { photoProblem, saveDecision } from '../src/lib/review'
@@ -8,7 +9,7 @@ import { article, costText, noun, plural, usd, withArticle } from '../src/lib/ut
 import { mainLine, pointAt, project, separate, slice } from '../src/map/trim'
 import { pickedLines, streetKey } from '../src/map/analyse'
 import { gapListOpen, panelOf } from '../src/store/ui'
-import { CLS_LETTER, tagBoxes } from '../src/lib/photoTags'
+import { CLS_LETTER, isDrawnTarget, tagBoxes } from '../src/lib/photoTags'
 import { answerOf, correctable, outcomeLine, reviewerSays, reviewQuestions } from '../src/lib/reviewQuestions'
 import { swapNote, swapOf, swapWhen, showsBoxes, shownView, SAME_NOTE } from '../src/lib/photoSwap'
 
@@ -321,6 +322,32 @@ t('D61: only a verified re-issue (same image) keeps the stored view and its boxe
   const near = swapOf(false, cur, '2026-02')
   assert.equal(near.state, 'swapped'); assert.ok(!showsBoxes(near)); assert.equal(shownView(near, view), near.current)
   assert.ok(showsBoxes(swapOf(true, null))); assert.equal(shownView(swapOf(true, null), view), view)
+})
+
+t('D66: model-card prose without developer references, numbers kept', () => {
+  assert.equal(plainText("No reference accurate to ~1 m is available, so a 3.5 m result can't be confirmed or ruled out. Evaluation tool ready for surveyed points (tools/eval_gate1.py)."),
+    "No reference accurate to ~1 m is available, so a 3.5 m result can't be confirmed or ruled out. Evaluation tool ready for surveyed points.")
+  assert.equal(plainText('… and real errors can be larger. tools/pole_uncertainty.py.'), '… and real errors can be larger.')
+  assert.equal(plainText('none touches the aimed one (D44).'), 'none touches the aimed one.')
+  assert.equal(plainText('history chat 1: 0-8 m median 1.64 m (86% within 3.5 m); 8-15 m median 4.55 m (n=1469 detections)'),
+    '0-8 m median 1.64 m (86% within 3.5 m); 8-15 m median 4.55 m (n=1469 detections)')
+  assert.equal(plainText('model_card.json has precision and recall per class'), 'the model card has precision and recall per class')
+  assert.equal(plainText('nothing to remove (n = 30, 77 %)'), 'nothing to remove (n = 30, 77 %)')
+})
+
+t('D66: one sentence for the poles on a dark stretch (list card = drawer)', () => {
+  assert.equal(gapPolesSentence(3), '3 poles stand here, but no lamp was seen on them.')
+  assert.equal(gapPolesSentence(1), '1 pole stands here, but no lamp was seen on it.')
+  assert.equal(gapPolesSentence(0), 'No pole or lamp was seen here.')
+})
+
+t('D66: the key promises an orange box only when it is on the photo', () => {
+  const box = { target: true, x1: 530, y1: 245, x2: 640, y2: 297 }
+  assert.ok(isDrawnTarget(box))
+  assert.ok(!isDrawnTarget({ ...box, target: false }))
+  assert.ok(!isDrawnTarget({ ...box, x1: 640, x2: 700 }))           // outside the 640 px frame
+  assert.ok(!isDrawnTarget({ ...box, y1: 300, y2: 302 }))           // a 2 px sliver
+  assert.equal(plural(1, 'building'), '1 building')                  // the findings footer ("1 buildings" before)
 })
 
 await (async () => {

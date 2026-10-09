@@ -139,7 +139,8 @@ class Detections:
                 return hit[1]
         with open(path, encoding="utf-8") as f:
             # P8: + the panorama's capture month ("YYYY-MM", Google's metadata stored by the pipeline) for the photo-age badge
-            cams = {p["pano_id"]: {"lat": p["camera_lat"], "lon": p["camera_lon"], "date": p.get("date")} for p in json.load(f)
+            cams = {p["pano_id"]: {"lat": p["camera_lat"], "lon": p["camera_lon"], "date": p.get("date"), "source": p.get("source")}
+                    for p in json.load(f)
                     if p.get("pano_id") and p.get("camera_lat") is not None}
         with self._lock:
             self._cache[key] = (stamp, cams)
@@ -379,12 +380,19 @@ def _evidence(D, bundle, kind, obj_id):
                                   f"failed the photo quality check ({why}), so its use and floors were not read from it." if why else None)
                 out.insert(0, {"key": "best", **v})
             elif not out and ev.get("views"):
-                v0 = {**ev["views"][0], "fov": ev["views"][0].get("fov") or 90}
+                # D66: among the photos planned to face this building (nearest first), a Google-car panorama before a
+                # public user photosphere; the photosphere only when no Google-car photo faces it. No new photo.
+                cams = D.cameras(bundle["slug"])
+                user = lambda x: (cams.get(x["pano_id"]) or {}).get("source") == "user"
+                pick = next((x for x in ev["views"] if not user(x)), ev["views"][0])
+                v0 = {**pick, "fov": pick.get("fov") or 90}
                 v = _exact_view(D, idx, v0, "Nearest camera", None, "building", None)
                 v["target"] = "none"
                 v["boxes"] = [{**b, "target": False} for b in v["boxes"]]
                 v["user_note"] = ("The detector found no box for this building in any photo. The boxes here are other things it saw "
-                                  "from the nearest camera; none of them was matched to this building's outline.")
+                                  "from the nearest camera; none of them was matched to this building's outline."
+                                  + (" This is a public photo taken by a Street View user: no Google car photo faces this building."
+                                     if user(pick) else ""))
                 out.append({"key": "v0", **v})
         return out
     if kind == "asset":
@@ -410,4 +418,4 @@ def building_links(D, slug, fp):
     links = D.sign_links(slug)
     crops = [c for c, f in links.items() if f == fp]
     photos = {c.rsplit("_", 1)[0] for c in crops}               # "<pano>_<heading>_<pitch>_<n>.jpg" -> the photo
-    return {"sign_boxes": len(crops), "photos": len(photos), "source": "sign_links.json (each sign linked by its own line of sight)"}
+    return {"sign_boxes": len(crops), "photos": len(photos), "source": "each sign is linked by its own line of sight"}

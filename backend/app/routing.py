@@ -50,14 +50,14 @@ def calls(F, run):
     K = {
         "use": {"n": len(use_cloud), "usd": _usd(sum(r.get("in", 0) for r in use_cloud), sum(r.get("out", 0) for r in use_cloud)),
                 "status": "measured", "lat_s": _med(r.get("lat_s") for r in use_cloud),
-                "src": "vlm_buildings.json: use calls' tokens × Nova Lite price"},
+                "src": "the run's saved use calls: tokens × the Nova Lite price"},
         "floors": {"n": len(floors), "usd": _usd(sum(r["floors_in"] for r in fl_tok), sum(r["floors_out"] for r in fl_tok)) if fl_tok else None,
                    "status": "measured" if fl_tok else "not recorded", "lat_s": None,
-                   "src": "vlm_buildings.json: floors calls' tokens × price" if fl_tok else "this run did not store the floors call's tokens"},
+                   "src": "the run's saved floors calls: tokens × the Nova Lite price" if fl_tok else "this run did not store the floors call's tokens"},
         "names": {"n": len(vn), "usd": _usd(sum(r.get("in", 0) for r in vn), sum(r.get("out", 0) for r in vn)), "status": "measured",
-                  "lat_s": _med(r.get("lat_s") for r in vn), "src": "vlm_names.json: tokens × price"},
+                  "lat_s": _med(r.get("lat_s") for r in vn), "src": "the run's saved name checks: tokens × the Nova Lite price"},
         "signs": {"n": len(vu), "usd": None, "status": "not recorded", "lat_s": None,
-                  "src": "vlm_unmapped.json stores no tokens"},
+                  "src": "the run did not save the business-sign checks' tokens"},
     }
     total_n = sum(k["n"] for k in K.values())
     rc, rusd = run.get("vlm_calls"), run.get("vlm_cost_usd")
@@ -96,7 +96,7 @@ def routing(bundle, F, n, model_card=None):
         return {"route": "cloud", "model": "Nova Lite", "label": label, "n": k["n"], "unit": unit, "usd": _r(k["usd"], 6),
                 "usd_status": k["status"], "usd_src": k["src"],
                 "usd_per_call": _r(k["usd"] / k["n"], 7) if k["usd"] is not None and k["n"] else None,
-                "lat_s": k["lat_s"], "lat_src": "median seconds per call (vlm files' lat_s)" if k["lat_s"] is not None else "not recorded"}
+                "lat_s": k["lat_s"], "lat_src": "median seconds per call, from the run's saved cloud calls" if k["lat_s"] is not None else "not recorded"}
 
     def local(model, label, value, unit, lat=None, lat_src="not measured"):
         return {"route": "local", "model": model, "label": label, "n": value, "unit": unit, "usd": 0, "usd_status": "no per-call charge",

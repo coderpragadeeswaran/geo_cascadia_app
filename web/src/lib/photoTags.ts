@@ -26,3 +26,10 @@ export function tagBoxes<T extends TagIn>(boxes: T[], all: boolean, hidden: Set<
   return shown.map((b) => ({ ...b, tag: b.target ? null : tag.get(b.i) ?? null }))
     .sort((a, c) => Number(a.target) - Number(c.target) || (a.tag ?? '').localeCompare(c.tag ?? '', undefined, { numeric: true }))
 }
+
+/** D66: the key may say "Orange = …" only for a target box that is really on the photo: inside the 640×640 frame with
+ *  at least 4 × 4 px showing. Anything else is treated as not matched (a plain line under the photo says so). */
+export function isDrawnTarget(b: { target: boolean; x1: number; y1: number; x2: number; y2: number }) {
+  return b.target && Math.min(b.x2, 640) - Math.max(b.x1, 0) >= 4 && Math.min(b.y2, 640) - Math.max(b.y1, 0) >= 4
+}
+export const SIGN_NOT_MATCHED = 'The sign box for this building couldn’t be matched in this photo.'

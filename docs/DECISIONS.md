@@ -2581,3 +2581,24 @@ numbers next to them where they cover the same thing (use, floors); no relabelli
   ($0.0081).
 
 Details, the full list of traces removed, files and limits: explainer 07, D65 entry.
+
+## 2026-10-09 — pre-review polish (branch prereview-polish)
+
+### D66. Display and wording only: the Key fits under the key numbers; full sentences; no developer text anywhere a user or judge looks
+- **Key** (Explore): capped to the space between the top area (key numbers, an open "More" list) and the Key button,
+  re-measured on every change, with its own scroll bar; text size unchanged. Camera-only row laid out like the others.
+- **Wording:** the dark-stretch card and hover card use the drawer's pole sentence; Trust's Building use lane shows
+  $0.000227 / $0.000271 per building (never "0"); plurals through the helper ("1 building"); a business sign on an
+  outline that is not analysed says so; Trust › Limits names the resumed runs (Trichy, Tiruppur) only.
+- **No developer text** (file names, paths, commands, env names, API paths, identifiers, "(Dnn)") on any page, tooltip,
+  error, the PDF, Excel or GIS files; model-card prose shown through `plainText` / `report.plain_text` (the model card is
+  not edited). Under the Hood › Street names is hidden, with its nav entry, for an area with no name list (Ward 29).
+- **Sign photo key:** "Orange = …" only for a target box drawn on the photo; an unmatched Sign photo says "The sign box
+  for this building couldn't be matched in this photo." Ward 29: 154 of 154 sign views matched and drawn, 0 unmatched.
+- **"Nearest camera":** a Google-car photo among those planned to face the building before a user photosphere; no new
+  photo. Ward 29: 0 change (the 8th Street building's only planned photo is the photosphere; it now says so).
+- No number, result, database row or pipeline / worker file changed; the code makes no new paid call; the AWS server
+  was not touched. The checks' browser screenshots loaded stored Street View photos (a few dozen, not counted exactly).
+
+Details, the full string list, numbers and limits: explainer 07, D66 entry.
+

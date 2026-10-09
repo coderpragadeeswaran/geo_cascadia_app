@@ -1,7 +1,7 @@
 /** Hover card (follows the cursor, plain words) and the low-coverage note. A click opens the evidence panel. */
 import { useAreas, useModelCard } from '@/api/queries'
 import type { AnyProps, GapProps } from '@/api/types'
-import { assetRegLabel, ASSET_REG, floorsText, gapTypeLabel, priorityLabel, matchLabel, onMapSeenIn, shortArea, useLabel, CAMERA_ONLY_TIP, cameraOnlyText } from '@/lib/labels'
+import { assetRegLabel, ASSET_REG, floorsText, gapPolesSentence, priorityLabel, matchLabel, onMapSeenIn, shortArea, useLabel, CAMERA_ONLY_TIP, cameraOnlyText } from '@/lib/labels'
 import { useAreaData } from '@/lib/useAreaData'
 import { fmt, noun, plural } from '@/lib/utils'
 import { useUi } from '@/store/ui'
@@ -45,7 +45,7 @@ function Body({ p }: { p: AnyProps }) {
         <Title eyebrow="Possible dark stretch" title={`${fmt.format(Math.round(p.length_m))} m of ${p.street}`} />
         <GapContext p={p} />
         {p.priority && <Line><b className="font-[560]">{priorityLabel(p.priority)} priority</b>: {p.priority_reason}</Line>}
-        <Line>{gapTypeLabel(p.gap_type)}</Line>
+        <Line>{gapPolesSentence(p.poles_inside)}</Line>
         <LampRecallLine />
         {p.display_mode === 'check' && <Line><span className="sodium">Needs checking: the road bends here</span></Line>}
       </>)

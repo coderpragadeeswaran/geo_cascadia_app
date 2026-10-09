@@ -181,8 +181,8 @@ def experiments(mc):
         item("Building use", name, status,
              [{"label": "use right", "value": get(mc, f"{fr}.{key}.use_accuracy"), "kind": "pct", "src": f"{fr}.{key}.use_accuracy"},
               {"label": "floors exact", "value": get(mc, f"{fr}.{key}.floors_exact"), "kind": "pct", "src": f"{fr}.{key}.floors_exact"},
-              {"label": "cloud $ per building", "value": get(mc, f"{fr}.{key}.usd_per_building"), "kind": "num", "src": f"{fr}.{key}.usd_per_building"},
-              {"label": "s per building", "value": get(mc, f"{fr}.{key}.s_per_building"), "kind": "num", "src": f"{fr}.{key}.s_per_building"},
+              {"label": "cloud cost per building", "value": get(mc, f"{fr}.{key}.usd_per_building"), "kind": "usd", "src": f"{fr}.{key}.usd_per_building"},
+              {"label": "time per building", "value": get(mc, f"{fr}.{key}.s_per_building"), "kind": "s", "src": f"{fr}.{key}.s_per_building"},
               {"label": "n", "value": get(mc, f"{fr}.n"), "kind": "num", "src": f"{fr}.n"}], why, fr)
     item("Shop names", "every photo to the VLM", "rejected",
          [{"label": "accuracy", "value": get(mc, "names.full_view_n16.all_vlm_per_view"), "kind": "pct", "src": "names.full_view_n16.all_vlm_per_view"},

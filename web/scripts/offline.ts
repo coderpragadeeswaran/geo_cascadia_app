@@ -3,13 +3,16 @@
  *  script reroutes those calls.  npx tsx scripts/offline.ts [outDir]
  *  Cases: map servers blocked · analysis computer offline (a test job stays queued) · Google keys missing · the API
  *  stops answering mid-session. Each prints what the person sees and saves a screenshot. */
-import { chromium, type Page } from 'playwright'
+import { chromium, type Page, type Route } from 'playwright'
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 const OUT = process.argv[2] ?? '../docs/screenshots/p7r3/offline'
 const APP = process.env.APP_URL ?? 'http://localhost:5173/'
-const API = 'http://localhost:8000'
+const API = 'http://localhost:8000'                       // what the page calls
+// D66: API_PORT (optional) reroutes the page's :8000 calls, and this script's own calls, to another API
+const PORT = process.env.API_PORT
+const NODE_API = PORT ? `http://localhost:${PORT}` : API
 mkdirSync(OUT, { recursive: true })
 let fails = 0
 const check = (ok: boolean, what: string) => { console.log(ok ? '  ok ' : '  FAIL', what); if (!ok) fails++ }
@@ -18,7 +21,8 @@ async function open(port?: number) {
   const browser = await chromium.launch({ args: ['--use-angle=d3d11', '--ignore-gpu-blocklist', '--enable-gpu'] })
   const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 } })
   await ctx.addInitScript(() => { localStorage.setItem('gc.tourSeen', '1'); localStorage.setItem('gc.area', JSON.stringify('ward29')); localStorage.setItem('gc.reviewer', JSON.stringify('offline check')) })
-  if (port) await ctx.route(`${API}/**`, (r) => r.continue({ url: r.request().url().replace(':8000', `:${port}`) }))
+  const to = port ?? (PORT ? Number(PORT) : undefined)
+  if (to) await ctx.route(`${API}/**`, (r) => r.continue({ url: r.request().url().replace(':8000', `:${to}`) }))
   const page = await ctx.newPage()
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
@@ -63,7 +67,7 @@ async function mapServersBlocked() {
 
 async function workerOffline() {
   console.log('[analysis computer offline] API :8000, no worker; one test job queued on a cached demo street')
-  const r = await fetch(`${API}/jobs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lat: 11.042553, lon: 76.9841361, test: true }) })
+  const r = await fetch(`${NODE_API}/jobs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lat: 11.042553, lon: 76.9841361, test: true }) })
   const job = await r.json() as { id?: string; job?: { id: string } }
   const id = job.id ?? job.job?.id
   // extras F1: record the exact id at creation, so a clean-up after a crash removes this job and nothing else
@@ -82,8 +86,8 @@ async function workerOffline() {
     check(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
   } finally {
     if (id) {
-      await fetch(`${API}/jobs/${id}/cancel`, { method: 'POST' })
-      const d = await fetch(`${API}/jobs/${id}`, { method: 'DELETE' })
+      await fetch(`${NODE_API}/jobs/${id}/cancel`, { method: 'POST' })
+      const d = await fetch(`${NODE_API}/jobs/${id}`, { method: 'DELETE' })
       console.log(`  (test job ${id.slice(0, 8)} cancelled and removed: ${d.status})`)
     }
     await browser.close()
@@ -95,7 +99,7 @@ async function keysMissing() {
   const { browser, page, errors } = await open(8002)
   await page.getByText('The map can’t be shown').waitFor({ timeout: 60_000 })
   await page.screenshot({ path: join(OUT, 'c1-explore-no-map.png') })
-  check(true, 'Explore: "The map can’t be shown" with what to set, and links to the pages that work')
+  check(true, 'Explore: "The map can’t be shown" in plain words, and links to the pages that work')
   await go(page, 'Review', 5000)
   // a just-started helper API reads every area first: wait for a real count ("0 waiting" shows while it loads)
   check(await said(page, /[1-9][\d,]* waiting/, 90_000), 'Review: the queue loads')
@@ -116,13 +120,14 @@ async function apiDown() {
   const { browser, page } = await open()
   await page.getByText('Buildings checked').first().waitFor({ timeout: 90_000 })
   await page.waitForTimeout(4000)
-  await page.context().route(`${API}/**`, (r) => r.abort('connectionrefused'))
+  const down = (r: Route) => r.abort('connectionrefused')
+  await page.context().route(`${API}/**`, down)
   await go(page, 'Jobs', 4000)
   await page.screenshot({ path: join(OUT, 'd1-api-down.png') })
-  check(await said(page, /The API isn’t answering/), 'banner: "The API isn’t answering … What is on screen stays"')
-  await page.context().unroute(`${API}/**`)
+  check(await said(page, /The app’s server isn’t answering/), 'banner: "The app’s server isn’t answering … What is on screen stays"')
+  await page.context().unroute(`${API}/**`, down)               // only this handler: an API_PORT reroute stays
   await go(page, 'Review', 6000)
-  check(await gone(page, /The API isn’t answering/), 'banner clears once the API answers again')
+  check(await gone(page, /The app’s server isn’t answering/), 'banner clears once the API answers again')
   await browser.close()
 }
 

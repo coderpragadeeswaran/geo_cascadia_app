@@ -843,4 +843,211 @@
 
 ---
 
+## 9 Oct 2026 · D66 — Pre-review polish: the Key fits under the key numbers, full sentences and plurals, no developer text on any page or file, sign photo key, "Nearest camera" photo
+
+### What
+Display and wording only. No pipeline, worker, analysis result, database row or number changed (except the wording
+listed below); the code makes no new Street View, Amazon Nova or Places call; the AWS server was not touched. The
+browser checks (screenshots, probes, the audit) loaded stored Street View photos: a few dozen, not counted exactly.
+1. **Key panel (Explore).** The open Key may use only the space between the bottom of the top area (top bar, key
+   numbers, the "More" list when open, the coverage note) and the top of the Key button, minus 8 px each side. It is
+   re-measured whenever that area changes size or content (street selected, "More" opened, window resize, Analyse) and
+   gets its own thin vertical scroll bar. Text size unchanged (15 px). The "Building seen by camera only, no map outline
+   · 9" row now flows as one label like the other rows (the stray "·" with the count far right is gone).
+2. **Dark-stretch card** (the list a key number or a question opens) and the map's hover card: the line "poles, but
+   no streetlight seen" is now the drawer's sentence, "34 poles stand here, but no lamp was seen on them." / "No pole or
+   lamp was seen here." (one helper, `gapPolesSentence`).
+3. **Small slips.**
+   a) Trust › Tried and dropped, Building use lane: "cloud $ per building 0" → **"cloud cost per building $0.000227"**
+      (routed) / **"$0.000271"** (cloud on everything); "s per building 1.21" → "time per building 1.21 s". Trust's number
+      formatter never prints 0 for a positive value any more (three significant digits below 0.001).
+   b) Plurals: the findings footer said "1 buildings" (spec question 1) → "1 building". Every count line found without
+      the plural helper now uses it (list in Files).
+   c) Business-sign drawer, "How do we know?": with `on_outline` set (Ward 29 ub-0000, on w1236978188) it says "It sits on
+      a building outline that is not one of the analysed buildings, so it is not compared with the register." The
+      no-outline sentence stays for signs with no outline.
+   d) Trust › Limits, Timings: "the stored runs were resumed … Ward 29's full-run GPU time comes from the model card" →
+      "the stored runs of Uthukuli Road, Tiruppur and Bharathidasan Salai, Tiruchirappalli were resumed, … Ward 29 and the
+      streets analysed from the app show the time measured on their own run." The two names come from the area list
+      (areas not analysed from the app), so a future change can't make the sentence wrong.
+4. **No developer text** on any page, panel, tooltip, empty state, error, the tour, the PDF, the Excel sheets, the
+   GeoJSON or the Shapefile README / fields.csv (full list below). Under the Hood › Street names is hidden, with its
+   "On this page" entry, for an area with no name list (Ward 29; also Rathinapuri, the Bharathiar Road unnamed road and
+   the 50 m "near 5th Street" road; the six areas with a list keep it); the name-list tool was not run. Setup
+   messages say "The map key isn't set up on this server" / "The app's server isn't answering".
+5. **Sign photo key vs boxes.** Why the orange box could be missing: it can't be, today. The sign view's orange box is
+   the sign box whose OCR text equals the building's stored sign text (`evidence._exact_view`), and the key says
+   "Orange = this building's sign" only when such a box is in the view; the drawing code draws every target box. The
+   savitha dry cleaner example (Hood › 06 › "cloud model, OCR agrees" › 1 › Sign) does draw it: a small orange box on
+   the "SAVITHA DRY CLEANER" sign at the photo's right edge (x 530–640 of 640), around an orange sign, with no tag
+   (target boxes never get one), so the tags read B1 B2 B3 P. The rule is now enforced anyway: the key promises orange
+   only for a target box that is on the photo (≥ 4 × 4 px inside the 640 × 640 frame, `isDrawnTarget`), and a Sign photo
+   with no such box shows one line, "The sign box for this building couldn't be matched in this photo." (same rule for
+   every photo key: building, pole, streetlight, business sign).
+6. **"Nearest camera" photo.** The fallback photo (a building the analysis matched no box to) is the first of the photos
+   planned to face it that comes from a Google car; a public user photosphere only when none does, and then the sentence
+   under it adds "This is a public photo taken by a Street View user: no Google car photo faces this building." No new
+   photo.
+
+### Why
+The owner's last pass before the 11 Oct review: the Key covered the key numbers at street zoom, a few sentences had lost
+their numbers or said the wrong thing, and pages, tooltips and files still showed file names, tool commands, environment
+variable names, internal keys and decision numbers that only a developer can read.
+
+### How it works
+- Key: `Key.tsx` `useKeyMaxHeight` measures `[data-top-scrim]` (its content bottom = bottom − padding, plus any open
+  `[role="menu"]`) and the Key button with a ResizeObserver, a MutationObserver on the top area and `resize`; the list
+  gets `max-height` and `overflow-y: auto` (thin scroll bar in the theme's ink colour). Labels are one inline span.
+- Developer text: found by scanning every API answer the pages read (all 10 listed areas: area, hood, hood examples for every
+  key, lighting, OSM, imagery, street names, camera-only, minimap, the first 60 buildings / 30 assets / 30 businesses with
+  their evidence, review, nine questions per area, trust, consistency, register, sign links, model card, jobs), the
+  Ward 29 / Sathy Main Road / Trichy / Tiruppur PDF, Excel, GeoJSON and Shapefile zip (README + fields.csv), and the web
+  source, for file names and paths, commands, env names, API paths, identifiers and "(Dnn)". Every hit was checked for
+  whether a person can see it. Kept as user data: OSM / Microsoft outline IDs, asset / gap / panorama IDs inside "How do
+  we know?", the Shapefile layer file names and field names (the files themselves) and attributions.
+- Model-card prose is not edited (it is data); `plainText` (web) / `report.plain_text` (PDF) drop "(tools/x.py)", a
+  trailing "tools/x.py.", "(Dnn)", "history chat 1:" and turn "model_card.json" into "the model card", numbers untouched.
+- Street names: `useStreetNames` (shared query); `StreetNamesSection` returns nothing when `available === false`, and the
+  nav filters the entry out (it also drops "Routing and cost" for a run without that table).
+- Nearest camera: `evidence.py` reads the panorama `source` from `panos.json` (added to `cameras()`), picks the first
+  non-user view among `evidence.views` (nearest first), else the first.
+- Tests: `backend/tests/test_d66.py` (13 with the two client modes): Trust lane kinds and values, plain consistency notes,
+  plain Hood cost / story / routing sources, the PDF Gate 1 note, Ward 29 has no name list, the fallback rule over every
+  building of the three original areas, all 154 Ward 29 sign views have one drawn orange sign box. `test:ui` +3 (28):
+  `plainText`, `gapPolesSentence`, `isDrawnTarget` and the footer plural.
+
+### Key numbers
+- Key at 1366 × 768 (Ward 29, both themes): street / object zoom, 17 rows → top at 147 px, 8 px under the key numbers
+  (139 px), scrolls; with Sathy Main Road selected 155 px under 147 px; with "More" open 348 px under the list's 340 px.
+  Area zoom: 10 rows, no cap needed (top 262 px).
+- Dark-stretch cards, Ward 29: "34 poles stand here, but no lamp was seen on them." (Sathy Main Road, 600 m), 10, 8 …
+- Sign photos (evidence API, every area): Ward 29 **154 of 154 sign views have their orange sign box matched and drawn;
+  0 can't be matched**. The other nine areas: 185 of 185; business-sign photos 64 of 64 (Ward 29 23). One drawn sign box lies
+  under the photo caption (Sanganur Road w1251630909, a 0.31 "FRID" sign at y 596–640: drawn, partly hidden by the
+  "Imagery © Google" strip).
+- "Nearest camera": Ward 29 43 buildings use it; **0 change photo** — the one whose planned photo is a user photosphere
+  (w1252504670, 8th Street, Ganapathy, the 2018 photo with the car bonnet) has no Google-car photo planned to face it, so
+  it keeps that photo and now says so. All areas: 0 change (Vadakku Masi Veethi has one more user-only building).
+
+### String changes (file · old → new)
+Web:
+- `App.tsx` (API unreachable): "Can't reach the API at http://localhost:8000. Start it with `backend\.venv\Scripts\python
+  -m uvicorn app.main:app --app-dir backend --port 8000`" → "The app's server isn't answering, so nothing can be shown
+  yet. Try again in a minute; if it keeps happening, the server needs to be started."
+- `App.tsx` (no map key): "The API has no Google Maps browser key or Map ID, so the map and the Street View photos are
+  off. Set GOOGLE_MAPS_BROWSER_KEY and GOOGLE_MAP_ID in backend/.env and restart the API." → "The map key isn't set up
+  on this server, so the map and the Street View photos are off."
+- `App.tsx` (API lost banner): "The API isn't answering (http://localhost:8000). What is on screen stays; …" → "The
+  app's server isn't answering. What is on screen stays; …"
+- `StreetNames.tsx`: "No name list for this area yet (run tools/street_name_candidates.py)." → the section and its nav
+  entry are hidden. Source labels "Street picker rule (F2)" → "Street picker rule", "Google (pipeline vote)" → "Google
+  (the analysis's vote)".
+- `Hood.tsx` accuracy bars (tooltip): "model_card.building_use.local_router.ward29_heldout (production)" → "the team's
+  model card · as run" (same for names).
+- `Trust.tsx`: Questions lead "… the pipeline's own rule-based QueryEngine …" → "… the analysis package's own rule-based
+  question reader …"; "Synonyms (docs/QUERY.md has the full list and the patterns)" → "Synonyms (examples; the project
+  documentation has the full list and the patterns)"; Gap length checks lead "… shown everywhere (D13)." → "… shown
+  everywhere."; Gate 1 status (2 places) and the Gate 1 card verdict "… ready for surveyed points (tools/eval_gate1.py)."
+  → "… ready for surveyed points."; pole table note "… can be larger. tools/pole_uncertainty.py." → "… can be larger.";
+  "Earlier surveyed check: history chat 1: 0-8 m …" → "Earlier surveyed check: 0-8 m …"; Stored vs computed labels:
+  "Buildings use vlm" / any raw key (e.g. "meta.counts.buildings") → "Buildings decided by the local model vs the cloud
+  model" / plain words; the bent-street row "Length of a dark stretch (…)" → "A dark stretch on a bent street (…)"; the
+  route word "sign text" → "shop sign".
+- `SignRule.tsx`: "Source: tools/validate_sign_links.py data/areas/ward29 (saved files only), 9 Oct 2026." → "Source:
+  the team's check of this run's saved files (no new photos or model calls), 9 Oct 2026."
+- `QueryPanel.tsx` (dark-stretch distance chip): "PostGIS distance" → "distance on the map".
+- `GapList.tsx` (priority hint): "fixed points rule (D54), not tuned" → "fixed points rule, not tuned".
+- `EvidenceDrawer.tsx` ("How do we know?" hints): "Result … · no_record / discrepancy" and "Result … ·
+  unrecorded_asset / unconfirmed_detection" → no hint (the plain result stays); camera-only "Method … ·
+  triangulated_no_footprint" → "· triangulated".
+
+Backend (text the pages, tooltips and files show):
+- `main.py` (Trust › Detector): "model_card.json has precision and recall per class, …" → "The model card has …".
+- `evidence.py` (drawer tooltip on the linked-signs line): "sign_links.json (each sign linked by its own line of sight)"
+  → "each sign is linked by its own line of sight".
+- `hood.py` (Time and cost line and its tooltips): "computed from this run's files: 338 views fetched (_views_done.json) +
+  44 building photos for use and floors (reliable rows of building_views.json) = 382 photos, × $0.007 per image (model
+  card)" → "counted from this run's saved files: 338 photos fetched along the streets + 44 building photos for use and
+  floors = 382 photos, × $0.007 per photo (model card)"; "run counter × model_card price" → "the run's own photo counter ×
+  the model card's price per photo"; "run counter" → "the run's own counter" (2); "model_card.cost_time" /
+  "model_card.generalisation" → "the model card".
+- `hood.py` (story corrections, shown on Trust): "The stored sentence counts assets seen by 2+ cameras (27); only 19
+  were actually triangulated (position method), …" → "… poles and lights seen by 2 or more cameras (27); only 19 were
+  actually placed where the cameras' lines of sight cross, …"; "… counted rows of building_views.json, which include 63
+  footprints that are not registered buildings; counted per registered building instead." → "… counted every building
+  outline with a photo, including 63 outlines that are not analysed buildings; counted per analysed building instead."
+- `routing.py` (Routing and cost tooltips): "vlm_buildings.json: use calls' tokens × Nova Lite price" → "the run's saved
+  use calls: tokens × the Nova Lite price"; the same for floors and names; "vlm_unmapped.json stores no tokens" → "the run
+  did not save the business-sign checks' tokens"; "median seconds per call (vlm files' lat_s)" → "median seconds per call,
+  from the run's saved cloud calls".
+- `derived.py` (Trust › Stored vs computed): "stored counter counts VLM-stage records; computed = buildings whose
+  exported use.route is tier1_local_clip" → "the saved counter also counts buildings the analysis set aside later; counted
+  here: the analysed buildings the local model decided"; "computed = buildings whose exported use.route is tier3_vlm" →
+  "counted here: the analysed buildings the cloud model decided"; "report counts assets seen by 2+ cameras (N); computed =
+  assets whose position method is 'triangulated'" → "the saved report counts poles and lights seen by 2 or more cameras
+  (N); counted here: those placed where the cameras' lines of sight cross"; "computed = assets not positioned by
+  triangulation" → "counted here: poles and lights placed from one camera"; "report counts VLM-stage records, not
+  exported buildings" → "the saved report counts every building the AI step looked at, not only the analysed
+  buildings"; "model_card n=36" → "model card: n = 36"; "metric: model_card.json is the only source (D2)" → "accuracy
+  figures come only from the model card".
+- `streetgeo.py` (same list): "pipeline orders cameras along one straight line (match.py); … Pipeline follow-up, not
+  changed in the app." → "the analysis orders the camera stops along one straight line; on a bent street that mixes both
+  sides of the bend. Left as the analysis recorded it."; "pipeline measures gap length on a straight fitted line
+  (match.py), which understates curved streets; same +12 m end padding applied. The recorded value is shown." → "the
+  analysis measures the length on a straight fitted line, which understates curved streets (the same 12 m end allowance
+  is added here). The recorded length is the one shown."
+- `report.py` (PDF, Gate 1): "… ready for surveyed points (tools/eval_gate1.py). No surveyed reference exists." → "…
+  ready for surveyed points. No surveyed reference exists."
+- `jobs.py` (job errors): "job is already needs_approval" style raw statuses → "needs approval".
+
+Wording fixes (not developer text): Key camera-only row; dark-stretch card and hover card sentence; Trust lane
+"cloud $ per building 0" / "s per building" → "cloud cost per building $0.000227" / "time per building 1.21 s"; ub
+drawer outline sentence; Trust Limits Timings; plurals in the findings footer ("1 buildings" → "1 building"), Hood
+chapter counts and units (photos, boxes, buildings, signs, lamp heads, camera positions, sign crops), Hood cost lines
+("N photos", "N calls", "N buildings"), the panorama-check tooltip, the Sankey ribbon tooltips, the OSM question note
+("Our camera found N businesses") and the PDF photo line; the Sign photo's unmatched line; the "Nearest camera" user
+photo sentence.
+
+### Limits
+- The savitha "missing orange box" could not be reproduced: the box is drawn in the drawer, Review and the Hood sheet
+  (screenshots checked by eye, then deleted). It is small and orange on an orange sign at the photo edge; no styling
+  was changed.
+- The Sanganur Road sign box under the caption stays partly hidden: the caption carries Google's attribution, which
+  must stay visible.
+- "Nearest camera" can't show a better photo for the 8th Street building without buying a new one (not allowed here).
+- The ub drawer's mini-map legend still says "this business sign (position approximate)" for a sign placed on an
+  outline (left as is).
+- Trust › Tried and dropped, Detector lane: "full Ward 29 run: 28 streetlights vs 38 with v8s, +45 unverified poles ->
+  rejected" is the model card's YOLO26s note from the Sep run; not changed (a model-card content question, not wording).
+
+### Checks and live (9 Oct)
+- Backend: 541 passed, 1 skipped (13 new in `test_d66.py`; `test_report` Gate 1 note compared through `plain_text`,
+  intended; a first full run also failed the known-flaky `test_p6` delete test, which passed in its file and in the
+  second full run). typecheck, build, test:ui 28 (3 new), check:data pass; the audit (both themes) passes.
+- Regression (`tools/regression.py`, full, output to a file): **ALL PASSED**, A–F, 0 retries, no expected answer changed
+  (`run-2026-10-09_1908.log`). Run against this branch's API on :8010 (`API_URL`, plus the new optional `API_PORT`
+  reroute in `regression.ts`, `offline.ts` and `audit.ts`) because the API already running on :8000 (pre-branch code)
+  could not be restarted from this session; the page was the dev server on :5173 (the only origin the Maps key accepts),
+  not the production preview.
+- Live: the screens above were checked by eye on :5173 with the page's API calls rerouted to the branch API, 1366 × 768,
+  both themes (`web/scripts/prereview-polish-shots.ts` → `docs/screenshots/prereview-polish/`; the six with Street View
+  photos deleted after checking). API answers checked with curl against the branch API (Trust lane values, consistency
+  notes, the 8th Street evidence, every Ward 29 sign view). **The :8000 API still runs the old code until restarted.**
+
+### Files changed
+- Web: `components/Key.tsx`, `Explore.tsx`, `GapList.tsx`, `Inspect.tsx`, `EvidenceDrawer.tsx`, `EvidenceViews.tsx`,
+  `FindingsTable.tsx`, `Sankey.tsx`, `SignRule.tsx`, `StreetNames.tsx`, `QueryPanel.tsx`; `pages/Hood.tsx`, `pages/Trust.tsx`;
+  `App.tsx`; `lib/labels.ts` (`gapPolesSentence`, `plainText`), `lib/photoTags.ts` (`isDrawnTarget`, `SIGN_NOT_MATCHED`);
+  `api/p5.ts` (kinds `usd`, `s`); scripts `test-ui.ts` (+3), `offline.ts` (banner wording), `audit.ts` (optional
+  `API_PORT` reroute), new `prereview-polish-shots.ts`.
+- Backend: `derived.py`, `evidence.py`, `hood.py`, `jobs.py`, `main.py`, `report.py`, `routing.py`, `streetgeo.py`,
+  `trust.py`, `views.py`; tests: new `test_d66.py`, `test_report.py` (Gate 1 note compared through `plain_text`, intended).
+- Screenshots: `docs/screenshots/prereview-polish/` (32, both themes; the 6 with Street View photos deleted after checking).
+
+### Lines that are now out of date in 00–06
+- 03_APP_AND_FLOWS.md, "Nearest camera": "The first planned photo facing the building is shown" → the first such photo
+  from a Google car; a user photosphere only when none, with a sentence saying so.
+
+---
+
 [← 06 Updates](06_updates.md) · [Start here](00_START_HERE.md) · (this is the last file) →

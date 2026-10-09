@@ -125,7 +125,8 @@ def test_report_numbers_equal_the_app(api, slug):
                                          f"{im['older_than_cutoff']} of {im['camera_stops_dated']}")
 
     g = api.get("/model-card").json().get("gate1_position") or api.app.state.model_card.get()["gate1_position"]
-    assert c["gate1"]["status"] == "Status: Not verified" and c["gate1"]["note"].startswith(g["status_note"])
+    # D66: the note is the model card's, without its tool path (report.plain_text), so the PDF shows no file names
+    assert c["gate1"]["status"] == "Status: Not verified" and c["gate1"]["note"].startswith(report.plain_text(g["status_note"]))
     fair = next((v for kk, v in (g["vs OSM front-wall centre"].get(slug) or {}).items() if kk.startswith("camera-derived")), None)
     if fair:
         assert f"n = {fair['n']}, median {fair['median_m']} m" in c["gate1"]["row"]
