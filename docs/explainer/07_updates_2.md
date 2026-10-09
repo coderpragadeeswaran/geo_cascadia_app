@@ -805,4 +805,42 @@
 
 ---
 
+## 9 Oct 2026 · Docs only — a full manual check and study guide for the 11 Oct review
+
+### What
+- New file [docs/MANUAL_CHECK_FULL.md](../MANUAL_CHECK_FULL.md): 95 checks in demo order. They cover setup (laptop and
+  the live server), the tour, Explore, questions, charts, Review, Under the Hood, Trust, Jobs and Analyse, reports, and
+  themes, keyboard and problem states.
+- Each check has where, the exact steps and input, the expected result with real current values, a cross-check you
+  can do yourself, the requirement it proves, what a difference means, and a checkbox.
+- The file ends with a requirements coverage table, the known limits to explain, a 5-minute demo path, and what could
+  not be verified.
+- `docs/P7_MANUAL_CHECKS.md` is unchanged. No app code changed.
+
+### Why
+- The owner checks every click by hand before the review and learns the project while doing it. The older short
+  list quoted Sep 2026 numbers.
+
+### How
+- Values were taken on 9 Oct 2026 from commit `6673d8c`: API calls against the laptop API (:8000), Playwright runs of
+  the dev server (:5173, 1366×768), and the downloaded PDF / Excel / GeoJSON / Shapefile.
+- Screenshots were checked by eye and then deleted (they contained Street View photos).
+- A Review Yes and a No with a value were made and both undone (221 waiting before and after; 4 history rows by
+  "manual-check-doc" remain).
+- One test job was created with no worker connected, then cancelled and deleted (8 jobs before and after).
+- The free Analyse estimates were run; nothing was bought.
+
+### Key numbers (Ward 29)
+- Ribbon: 373 (+ 9 seen only by camera) / 22 / 54 / 11 / 168. Review: 221 waiting.
+- Spec question 1: 1 building. Question 2: 11 stretches. Question 3: 3 items. Question 4: 22 buildings on 10 streets.
+- Reports: PDF 19 pages; Sathy Main Road PDF 8 pages.
+
+### Limits
+- The live server was not started (status: stopped), so its outputs are quoted from the scripts.
+- Appeal with a photo, the browser cost-cap edit and the error states were not reproduced.
+- The requirements PDF is not in the repository, so the requirement quotes come from `CLAUDE.md` and `docs/history/`.
+- Five small display slips seen while checking are listed at the end of the guide; none was fixed.
+
+---
+
 [← 06 Updates](06_updates.md) · [Start here](00_START_HERE.md) · (this is the last file) →
