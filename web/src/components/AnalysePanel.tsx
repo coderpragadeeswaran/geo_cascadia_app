@@ -13,7 +13,7 @@ import { api } from '@/api/client'
 import type { JobEstimate, PlanStatus } from '@/api/p5'
 import { post, useAreas } from '@/api/queries'
 import { deviceWord, JOB_STAGES, jobStatus, minutesParts, planSlowText, planTooSlow, shortArea, STAGE_PLAIN, stageLine, timeLeft } from '@/lib/labels'
-import { fmt, noun } from '@/lib/utils'
+import { fmt } from '@/lib/utils'
 import { pickedLines, streetKey, useAnalyse } from '@/map/analyse'
 import { flyToBounds } from '@/map/MapView'
 import { mainLine, MIN_STRETCH_M, slice } from '@/map/trim'
@@ -89,16 +89,18 @@ function CostCap({ total, fallback }: { total: number | null; fallback: number }
         style={{ boxShadow: 'inset 0 0 0 1px var(--ns-line-strong)' }} value={text} onChange={(e) => setText(e.target.value)}
         onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') commit() }} aria-describedby="cost-cap-note" />
       <span id="cost-cap-note" className={over ? '' : 'ink3'} style={over ? { color: 'var(--ns-sodium)' } : undefined}>
-        {over ? 'Above the cap: it will wait for your approval before any photo is bought.' : 'Above it, the analysis waits for your approval.'}</span>
+        {over ? 'Over the cap: waits for your approval first.' : 'Over it, it waits for your approval.'}</span>
     </div>
   )
 }
 
-/** P7.1: "≈ 3 minutes", "< 1 minute" (never "0") */
-function MinutesFigure({ m }: { m: number | null | undefined }) {
+const DOCK_W = 340
+/** the compact card's time: "≈ 3 min", "< 1 min" (never "0") */
+function minutesShort(m: number | null | undefined) {
   const [v, u] = minutesParts(m)
-  return <><dd className="t-figure mt-1" style={{ fontSize: 21.5 }}>{v === '—' ? v : v.startsWith('<') ? v : `≈ ${v}`}</dd><dd className="t-small ink3">{u}</dd></>
+  return v === '—' ? v : `${v.startsWith('<') ? v : `≈ ${v}`} ${u.startsWith('minute') ? 'min' : u}`
 }
+
 
 export function AnalysePanel() {
   const on = useUi((s) => s.analyse)
@@ -145,8 +147,8 @@ export function AnalysePanel() {
     fitted.current = key
     const pts = pickedLines(p, both)!.coordinates.flat()
     const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1])
-    // the sheet covers ~300 px at the bottom: frame the street above it so both end dots can be dragged (fix 10)
-    flyToBounds(map, [Math.min(...xs) - 0.0003, Math.min(...ys) - 0.0003, Math.max(...xs) + 0.0003, Math.max(...ys) + 0.0003], { maxZoom: 17.2, bottomPx: 300 })
+    // the confirm card is docked on the right: frame the whole street, both end dots, in the map left of it
+    flyToBounds(map, [Math.min(...xs) - 0.0003, Math.min(...ys) - 0.0003, Math.max(...xs) + 0.0003, Math.max(...ys) + 0.0003], { maxZoom: 17.2, rightPx: DOCK_W + 32 })
   }, [map, p, key, both])
   const already = p?.already ?? []
   const openExisting = (slug: string, street: string) => {
@@ -160,6 +162,7 @@ export function AnalysePanel() {
     }, ui.area !== slug ? 900 : 0)
   }
   return (
+    <>
     <div className="pointer-events-none absolute inset-x-0 bottom-9 z-30 flex justify-center">
       <AnimatePresence mode="wait">
         {on && !p && (
@@ -184,16 +187,24 @@ export function AnalysePanel() {
             )}
           </motion.div>
         )}
+        {!on && a.job && <JobCard key="job" />}
+      </AnimatePresence>
+    </div>
+    {/* the confirm card is docked on the right, like the other panels, so the street and its end dots stay free */}
+    <div className="pointer-events-none absolute inset-0 z-30">
+      <AnimatePresence>
         {on && p && (
-          <motion.div key="confirm" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className={card} role="dialog" aria-label="Confirm analysis">
-            <div className="flex items-start justify-between gap-3">
+          <motion.div key="confirm" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}
+            className="sheet pointer-events-auto absolute right-4 top-[68px] max-h-[calc(100%-330px)] overflow-y-auto px-4 py-3" style={{ width: DOCK_W }}
+            role="dialog" aria-label="Confirm analysis">
+            <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <div className="t-micro">Analyse this street?</div>
-                <div className="t-title mt-1">{p.street}</div>
+                <div className="t-title mt-0.5">{p.street}</div>
                 <div className="t-small ink2 mt-0.5">
                   {both ? <><span className="t-data">{fmt.format(p.length_m + p.elsewhere!.length_m)} m</span>{p.elsewhere!.pieces > 0 && !p.elsewhere!.joins ? ` in ${p.elsewhere!.pieces + 1} separate pieces` : ' in total'} · highlighted on the map</>
                     : a.trim ? <><span className="t-data">{fmt.format(Math.round(a.trim.b - a.trim.a))} m</span> of {fmt.format(p.length_m)} m · <button className="link" onClick={() => a.setTrim(null)}>whole street</button></>
-                    : <><span className="t-data">{fmt.format(p.length_m)} m</span> · highlighted on the map</>}
+                    : <span className="t-data">{fmt.format(p.length_m)} m</span>}
                   </div>
                 {p.elsewhere && (
                   <label className="t-small mt-1.5 flex cursor-pointer items-center gap-2">
@@ -207,7 +218,7 @@ export function AnalysePanel() {
                   </label>
                 )}
                 <div className="t-small ink3 mt-0.5">{both ? (p.elsewhere!.outside_area ? 'Trimming is off while the rest of the street is included.' : 'Trimming is off while both pieces are included.')
-                  : <>Drag the orange end dots on the map to analyse only part of it{trimmable ? '' : ' (this street is too short to trim)'}.</>}</div>
+                  : trimmable ? 'Drag the orange end dots to trim.' : 'Too short to trim.'}</div>
               </div>
               <button className="btn btn-icon" onClick={() => a.reset()} aria-label="Pick another street"><X /></button>
             </div>
@@ -241,11 +252,15 @@ export function AnalysePanel() {
             ) : (
               <>
                 {est ? (
-                  <dl className="mt-4 grid grid-cols-2" aria-live="polite" style={{ opacity: plan.busy ? 0.6 : 1 }}>
-                    <div><dt className="t-micro">Street View</dt><dd className="t-figure mt-1" style={{ fontSize: 21.5 }}>≈ {fmt.format(est.street_view_images)}</dd>
-                      <dd className="t-small ink3">{noun(est.street_view_images, 'image')}{est.street_view_usd != null ? ` · ≈ $${est.street_view_usd.toFixed(2)} (Google list price)` : ''}</dd></div>
-                    <div className="rule-l pl-4"><dt className="t-micro">Time</dt><MinutesFigure m={est.gpu_minutes} /></div>
-                  </dl>
+                  <div className="t-small mt-2.5 space-y-0.5" aria-live="polite" style={{ opacity: plan.busy ? 0.6 : 1 }}>
+                    <p>Photos <span className="t-data">≈ {fmt.format(est.street_view_images)}</span>{est.street_view_usd != null ? <> · <span className="t-data">≈ ${est.street_view_usd.toFixed(2)}</span> <span className="ink3">list price</span></> : ''}
+                      {' '}· <span className="whitespace-nowrap">Time <span className="t-data">{minutesShort(est.gpu_minutes)}</span></span></p>
+                    <p className="ink2">
+                      {/* D60: Google and AWS on separate lines; the photo dollars above are Google's global list price */}
+                      {est.cloud_ai_usd != null ? <>Cloud AI (Amazon Nova) <span className="t-data">≈ ${est.cloud_ai_usd.toFixed(est.cloud_ai_usd < 0.01 ? 4 : 2)}</span></> : 'Cloud AI cost not known'}
+                      {plan.busy && <> · updating…</>}
+                    </p>
+                  </div>
                 ) : plan.st?.status === 'failed' ? null
                   : plan.slow ? (
                     <div className="mt-3 flex items-start gap-3" role="status">
@@ -259,23 +274,17 @@ export function AnalysePanel() {
                     <button className="btn btn-line" onClick={plan.retry}>Try again</button>
                   </div>
                 )}
-                {est && (
-                  <p className="t-small ink2 mt-2">
-                    {/* D60: Google and AWS on separate lines; the photo dollars above are Google's global list price */}
-                    {est.cloud_ai_usd != null ? <>Cloud AI (Amazon Nova, AWS) ≈ <span className="t-data">${est.cloud_ai_usd.toFixed(est.cloud_ai_usd < 0.01 ? 4 : 2)}</span></> : 'Cloud AI cost not known'}
-                    {plan.busy && <> · updating…</>}
-                  </p>
-                )}
                 {est?.note && <p className="t-small mt-1" style={{ color: 'var(--ns-sodium)' }}>{est.note}</p>}
                 <CostCap total={est?.total_usd ?? null} fallback={p.cost_cap_usd} />
                 {est && (
                   <details className="mt-2">
-                    <summary className="t-small ink3 cursor-pointer">An estimate{a.trim ? ' for the shorter stretch' : ''}, not a measurement. <span className="link">How is this estimated?</span></summary>
+                    <summary className="t-small ink3 cursor-pointer"><span className="link">How is this estimated?</span></summary>
+                    <p className="t-small ink3 mt-1">An estimate{a.trim ? ' for the shorter stretch' : ''}, not a measurement.</p>
                     <p className="t-small ink3 mt-1">{est.basis}</p>
                   </details>
                 )}
                 {a.error && a.error.kind !== 'busy' && <p className="t-small mt-2" style={{ color: 'var(--ns-no-record)' }}>{a.error.message}</p>}
-                <div className="mt-4 flex justify-end gap-2">
+                <div className="mt-3 flex justify-end gap-2">
                   <button className="btn" onClick={leave}>Cancel</button>
                   <button className="btn btn-solid" disabled={a.loading || offline || p.osm_details === false} onClick={() => a.start()}>{a.loading && <Loader2 className="animate-spin" />} {offline ? 'Offline — read-only' : 'Start analysis'}</button>
                 </div>
@@ -283,9 +292,9 @@ export function AnalysePanel() {
             )}
           </motion.div>
         )}
-        {!on && a.job && <JobCard key="job" />}
       </AnimatePresence>
     </div>
+    </>
   )
 }
 

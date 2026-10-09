@@ -265,10 +265,10 @@ export function visibleWidth(map: google.maps.Map) {
 
 /** Fit a lon/lat bbox into the part of the map not covered by the right panel (and, with bottomPx, above a bottom
  *  sheet such as Analyse's confirm sheet, so the street's end dots are never under it). */
-export function flyToBounds(map: google.maps.Map, bb: [number, number, number, number], opts: { maxZoom?: number; minZoom?: number; bottomPx?: number } = {}) {
+export function flyToBounds(map: google.maps.Map, bb: [number, number, number, number], opts: { maxZoom?: number; minZoom?: number; bottomPx?: number; rightPx?: number } = {}) {
   const ui = useUi.getState()
   const div = map.getDiv()
-  const vw = visibleWidth(map)
+  const vw = visibleWidth(map) - (opts.rightPx ?? 0)                        // a card docked on the right (Analyse)
   const bottom = opts.bottomPx ?? 0
   const zoom = Math.max(opts.minZoom ?? 3, Math.min(opts.maxZoom ?? 17.4, fitZoom(bb, vw, div.clientHeight - 170 - bottom, 70)))
   const shiftPx = (div.clientWidth - vw) / 2                                  // keep the target centred in the visible part
