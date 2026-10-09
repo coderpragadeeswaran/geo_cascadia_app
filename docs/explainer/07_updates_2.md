@@ -779,6 +779,18 @@
 - The measurement took three server runs (the first two failed on folder permissions in the local steps; their photos were
   bought again): 90 Street View photos ($0.63 at list price), 60 Nova calls ($0.0081).
 
+### Checks and live (9 Oct)
+- Backend 531 passed, 1 skipped (after the intended updates listed under Files); typecheck, build, test:ui 25, check:data
+  and the audit (both themes) pass; regression ALL PASSED, 0 retries, no expected answer changed
+  (`run-2026-10-08_2358.log`).
+- Live (http://65.1.253.18/, release `a7278ec`): Explore shows "373 buildings checked + 9 seen only by camera"; Under the
+  Hood › Routing and cost shows the measured table and the time per step; Trust's cost panel shows this run's numbers; a
+  "Differ from register" drawer shows a fresh photo with one orange box; no page errors, both themes
+  (`docs/screenshots/prereview/live/`). The worker's journal shows the new start line.
+- Server: stopped before the round (status.ps1: "stopped"); used 17:53–18:09 UTC (measurement) and about 18:47–19:00 UTC
+  (deploy and live check), ≈ 30 min, ≈ $0.29. The EC2 keys expired during the final stop: the stop request was accepted
+  ("waiting for 'stopped'") and the site and SSH stopped answering; status.ps1 needs fresh keys to show "stopped".
+
 ### Files changed
 - Pipeline: `config.py` (0–8 m circle 2.6).
 - Backend: `camonly.py`, `routing.py`, `hood.py`, `trust.py`, `main.py`, `planest.py`, `jobs.py`; tests `test_d65.py`
